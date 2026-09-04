@@ -39,3 +39,4 @@ Topics follow a fixed five-slot cycle. The slot for a new entry is `(number of e
 |------|-------|----------|
 | 2026-08-30 | [ClickHouse MergeTree Internals — Storage, Indexing, and Replication](2026/08/2026-08-30-clickhouse-mergetree-internals/README.md) | Database Internals |
 | 2026-09-03 | [Spanner — How TrueTime Turns Clock Uncertainty Into External Consistency](2026/09/2026-09-03-spanner-truetime-external-consistency/README.md) | System Design / Paper Analysis |
+| 2026-09-04 | [How Discord Moved Trillions of Messages From Cassandra to ScyllaDB](2026/09/2026-09-04-discord-cassandra-scylladb-migration/README.md) | Tech Blog Analysis |
