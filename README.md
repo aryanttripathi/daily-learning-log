@@ -42,3 +42,4 @@ Topics follow a fixed five-slot cycle. The slot for a new entry is `(number of e
 | 2026-09-04 | [How Discord Moved Trillions of Messages From Cassandra to ScyllaDB](2026/09/2026-09-04-discord-cassandra-scylladb-migration/README.md) | Tech Blog Analysis |
 | 2026-09-05 | [The Daily Diff — Agentic AI, a Kernel io_uring Gotcha, and Meta's ZGateway Proxy for ZippyDB](2026/09/2026-09-05-daily-diff-zgateway-proxy/README.md) | The Daily Diff Digest |
 | 2026-09-06 | [C²KV — Making KV-Cache Reuse Compression-Aware and Position-Free](2026/09/2026-09-06-c2kv-composable-kv-cache-reuse/README.md) | Variety |
+| 2026-09-07 | [PostgreSQL MVCC Internals — Tuple Versions, Hint Bits, HOT Chains, and VACUUM](2026/09/2026-09-07-postgres-mvcc-vacuum-internals/README.md) | Database Internals |
