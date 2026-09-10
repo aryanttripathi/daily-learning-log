@@ -44,3 +44,4 @@ Topics follow a fixed five-slot cycle. The slot for a new entry is `(number of e
 | 2026-09-06 | [C²KV — Making KV-Cache Reuse Compression-Aware and Position-Free](2026/09/2026-09-06-c2kv-composable-kv-cache-reuse/README.md) | Variety |
 | 2026-09-07 | [PostgreSQL MVCC Internals — Tuple Versions, Hint Bits, HOT Chains, and VACUUM](2026/09/2026-09-07-postgres-mvcc-vacuum-internals/README.md) | Database Internals |
 | 2026-09-08 | [Amazon Aurora — The Log Is the Database, and How It Avoids Consensus](2026/09/2026-09-08-amazon-aurora-log-is-the-database/README.md) | System Design / Paper Analysis |
+| 2026-09-10 | [Notion's Postgres Sharding — From Monolith to 480 Shards, Then a Zero-Downtime 3x Re-shard](2026/09/2026-09-10-notion-postgres-sharding/README.md) | Tech Blog Analysis |
