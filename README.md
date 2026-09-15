@@ -47,3 +47,4 @@ Topics follow a fixed five-slot cycle. The slot for a new entry is `(number of e
 | 2026-09-10 | [Notion's Postgres Sharding — From Monolith to 480 Shards, Then a Zero-Downtime 3x Re-shard](2026/09/2026-09-10-notion-postgres-sharding/README.md) | Tech Blog Analysis |
 | 2026-09-12 | [The Daily Diff — AI Agents Accused of Hacking, a Navier-Stokes Proof, and ClickHouse's WalShadow Physical-WAL Replication](2026/09/2026-09-12-daily-diff-walshadow-physical-wal-replication/README.md) | The Daily Diff Digest |
 | 2026-09-14 | [Kubernetes Prow & Tide — How OWNERS Trees and Batch-Tested Merge Queues Actually Work](2026/09/2026-09-14-kubernetes-prow-tide-merge-automation/README.md) | Variety |
+| 2026-09-15 | [SQLite WAL Internals — Frame Checksums, Checkpoints, and the 16-Year Reset Race That Broke Tailscale](2026/09/2026-09-15-sqlite-wal-internals-reset-bug/README.md) | Database Internals |
