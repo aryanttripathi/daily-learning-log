@@ -13,7 +13,7 @@ Every lesson is written to be *runnable*: it carries a hands-on exercise you can
 
 ## Current Track
 
-**SQLite Internals**: Lesson 1 of 32 · started 2026-09-16 · [syllabus and progress →](TRACK.md)
+**SQLite Internals**: Lesson 2 of 32 · started 2026-09-16 · [syllabus and progress →](TRACK.md)
 
 ## Format
 
@@ -52,3 +52,4 @@ Entries before 2026-09-16 predate the track model. They came from a five-slot to
 | 2026-09-14 | — | [Kubernetes Prow & Tide — How OWNERS Trees and Batch-Tested Merge Queues Actually Work](2026/09/2026-09-14-kubernetes-prow-tide-merge-automation/README.md) | pre-track · Variety | — |
 | 2026-09-15 | — | [SQLite WAL Internals — Frame Checksums, Checkpoints, and the 16-Year Reset Race That Broke Tailscale](2026/09/2026-09-15-sqlite-wal-internals-reset-bug/README.md) | pre-track · Database Internals | — |
 | 2026-09-16 | 01 | [The Database File Header and How lockBtree() Bootstraps Page 1](2026/09/2026-09-16-sqlite-file-header-page1-bootstrap/README.md) | SQLite | [digest (edition 2026-09-13)](2026/09/2026-09-16-sqlite-file-header-page1-bootstrap/daily-diff.md) |
+| 2026-09-17 | 02 | [Varints, Serial Types, and the Record Format](2026/09/2026-09-17-sqlite-varints-serial-types-record-format/README.md) | SQLite | [digest (edition 2026-09-15)](2026/09/2026-09-17-sqlite-varints-serial-types-record-format/daily-diff.md) |
