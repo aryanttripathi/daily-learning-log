@@ -8,12 +8,12 @@ Every lesson is written to be *runnable*: it carries a hands-on exercise you can
 
 - **One subject at a time.** The log follows a multi-week *track*: a sequential deep dive into a single database or systems subject. The track's syllabus and progress live in [`TRACK.md`](TRACK.md), which is the single source of truth for what has been taught and what comes next.
 - **One lesson per day, each building on the last.** Every day takes the first unchecked lesson from the syllabus. Lessons assume everything earlier in the track is known and open with a *Where This Fits* section linking the previous lesson. Missed days are never backfilled; the track simply continues.
-- **A separate Daily Diff digest every day.** Alongside the lesson, each day folder has a `daily-diff.md` covering an edition of [The Daily Diff](https://tdd.cat/): a point-wise summary plus a deep dive on the single most significant item. tdd.cat publishes editions about two days late, so a digest covers the newest edition not yet covered and says which one it is.
+- **A separate Daily Diff digest every day.** Alongside the lesson, each day folder has a `daily-diff.md` covering an edition of [The Daily Diff](https://tdd.cat/): a point-wise summary plus a deep dive on the single most significant item. tdd.cat publishes editions about two days late, so a digest covers the newest edition not yet covered and says which one it is. When no new edition has published, the digest says so explicitly rather than inventing items.
 - **Tracks end with a capstone.** When every lesson is checked, that day's document is a capstone assembling the whole system end to end. The subject moves to *Completed Subjects* in `TRACK.md`, and a new track begins.
 
 ## Current Track
 
-**SQLite Internals**: Lesson 2 of 32 · started 2026-09-16 · [syllabus and progress →](TRACK.md)
+**SQLite Internals**: Lesson 3 of 32 · started 2026-09-16 · [syllabus and progress →](TRACK.md)
 
 ## Format
 
@@ -53,3 +53,4 @@ Entries before 2026-09-16 predate the track model. They came from a five-slot to
 | 2026-09-15 | — | [SQLite WAL Internals — Frame Checksums, Checkpoints, and the 16-Year Reset Race That Broke Tailscale](2026/09/2026-09-15-sqlite-wal-internals-reset-bug/README.md) | pre-track · Database Internals | — |
 | 2026-09-16 | 01 | [The Database File Header and How lockBtree() Bootstraps Page 1](2026/09/2026-09-16-sqlite-file-header-page1-bootstrap/README.md) | SQLite | [digest (edition 2026-09-13)](2026/09/2026-09-16-sqlite-file-header-page1-bootstrap/daily-diff.md) |
 | 2026-09-17 | 02 | [Varints, Serial Types, and the Record Format](2026/09/2026-09-17-sqlite-varints-serial-types-record-format/README.md) | SQLite | [digest (edition 2026-09-15)](2026/09/2026-09-17-sqlite-varints-serial-types-record-format/daily-diff.md) |
+| 2026-09-18 | 03 | [The B-tree Page Header, Cell Pointer Array, and the Four Cell Layouts](2026/09/2026-09-18-sqlite-btree-page-header-cell-layouts/README.md) | SQLite | [digest (no new edition; 2026-09-15 revisited)](2026/09/2026-09-18-sqlite-btree-page-header-cell-layouts/daily-diff.md) |
