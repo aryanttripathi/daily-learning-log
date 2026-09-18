@@ -3,7 +3,7 @@ track-state
 subject: SQLite
 started: 2026-09-16
 lessons-total: 32
-lessons-done: 2
+lessons-done: 3
 -->
 
 # Current Track: SQLite Internals
@@ -17,7 +17,7 @@ The order follows SQLite's actual layering (see sqlite.org/arch.html and filefor
 ### Part I — On-disk format and the b-tree layer (`btree.c`)
 - [x] 01 — The database file header and how lockBtree() bootstraps page 1
 - [x] 02 — Varints, serial types, and the record format
-- [ ] 03 — The b-tree page header, cell pointer array, and the four cell layouts
+- [x] 03 — The b-tree page header, cell pointer array, and the four cell layouts
 - [ ] 04 — In-page space management: freeblocks, fragmented bytes, and defragmentation
 - [ ] 05 — Cell payload overflow: maxLocal/minLocal/maxLeaf and overflow page chains
 - [ ] 06 — The freelist: trunk and leaf pages, and how allocateBtreePage() and freePage2() recycle pages
