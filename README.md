@@ -13,7 +13,7 @@ Every lesson is written to be *runnable*: it carries a hands-on exercise you can
 
 ## Current Track
 
-**SQLite Internals**: Lesson 5 of 32 · started 2026-09-16 · [syllabus and progress →](TRACK.md)
+**SQLite Internals**: Lesson 6 of 32 · started 2026-09-16 · [syllabus and progress →](TRACK.md)
 
 ## Format
 
@@ -56,3 +56,4 @@ Entries before 2026-09-16 predate the track model. They came from a five-slot to
 | 2026-09-18 | 03 | [The B-tree Page Header, Cell Pointer Array, and the Four Cell Layouts](2026/09/2026-09-18-sqlite-btree-page-header-cell-layouts/README.md) | SQLite | [digest (no new edition; 2026-09-15 revisited)](2026/09/2026-09-18-sqlite-btree-page-header-cell-layouts/daily-diff.md) |
 | 2026-09-19 | 04 | [In-Page Space Management — freeSpace(), pageFindSlot(), and defragmentPage()](2026/09/2026-09-19-sqlite-page-space-allocator-defragmentation/README.md) | SQLite | [digest (edition 2026-09-16)](2026/09/2026-09-19-sqlite-page-space-allocator-defragmentation/daily-diff.md) |
 | 2026-09-20 | 05 | [Cell Payload Overflow — nLocal, the Sawtooth, and the Overflow Chain](2026/09/2026-09-20-sqlite-cell-payload-overflow/README.md) | SQLite | [digest (edition 2026-09-17)](2026/09/2026-09-20-sqlite-cell-payload-overflow/daily-diff.md) |
+| 2026-09-21 | 06 | [The Database Freelist — Trunk Pages, Leaf Arrays, and Swap-With-Last Reuse](2026/09/2026-09-21-sqlite-freelist-trunk-leaf-pages/README.md) | SQLite | [digest (edition 2026-09-19)](2026/09/2026-09-21-sqlite-freelist-trunk-leaf-pages/daily-diff.md) |
