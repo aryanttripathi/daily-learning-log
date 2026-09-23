@@ -8,12 +8,12 @@ Every lesson is written to be *runnable*: it carries a hands-on exercise you can
 
 - **One subject at a time.** The log follows a multi-week *track*: a sequential deep dive into a single database or systems subject. The track's syllabus and progress live in [`TRACK.md`](TRACK.md), which is the single source of truth for what has been taught and what comes next.
 - **One lesson per day, each building on the last.** Every day takes the first unchecked lesson from the syllabus. Lessons assume everything earlier in the track is known and open with a *Where This Fits* section linking the previous lesson. Missed days are never backfilled; the track simply continues.
-- **A separate Daily Diff digest every day.** Alongside the lesson, each day folder has a `daily-diff.md` covering an edition of [The Daily Diff](https://tdd.cat/): a point-wise summary plus a deep dive on the single most significant item. tdd.cat publishes editions a few days late, so a digest covers the newest edition not yet covered and says which one it is. When no new edition has published, the digest says so explicitly rather than inventing items.
+- **A separate Daily Diff digest every day.** Alongside the lesson, each day folder has a `daily-diff.md` covering an edition of [The Daily Diff](https://tdd.cat/): a point-wise summary plus a deep dive on the single most significant item. tdd.cat publishes editions on a two-day settling window, so a digest covers the newest edition not yet covered and says which one it is. When no new edition has published, the digest says so explicitly rather than inventing items.
 - **Tracks end with a capstone.** When every lesson is checked, that day's document is a capstone assembling the whole system end to end. The subject moves to *Completed Subjects* in `TRACK.md`, and a new track begins.
 
 ## Current Track
 
-**SQLite Internals**: Lesson 7 of 32 · started 2026-09-16 · [syllabus and progress →](TRACK.md)
+**SQLite Internals**: Lesson 8 of 32 · started 2026-09-16 · [syllabus and progress →](TRACK.md)
 
 ## Format
 
@@ -58,3 +58,4 @@ Entries before 2026-09-16 predate the track model. They came from a five-slot to
 | 2026-09-20 | 05 | [Cell Payload Overflow — nLocal, the Sawtooth, and the Overflow Chain](2026/09/2026-09-20-sqlite-cell-payload-overflow/README.md) | SQLite | [digest (edition 2026-09-17)](2026/09/2026-09-20-sqlite-cell-payload-overflow/daily-diff.md) |
 | 2026-09-21 | 06 | [The Database Freelist — Trunk Pages, Leaf Arrays, and Swap-With-Last Reuse](2026/09/2026-09-21-sqlite-freelist-trunk-leaf-pages/README.md) | SQLite | [digest (edition 2026-09-19)](2026/09/2026-09-21-sqlite-freelist-trunk-leaf-pages/daily-diff.md) |
 | 2026-09-22 | 07 | [The Schema Table — Root Pages, sqlite3InitOne(), and the Cookie That Reparses Everything](2026/09/2026-09-22-sqlite-schema-table-rootpages-initone/README.md) | SQLite | [digest (edition 2026-09-20)](2026/09/2026-09-22-sqlite-schema-table-rootpages-initone/daily-diff.md) |
+| 2026-09-23 | 08 | [Table B-trees — Rowids, INTEGER PRIMARY KEY Aliasing, and WITHOUT ROWID](2026/09/2026-09-23-sqlite-rowid-ipk-without-rowid/README.md) | SQLite | [digest (edition 2026-09-21)](2026/09/2026-09-23-sqlite-rowid-ipk-without-rowid/daily-diff.md) |
