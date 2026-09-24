@@ -3,7 +3,7 @@ track-state
 subject: SQLite
 started: 2026-09-16
 lessons-total: 32
-lessons-done: 8
+lessons-done: 9
 -->
 
 # Current Track: SQLite Internals
@@ -23,7 +23,7 @@ The order follows SQLite's actual layering (see sqlite.org/arch.html and filefor
 - [x] 06 — The freelist: trunk and leaf pages, and how allocateBtreePage() and freePage2() recycle pages
 - [x] 07 — The sqlite_schema table, root page numbers, and schema loading (sqlite3InitOne)
 - [x] 08 — Table b-trees: rowids, INTEGER PRIMARY KEY aliasing, and WITHOUT ROWID tables
-- [ ] 09 — Index b-trees: key records, record sort order, and covering-index lookups
+- [x] 09 — Index b-trees: key records, record sort order, and covering-index lookups
 - [ ] 10 — BtCursor navigation: moveToChild, table and index seeks, and cursor save/restore
 - [ ] 11 — Insertion and page splits: balance(), balance_nonroot() and balance_deeper()
 - [ ] 12 — Deletion, underflow, and rebalancing sibling pages
