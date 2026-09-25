@@ -229,7 +229,7 @@ stateDiagram-v2
     VALID --> REQUIRESEEK: saveCursorPosition()<br/>saveCursorKey() stores rowid or full key<br/>btreeReleaseAllCursorPages() sets iPage = -1
     REQUIRESEEK --> VALID: btreeRestoreCursorPosition()<br/>btreeMoveto() re-descends, frees pKey
     REQUIRESEEK --> SKIPNEXT: restore returned skipNext != 0<br/>(landed on a neighbour row)
-    VALID --> SKIPNEXT: sqlite3BtreeDelete(bPreserve &gt; 1)<br/>row removed under the cursor
+    VALID --> SKIPNEXT: sqlite3BtreeDelete(bPreserve > 1)<br/>row removed under the cursor
     SKIPNEXT --> VALID: one Next()/Previous() consumed<br/>as a no-op
     SKIPNEXT --> REQUIRESEEK: saveCursorPosition()<br/>(state forced to VALID first, skipNext kept)
     VALID --> FAULT: I/O or OOM on another connection<br/>sharing this BtShared
