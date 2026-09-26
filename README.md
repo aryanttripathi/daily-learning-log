@@ -13,7 +13,7 @@ Every lesson is written to be *runnable*: it carries a hands-on exercise you can
 
 ## Current Track
 
-**SQLite Internals**: Lesson 10 of 32 · started 2026-09-16 · [syllabus and progress →](TRACK.md)
+**SQLite Internals**: Lesson 11 of 32 · started 2026-09-16 · [syllabus and progress →](TRACK.md)
 
 ## Format
 
@@ -61,3 +61,4 @@ Entries before 2026-09-16 predate the track model. They came from a five-slot to
 | 2026-09-23 | 08 | [Table B-trees — Rowids, INTEGER PRIMARY KEY Aliasing, and WITHOUT ROWID](2026/09/2026-09-23-sqlite-rowid-ipk-without-rowid/README.md) | SQLite | [digest (edition 2026-09-21)](2026/09/2026-09-23-sqlite-rowid-ipk-without-rowid/daily-diff.md) |
 | 2026-09-24 | 09 | [Index B-trees — Key Records, Sort Order, and the Covering-Index Bargain](2026/09/2026-09-24-sqlite-index-btrees-sort-order-covering/README.md) | SQLite | [digest (edition 2026-09-22)](2026/09/2026-09-24-sqlite-index-btrees-sort-order-covering/daily-diff.md) |
 | 2026-09-25 | 10 | [BtCursor Navigation — The Page Stack, the Two Movetos, and Save/Restore](2026/09/2026-09-25-sqlite-btcursor-navigation-seek-restore/README.md) | SQLite | [digest (no new edition; newest is 2026-09-22)](2026/09/2026-09-25-sqlite-btcursor-navigation-seek-restore/daily-diff.md) |
+| 2026-09-26 | 11 | [Insertion and Page Splits — balance(), balance_quick(), balance_deeper() and balance_nonroot()](2026/09/2026-09-26-sqlite-balance-page-splits/README.md) | SQLite | [digest (no new edition; newest is 2026-09-22)](2026/09/2026-09-26-sqlite-balance-page-splits/daily-diff.md) |
