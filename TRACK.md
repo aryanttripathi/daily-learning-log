@@ -2,8 +2,8 @@
 track-state
 subject: SQLite
 started: 2026-09-16
-lessons-total: 32
-lessons-done: 12
+lessons-total: 33
+lessons-done: 13
 -->
 
 # Current Track: SQLite Internals
@@ -27,7 +27,7 @@ The order follows SQLite's actual layering (see sqlite.org/arch.html and filefor
 - [x] 10 — BtCursor navigation: moveToChild, table and index seeks, and cursor save/restore
 - [x] 11 — Insertion and page splits: balance(), balance_nonroot() and balance_deeper()
 - [x] 12 — Deletion, underflow, and rebalancing sibling pages
-- [ ] 13 — Auto-vacuum: pointer-map (ptrmap) pages, page relocation, and incremental_vacuum
+- [x] 13 — Auto-vacuum: pointer-map (ptrmap) pages, page relocation, and incremental_vacuum
 
 ### Part II — The pager, journals, and the OS interface (`pager.c`, `pcache*.c`, `os_unix.c`)
 - [ ] 14 — The page cache: PgHdr, pcache.c and pcache1.c, and dirty-page lists
@@ -55,6 +55,15 @@ The order follows SQLite's actual layering (see sqlite.org/arch.html and filefor
 - [ ] 30 — Virtual tables: the xBestIndex protocol, plus sqlite_dbpage and dbstat introspection
 - [ ] 31 — Memory-mapped I/O and memory allocation (mmap_size, memsys, lookaside)
 - [ ] 32 — Verifying a database: how PRAGMA integrity_check walks the file, and SQLite's test strategy
+- [ ] 33 — VACUUM and VACUUM INTO: the temp-database rewrite in vacuum.c, the backup API it shares, and why it is the only way to change auto_vacuum mode
+
+<!--
+syllabus revision 2026-09-28 (lesson 13): lesson 33 added, lessons-total 32 -> 33.
+Lesson 13 had to refer to VACUUM repeatedly as the mechanism that does what auto-vacuum
+cannot (repacking partially filled pages, changing auto_vacuum mode, forensic erasure),
+and no lesson covered vacuum.c. Placed after lesson 32 because both are whole-file
+operations. No lesson was reordered, split, or removed.
+-->
 
 ## Completed Subjects
 

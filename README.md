@@ -8,12 +8,12 @@ Every lesson is written to be *runnable*: it carries a hands-on exercise you can
 
 - **One subject at a time.** The log follows a multi-week *track*: a sequential deep dive into a single database or systems subject. The track's syllabus and progress live in [`TRACK.md`](TRACK.md), which is the single source of truth for what has been taught and what comes next.
 - **One lesson per day, each building on the last.** Every day takes the first unchecked lesson from the syllabus. Lessons assume everything earlier in the track is known and open with a *Where This Fits* section linking the previous lesson. Missed days are never backfilled; the track simply continues.
-- **A separate Daily Diff digest every day.** Alongside the lesson, each day folder has a `daily-diff.md` covering an edition of [The Daily Diff](https://tdd.cat/): a point-wise summary plus a deep dive on the single most significant item. tdd.cat publishes editions on a two-day settling window, so a digest covers the newest edition not yet covered and says which one it is. When no new edition has published, the digest says so explicitly rather than inventing items.
+- **A separate Daily Diff digest every day.** Alongside the lesson, each day folder has a `daily-diff.md` covering an edition of [The Daily Diff](https://tdd.cat/): a point-wise summary plus a deep dive on the single most significant item, with its source link followed and the underlying thing read. tdd.cat publishes editions on a settling window, so a digest covers the newest edition not yet covered and says which one it is. When no new edition has published, the digest says so explicitly rather than inventing items.
 - **Tracks end with a capstone.** When every lesson is checked, that day's document is a capstone assembling the whole system end to end. The subject moves to *Completed Subjects* in `TRACK.md`, and a new track begins.
 
 ## Current Track
 
-**SQLite Internals**: Lesson 12 of 32 · started 2026-09-16 · [syllabus and progress →](TRACK.md)
+**SQLite Internals**: Lesson 13 of 33 · started 2026-09-16 · [syllabus and progress →](TRACK.md)
 
 ## Format
 
@@ -63,3 +63,4 @@ Entries before 2026-09-16 predate the track model. They came from a five-slot to
 | 2026-09-25 | 10 | [BtCursor Navigation — The Page Stack, the Two Movetos, and Save/Restore](2026/09/2026-09-25-sqlite-btcursor-navigation-seek-restore/README.md) | SQLite | [digest (no new edition; newest is 2026-09-22)](2026/09/2026-09-25-sqlite-btcursor-navigation-seek-restore/daily-diff.md) |
 | 2026-09-26 | 11 | [Insertion and Page Splits — balance(), balance_quick(), balance_deeper() and balance_nonroot()](2026/09/2026-09-26-sqlite-balance-page-splits/README.md) | SQLite | [digest (no new edition; newest is 2026-09-22)](2026/09/2026-09-26-sqlite-balance-page-splits/daily-diff.md) |
 | 2026-09-27 | 12 | [Deletion, Underflow, and Rebalancing — sqlite3BtreeDelete(), dropCell(), and the 2/3 Rule](2026/09/2026-09-27-sqlite-delete-underflow-rebalance/README.md) | SQLite | [digest (edition 2026-09-25)](2026/09/2026-09-27-sqlite-delete-underflow-rebalance/daily-diff.md) |
+| 2026-09-28 | 13 | [Auto-Vacuum — Pointer-Map Pages, relocatePage(), and the Arithmetic of finalDbSize()](2026/09/2026-09-28-sqlite-autovacuum-ptrmap-page-relocation/README.md) | SQLite | [digest (edition 2026-09-27)](2026/09/2026-09-28-sqlite-autovacuum-ptrmap-page-relocation/daily-diff.md) |
