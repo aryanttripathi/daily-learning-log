@@ -3,7 +3,7 @@ track-state
 subject: SQLite
 started: 2026-09-16
 lessons-total: 33
-lessons-done: 13
+lessons-done: 14
 -->
 
 # Current Track: SQLite Internals
@@ -30,7 +30,7 @@ The order follows SQLite's actual layering (see sqlite.org/arch.html and filefor
 - [x] 13 — Auto-vacuum: pointer-map (ptrmap) pages, page relocation, and incremental_vacuum
 
 ### Part II — The pager, journals, and the OS interface (`pager.c`, `pcache*.c`, `os_unix.c`)
-- [ ] 14 — The page cache: PgHdr, pcache.c and pcache1.c, and dirty-page lists
+- [x] 14 — The page cache: PgHdr, pcache.c and pcache1.c, and dirty-page lists
 - [ ] 15 — The pager state machine and the five lock states (SHARED/RESERVED/PENDING/EXCLUSIVE)
 - [ ] 16 — The rollback journal file format and the single-file atomic commit sequence
 - [ ] 17 — Hot journals, crash recovery, and super-journals for multi-database commits
@@ -63,6 +63,13 @@ Lesson 13 had to refer to VACUUM repeatedly as the mechanism that does what auto
 cannot (repacking partially filled pages, changing auto_vacuum mode, forensic erasure),
 and no lesson covered vacuum.c. Placed after lesson 32 because both are whole-file
 operations. No lesson was reordered, split, or removed.
+
+no revision 2026-09-29 (lesson 14): the ordering held. Lesson 14 needed only btree-layer
+material already covered and stopped exactly where lesson 15 (pager state machine) begins:
+at the xStress -> pagerStress() call, whose legality depends on the pager state and the
+doNotSpill flags that lesson 15 covers. Lesson 31 (memory allocation) remains the right
+home for SQLITE_CONFIG_PAGECACHE bulk allocation and soft-heap-limit behaviour, which
+lesson 14 deliberately left alone.
 -->
 
 ## Completed Subjects
