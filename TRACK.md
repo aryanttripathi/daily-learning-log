@@ -3,7 +3,7 @@ track-state
 subject: SQLite
 started: 2026-09-16
 lessons-total: 33
-lessons-done: 14
+lessons-done: 15
 -->
 
 # Current Track: SQLite Internals
@@ -31,7 +31,7 @@ The order follows SQLite's actual layering (see sqlite.org/arch.html and filefor
 
 ### Part II — The pager, journals, and the OS interface (`pager.c`, `pcache*.c`, `os_unix.c`)
 - [x] 14 — The page cache: PgHdr, pcache.c and pcache1.c, and dirty-page lists
-- [ ] 15 — The pager state machine and the five lock states (SHARED/RESERVED/PENDING/EXCLUSIVE)
+- [x] 15 — The pager state machine and the five lock states (SHARED/RESERVED/PENDING/EXCLUSIVE)
 - [ ] 16 — The rollback journal file format and the single-file atomic commit sequence
 - [ ] 17 — Hot journals, crash recovery, and super-journals for multi-database commits
 - [ ] 18 — The VFS: sqlite3_vfs and sqlite3_io_methods, POSIX advisory locks in os_unix.c, and the lock-byte page
@@ -70,6 +70,25 @@ at the xStress -> pagerStress() call, whose legality depends on the pager state 
 doNotSpill flags that lesson 15 covers. Lesson 31 (memory allocation) remains the right
 home for SQLITE_CONFIG_PAGECACHE bulk allocation and soft-heap-limit behaviour, which
 lesson 14 deliberately left alone.
+
+scope note 2026-09-30 (lesson 15): no lesson added, removed, reordered or split;
+lessons-total stays 33. Lesson 15 necessarily consumed some os_unix.c material that
+lesson 18 nominally owns: the PENDING_BYTE / RESERVED_BYTE / SHARED_FIRST offsets from
+os.h:159-166 and the unixLock() escalation sequence, because the five lock levels cannot
+be explained without saying which bytes they are. Lesson 18 should therefore NOT re-teach
+those offsets and should instead take: the sqlite3_vfs / sqlite3_io_methods dispatch
+tables and VFS registration; unixInodeInfo and the intra-process lock emulation that makes
+two connections in one process behave correctly despite per-process POSIX record locks;
+the alternative locking styles in os_unix.c (dot-file, flock, AFP, named-semaphore, nolock)
+and when each is selected; xCheckReservedLock and its interaction with UNKNOWN_LOCK;
+xSectorSize / xDeviceCharacteristics and the IOCAP flags (SAFE_APPEND, SEQUENTIAL,
+BATCH_ATOMIC) that lessons 15 and 16 both reference but neither explains; and the lock-byte
+PAGE as it appears in the b-tree address space (PENDING_BYTE_PAGE, btreeInt.h:612) rather
+than the lock byte ranges themselves.
+
+Lesson 15 also pulled forward one WAL observation (a WAL write transaction never raises the
+database file above SHARED; write exclusion moves to the -shm file) purely to bound the
+rollback-mode claims. Lessons 19-20 keep the -shm file, read-marks and checkpointing intact.
 -->
 
 ## Completed Subjects
