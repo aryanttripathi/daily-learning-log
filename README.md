@@ -13,7 +13,7 @@ Every lesson is written to be *runnable*: it carries a hands-on exercise you can
 
 ## Current Track
 
-**SQLite Internals**: Lesson 14 of 33 · started 2026-09-16 · [syllabus and progress →](TRACK.md)
+**SQLite Internals**: Lesson 15 of 33 · started 2026-09-16 · [syllabus and progress →](TRACK.md)
 
 Part I (the on-disk format and the b-tree layer) is complete. Part II — the pager, the page cache, journals, and the OS interface — began on 2026-09-29.
 
@@ -67,3 +67,4 @@ Entries before 2026-09-16 predate the track model. They came from a five-slot to
 | 2026-09-27 | 12 | [Deletion, Underflow, and Rebalancing — sqlite3BtreeDelete(), dropCell(), and the 2/3 Rule](2026/09/2026-09-27-sqlite-delete-underflow-rebalance/README.md) | SQLite | [digest (edition 2026-09-25)](2026/09/2026-09-27-sqlite-delete-underflow-rebalance/daily-diff.md) |
 | 2026-09-28 | 13 | [Auto-Vacuum — Pointer-Map Pages, relocatePage(), and the Arithmetic of finalDbSize()](2026/09/2026-09-28-sqlite-autovacuum-ptrmap-page-relocation/README.md) | SQLite | [digest (edition 2026-09-27)](2026/09/2026-09-28-sqlite-autovacuum-ptrmap-page-relocation/daily-diff.md) |
 | 2026-09-29 | 14 | [The Page Cache — PgHdr, pcache1's LRU, and Why the Dirty List Is Sorted Twice](2026/09/2026-09-29-sqlite-page-cache-pghdr-dirty-lists/README.md) | SQLite | [digest (edition 2026-09-28)](2026/09/2026-09-29-sqlite-page-cache-pghdr-dirty-lists/daily-diff.md) |
+| 2026-09-30 | 15 | [The Pager State Machine — Seven States, Three Locks, and the PENDING Byte Nobody Records](2026/09/2026-09-30-sqlite-pager-state-machine-lock-states/README.md) | SQLite | [digest (edition 2026-09-29)](2026/09/2026-09-30-sqlite-pager-state-machine-lock-states/daily-diff.md) |
