@@ -3,7 +3,7 @@ track-state
 subject: SQLite
 started: 2026-09-16
 lessons-total: 33
-lessons-done: 15
+lessons-done: 16
 -->
 
 # Current Track: SQLite Internals
@@ -32,7 +32,7 @@ The order follows SQLite's actual layering (see sqlite.org/arch.html and filefor
 ### Part II — The pager, journals, and the OS interface (`pager.c`, `pcache*.c`, `os_unix.c`)
 - [x] 14 — The page cache: PgHdr, pcache.c and pcache1.c, and dirty-page lists
 - [x] 15 — The pager state machine and the five lock states (SHARED/RESERVED/PENDING/EXCLUSIVE)
-- [ ] 16 — The rollback journal file format and the single-file atomic commit sequence
+- [x] 16 — The rollback journal file format and the single-file atomic commit sequence
 - [ ] 17 — Hot journals, crash recovery, and super-journals for multi-database commits
 - [ ] 18 — The VFS: sqlite3_vfs and sqlite3_io_methods, POSIX advisory locks in os_unix.c, and the lock-byte page
 
@@ -89,6 +89,33 @@ than the lock byte ranges themselves.
 Lesson 15 also pulled forward one WAL observation (a WAL write transaction never raises the
 database file above SHARED; write exclusion moves to the -shm file) purely to bound the
 rollback-mode claims. Lessons 19-20 keep the -shm file, read-marks and checkpointing intact.
+
+scope note 2026-10-01 (lesson 16): no lesson added, removed, reordered or split;
+lessons-total stays 33. The ordering held — lesson 16 needed only the pager states and lock
+levels from lesson 15 and the dirty-list/spill mechanics from lesson 14.
+
+Two scope adjustments to record:
+
+(a) Lesson 16 took more of the IOCAP flags than lesson 15's note anticipated, because the
+journal header format cannot be explained without them: SQLITE_IOCAP_SAFE_APPEND selects
+the nRec=0xffffffff path in writeJournalHdr (pager.c:1532-1539) and suppresses the extra
+journal header after a spill (pager.c:4431), and SQLITE_IOCAP_SEQUENTIAL gates both journal
+syncs in syncJournal (pager.c:4409, 4421). SQLITE_IOCAP_POWERSAFE_OVERWRITE was also taken,
+since it is why the measured sectorSize is 512 rather than 4096 (setSectorSize,
+pager.c:2799-2813). Lesson 18 should therefore take only BATCH_ATOMIC and the
+xSectorSize / xDeviceCharacteristics dispatch itself, and may reference the three flags
+above as already covered.
+
+(b) Lesson 16 produced a real hot journal (SIGKILL of a spilling writer), measured the
+rollback end to end (md5 identical, file truncated to dbOrigSize x pageSize, 14 ms), and
+established why a zeroed magic number makes a journal safe to ignore. Lesson 17 should NOT
+re-teach the playback walk or re-run a basic recovery. It should take: hasHotJournal()'s
+five conditions and the xCheckReservedLock interaction; the pagerSyncHotJournal step and
+the cache-reset distinction between a genuinely hot journal and a merely persistent one
+(the isHot parameter, pager.c:2865-2871); SQLITE_READONLY_ROLLBACK; the super-journal
+format, writeSuperJournal, readSuperJournal (pager.c:1340-1382) and pagerIsSuperJrnlName;
+and the multi-database commit protocol where the super-journal's deletion is the commit
+point instead of the per-database journal's.
 -->
 
 ## Completed Subjects
