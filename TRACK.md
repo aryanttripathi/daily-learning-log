@@ -3,7 +3,7 @@ track-state
 subject: SQLite
 started: 2026-09-16
 lessons-total: 33
-lessons-done: 16
+lessons-done: 17
 -->
 
 # Current Track: SQLite Internals
@@ -33,7 +33,7 @@ The order follows SQLite's actual layering (see sqlite.org/arch.html and filefor
 - [x] 14 — The page cache: PgHdr, pcache.c and pcache1.c, and dirty-page lists
 - [x] 15 — The pager state machine and the five lock states (SHARED/RESERVED/PENDING/EXCLUSIVE)
 - [x] 16 — The rollback journal file format and the single-file atomic commit sequence
-- [ ] 17 — Hot journals, crash recovery, and super-journals for multi-database commits
+- [x] 17 — Hot journals, crash recovery, and super-journals for multi-database commits
 - [ ] 18 — The VFS: sqlite3_vfs and sqlite3_io_methods, POSIX advisory locks in os_unix.c, and the lock-byte page
 
 ### Part III — Write-ahead logging, revisited in depth (`wal.c`)
@@ -116,6 +116,38 @@ the cache-reset distinction between a genuinely hot journal and a merely persist
 format, writeSuperJournal, readSuperJournal (pager.c:1340-1382) and pagerIsSuperJrnlName;
 and the multi-database commit protocol where the super-journal's deletion is the commit
 point instead of the per-database journal's.
+
+scope note 2026-10-02 (lesson 17): no lesson added, removed, reordered or split;
+lessons-total stays 33. Lesson 17 took exactly the scope lesson 16's note (b) assigned it
+and did not re-teach the playback walk. It read source at commit fde3a84d: pager.c
+(1265-1316, 1318-1386, 1725-1816, 2570-2704, 2875-2935, 3010-3060, 4090-4111, 5180-5300,
+5330-5470), vdbeaux.c (2918-3170) and sqlite.h.in (556-561).
+
+Three scope adjustments to record:
+
+(a) Lesson 17 necessarily took part of xCheckReservedLock that lesson 15's note assigned to
+lesson 18 — specifically that sqlite3OsCheckReservedLock() is hasHotJournal()'s condition 5
+and the ticket #3883 race around it (pager.c:5217-5225). It treated the call as a black box
+and did NOT touch unixCheckReservedLock's implementation, the UNKNOWN_LOCK interaction, or
+unixInodeInfo. Lesson 18 keeps all of those and should open the box lesson 17 only named.
+
+(b) The multi-file commit protocol lives in the VDBE layer, not the pager, so lesson 17
+necessarily read vdbeCommit() (vdbeaux.c:2930-3180) ahead of Part IV. What it took is narrow:
+the aMJNeeded[] matrix and the safety_level/memdb test that decide nTrans (2962-2983), the
+super-journal name generation (3056-3079), the per-journal CommitPhaseOne loop (3139-3144),
+and the sqlite3OsDelete(..., 1) commit point (3156). Lessons 21-28 keep everything else about
+the VDBE; lesson 29 (SQL-level transactions, savepoints, statement journals) keeps autocommit,
+sqlite3VdbeHalt's surrounding logic, and the statement journal entirely — lesson 17 mentioned
+the statement journal only as a forward reference and measured nothing about it.
+
+(c) Lesson 17 established two things later lessons should build on rather than repeat: that
+SQLITE_READONLY_ROLLBACK (776) makes a crashed database unreadable to a read-only connection,
+and that aMJNeeded[] silently disables cross-file atomicity when any participant is in WAL,
+MEMORY or OFF journal mode or at synchronous=OFF (measured as a torn delete+WAL transaction).
+Lessons 19-20 should reference the WAL row of that matrix as already measured when discussing
+what WAL gives up, and lesson 32 (integrity_check) should reference the measured finding that
+a torn multi-file transaction leaves every participating file reporting integrity_check = ok,
+since that bounds what integrity_check can be claimed to verify.
 -->
 
 ## Completed Subjects
