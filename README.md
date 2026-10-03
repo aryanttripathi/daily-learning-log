@@ -8,14 +8,14 @@ Every lesson is written to be *runnable*: it carries a hands-on exercise you can
 
 - **One subject at a time.** The log follows a multi-week *track*: a sequential deep dive into a single database or systems subject. The track's syllabus and progress live in [`TRACK.md`](TRACK.md), which is the single source of truth for what has been taught and what comes next.
 - **One lesson per day, each building on the last.** Every day takes the first unchecked lesson from the syllabus. Lessons assume everything earlier in the track is known and open with a *Where This Fits* section linking the previous lesson. Missed days are never backfilled; the track simply continues.
-- **A separate Daily Diff digest every day.** Alongside the lesson, each day folder has a `daily-diff.md` covering an edition of [The Daily Diff](https://tdd.cat/): a point-wise summary plus a deep dive on the single most significant item, with its source link followed and the underlying thing read. tdd.cat publishes editions on a settling window — and its homepage can lag its archive by a day or two — so a digest covers the newest edition not yet covered and says which one it is. When no new edition has published, the digest says so explicitly rather than inventing items.
+- **A separate Daily Diff digest every day.** Alongside the lesson, each day folder has a `daily-diff.md` covering an edition of [The Daily Diff](https://tdd.cat/): a point-wise summary plus a deep dive on the single most significant item, with its source link followed and the underlying thing read. tdd.cat publishes editions on a documented two-day settling window — and its homepage can lag its archive by a day or two — so a digest covers the newest edition not yet covered and says which one it is. When no new edition has published, the digest says so explicitly rather than inventing items.
 - **Tracks end with a capstone.** When every lesson is checked, that day's document is a capstone assembling the whole system end to end. The subject moves to *Completed Subjects* in `TRACK.md`, and a new track begins.
 
 ## Current Track
 
-**SQLite Internals**: Lesson 17 of 33 · started 2026-09-16 · [syllabus and progress →](TRACK.md)
+**SQLite Internals**: Lesson 18 of 33 · started 2026-09-16 · [syllabus and progress →](TRACK.md)
 
-Part I (the on-disk format and the b-tree layer) is complete. Part II — the pager, the page cache, journals, and the OS interface — began on 2026-09-29 and is now four lessons in: the page cache, the pager state machine, the rollback journal format, and hot-journal recovery with the super-journal. One lesson remains in Part II (the VFS) before Part III takes WAL in depth.
+Part I (the on-disk format and the b-tree layer) and **Part II (the pager, journals, and the OS interface) are now both complete**. Part II ran from 2026-09-29 through 2026-10-03: the page cache, the pager state machine, the rollback journal format, hot-journal recovery with the super-journal, and the VFS layer underneath all of them. Part III takes write-ahead logging in depth — frame append and the wal-index, then checkpointing — starting from the `xShmMap`/`xShmLock`/`xShmBarrier`/`xShmUnmap` slots that lesson 18 enumerated.
 
 ## Format
 
@@ -70,3 +70,4 @@ Entries before 2026-09-16 predate the track model. They came from a five-slot to
 | 2026-09-30 | 15 | [The Pager State Machine — Seven States, Three Locks, and the PENDING Byte Nobody Records](2026/09/2026-09-30-sqlite-pager-state-machine-lock-states/README.md) | SQLite | [digest (edition 2026-09-29)](2026/09/2026-09-30-sqlite-pager-state-machine-lock-states/daily-diff.md) |
 | 2026-10-01 | 16 | [The Rollback Journal — Why the Magic Number Is Written Last](2026/10/2026-10-01-sqlite-rollback-journal-atomic-commit/README.md) | SQLite | [digest (no new edition; newest is 2026-09-29)](2026/10/2026-10-01-sqlite-rollback-journal-atomic-commit/daily-diff.md) |
 | 2026-10-02 | 17 | [Hot Journals and the Super-Journal — A 285-Byte File Decides Whether Three Databases Commit](2026/10/2026-10-02-sqlite-hot-journals-super-journal-recovery/README.md) | SQLite | [digest (edition 068, 2026-10-01)](2026/10/2026-10-02-sqlite-hot-journals-super-journal-recovery/daily-diff.md) |
+| 2026-10-03 | 18 | [The VFS — Two Dispatch Tables, Five Locking Styles, and the File Descriptor That Outlives Its Connection](2026/10/2026-10-03-sqlite-vfs-locking-styles-inode-emulation/README.md) | SQLite | [digest (edition 067, 2026-09-30)](2026/10/2026-10-03-sqlite-vfs-locking-styles-inode-emulation/daily-diff.md) |

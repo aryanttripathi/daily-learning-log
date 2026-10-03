@@ -3,7 +3,7 @@ track-state
 subject: SQLite
 started: 2026-09-16
 lessons-total: 33
-lessons-done: 17
+lessons-done: 18
 -->
 
 # Current Track: SQLite Internals
@@ -34,7 +34,7 @@ The order follows SQLite's actual layering (see sqlite.org/arch.html and filefor
 - [x] 15 — The pager state machine and the five lock states (SHARED/RESERVED/PENDING/EXCLUSIVE)
 - [x] 16 — The rollback journal file format and the single-file atomic commit sequence
 - [x] 17 — Hot journals, crash recovery, and super-journals for multi-database commits
-- [ ] 18 — The VFS: sqlite3_vfs and sqlite3_io_methods, POSIX advisory locks in os_unix.c, and the lock-byte page
+- [x] 18 — The VFS: sqlite3_vfs and sqlite3_io_methods, POSIX advisory locks in os_unix.c, and the lock-byte page
 
 ### Part III — Write-ahead logging, revisited in depth (`wal.c`)
 - [ ] 19 — WAL frame append, wal-index hash tables, and read-mark slots
@@ -148,6 +148,67 @@ Lessons 19-20 should reference the WAL row of that matrix as already measured wh
 what WAL gives up, and lesson 32 (integrity_check) should reference the measured finding that
 a torn multi-file transaction leaves every participating file reporting integrity_check = ok,
 since that bounds what integrity_check can be claimed to verify.
+
+scope note 2026-10-03 (lesson 18): no lesson added, removed, reordered or split;
+lessons-total stays 33. Lesson 18 took exactly the scope that lessons 15, 16 and 17's notes
+assigned it: the sqlite3_vfs / sqlite3_io_methods dispatch tables and VFS registration;
+unixInodeInfo and the intra-process lock emulation; the alternative locking styles
+(dot-file, flock, named-semaphore, nolock, afp/proxy/nfs) and autolockIoFinder's selection
+logic; xCheckReservedLock opened up, with UNKNOWN_LOCK; xSectorSize / xDeviceCharacteristics
+dispatch plus BATCH_ATOMIC only; and the lock-byte PAGE (PENDING_BYTE_PAGE). It did NOT
+re-teach the PENDING_BYTE / RESERVED_BYTE / SHARED_FIRST offsets (lesson 15) or the
+SAFE_APPEND / SEQUENTIAL / POWERSAFE_OVERWRITE flags (lesson 16), referencing both as
+already covered. Source read at commit fde3a84d: os_unix.c (423-427, 236-276, 521-528,
+584-586, 1282-1365, 1471-1512, 1527-1618, 1660-1716, 1780-1840, 2099-2109, 2341-2400,
+2443-2571, 4144-4157, 4330-4400, 4461-4482, 5800-6016, 6128-6207, 8460-8526), os.c (355-447),
+pager.c (396-407, 627-634, 906-964, 1129-1173, 1187-1212, 2384-2390, 2764-2806, 3682-3689,
+5018-5074, 5330-5395, 5631-5648, 6583-6731, 7622-7733), btreeInt.h (592-614), btree.c and
+backup.c (PENDING_BYTE_PAGE sites only).
+
+Four scope adjustments to record:
+
+(a) Lesson 18 took sqlite3PagerWalSupported() (pager.c:7625-7629) and measured that its line
+ordering is observable from SQL: locking_mode=EXCLUSIVE makes journal_mode=WAL succeed on
+unix-dotfile and unix-none (exclusiveMode short-circuits the iVersion>=2 && xShmMap test),
+while ?nolock=1 defeats WAL even in exclusive mode because noLock is tested first. It also
+measured that a failed journal_mode=WAL returns "delete" with SQLITE_OK and no error.
+Lessons 19-20 should treat that gate as already measured and should NOT re-derive it; they
+keep the -shm file contents, the wal-index hash tables, read-marks, frame append and
+checkpointing entirely. The heap-memory wal-index under exclusiveMode (pager.c:7663-7666)
+was named only as the justification for the short-circuit and is still theirs to explain.
+
+(b) Lesson 18 demonstrated PENDING_BYTE_PAGE by relocating PENDING_BYTE with
+sqlite3_test_control(SQLITE_TESTCTRL_PENDING_BYTE, 0x2000) at page_size=1024 and showing
+page 9 as 1024 zero bytes between 0x0d leaves. It also catalogued the ~two dozen sites that
+special-case it. Lesson 32 (integrity_check) should reference the measured fact that
+integrity_check marks PENDING_BYTE_PAGE as referenced (btree.c:11263-11264) so it is not
+reported as a leak, rather than rediscovering it; lesson 33 (VACUUM / the backup API) keeps
+backup.c's page-skipping (254, 265, 419, 479, 507, 519) and pager_truncate's adjustment.
+
+(c) Lesson 18 touched xFetch / xUnfetch ONLY as far as measuring that the unix VFS maps the
+database PROT_READ|MAP_SHARED (never writable), that reads then collapse to the pre-mmap
+bootstrap preads while every write remains a pwrite64 through xWrite, and that mmap_size
+defaults to 0. That measurement exists to support today's Daily Diff deep-dive (the CIDR 2022
+mmap paper, which names SQLite's approach "user space copy-on-write"). Lesson 31
+(memory-mapped I/O and memory allocation) keeps everything else: mmapSize / mmapSizeActual /
+mmapSizeMax / nFetchOut, SQLITE_FCNTL_MMAP_SIZE, SQLITE_MAX_MMAP_SIZE, the xFetch-returns-NULL
+fallback, the SIGBUS hazard in detail, and memsys / lookaside / SQLITE_CONFIG_PAGECACHE.
+
+(d) Two findings later lessons should build on rather than repeat. First:
+setDeviceCharacteristics on Linux (os_unix.c:4353-4375) is a compile-time constant plus a
+single F2FS ioctl, so every SQLITE_IOCAP_ATOMIC*, SAFE_APPEND and SEQUENTIAL flag is UNSET on
+ordinary Linux, and the pager discards the reported sector size anyway when
+POWERSAFE_OVERWRITE is set (pager.c:2802-2805, measured: VFS says 4096, pager uses 512). That
+bounds lesson 16's journal-format claims: those optimization paths are real in the source and
+unreachable in ordinary Linux measurements. Second: the BATCH_ATOMIC commit path requires
+zSuper==0 (pager.c:6587), so it is mutually exclusive with lesson 17's super-journal — another
+row in the same table as aMJNeeded[]. Lesson 29 (SQL-level transactions, savepoints,
+statement journals) may reference that exclusion.
+
+Version caveat for anyone re-running lesson 18's measurements: they were taken against system
+libsqlite3 3.45.1 while the source was read at trunk fde3a84d. The visible disagreement is
+SQLITE_IOCAP_SUBPAGE_READ, which trunk sets unconditionally and 3.45.1 does not have. The
+lesson states this rather than reconciling it.
 -->
 
 ## Completed Subjects
