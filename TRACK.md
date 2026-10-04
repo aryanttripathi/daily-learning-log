@@ -3,7 +3,7 @@ track-state
 subject: SQLite
 started: 2026-09-16
 lessons-total: 33
-lessons-done: 18
+lessons-done: 19
 -->
 
 # Current Track: SQLite Internals
@@ -37,7 +37,7 @@ The order follows SQLite's actual layering (see sqlite.org/arch.html and filefor
 - [x] 18 — The VFS: sqlite3_vfs and sqlite3_io_methods, POSIX advisory locks in os_unix.c, and the lock-byte page
 
 ### Part III — Write-ahead logging, revisited in depth (`wal.c`)
-- [ ] 19 — WAL frame append, wal-index hash tables, and read-mark slots
+- [x] 19 — WAL frame append, wal-index hash tables, and read-mark slots
 - [ ] 20 — Checkpoint algorithm, wal_autocheckpoint, and WAL reset/restart
 
 ### Part IV — The SQL compiler and bytecode engine
@@ -209,6 +209,68 @@ Version caveat for anyone re-running lesson 18's measurements: they were taken a
 libsqlite3 3.45.1 while the source was read at trunk fde3a84d. The visible disagreement is
 SQLITE_IOCAP_SUBPAGE_READ, which trunk sets unconditionally and 3.45.1 does not have. The
 lesson states this rather than reconciling it.
+
+scope note 2026-10-04 (lesson 19): no lesson added, removed, reordered or split;
+lessons-total stays 33. The ordering held exactly. Lesson 19 needed only the -shm method
+slots from lesson 18, the lock levels from lesson 15, and the spill/dirty-list mechanics from
+lesson 14, and it took precisely the scope lesson 18's note (a) assigned it: the -shm file
+contents, the wal-index hash tables, read-marks, frame append, and the heap-memory wal-index.
+It did NOT re-derive the sqlite3PagerWalSupported() line ordering — it referenced lesson 18's
+measurement and used the same unix-dotfile + locking_mode=EXCLUSIVE setup only to show that
+no -shm file is created at all. Source read at commits 9696acb0 and ccbdec84 (identical line
+numbering for every region cited), almost entirely src/wal.c; see the lesson's Sources for the
+line ranges.
+
+Four things to record for the lessons that follow:
+
+(a) Lesson 20 (checkpointing) keeps walCheckpoint() (wal.c:2281), the WalIterator and its two
+algorithms WALITER-1 / WALITER-2 (wal.c:576-636, 1796-2108 — note WALITER-2 was added in
+SQLite 3.54.0 and the system 3.45.1 used for measurements does not have it), walLimitSize(),
+sqlite3WalCheckpoint() (4387) and the PASSIVE/FULL/RESTART/TRUNCATE modes. Lesson 19 took
+nBackfill / nBackfillAttempted / minFrame and the read-mark FLOOR only as far as measuring it
+from outside: PRAGMA wal_checkpoint(PASSIVE) returned (0, 10, 3) with one reader pinned at
+aReadMark[1]=3, and (0, 10, 10) once released. Lesson 20 should treat that floor as already
+measured and explain the algorithm that respects it, not re-demonstrate the effect. It also
+keeps the sqlite3_wal_checkpoint_v2 C interface and wal_autocheckpoint's 1000-page default
+entirely — lesson 19 only ever set wal_autocheckpoint=0 to get deterministic measurements.
+
+(b) Lesson 19 necessarily took walRestartLog() / walRestartHdr() (wal.c:2234-2248, 3961-4001)
+ahead of lesson 20's "WAL reset/restart" line item, because walRestartLog() is the FIRST thing
+walFrames() calls and the append path cannot be described without it. What it took: the
+readLock==0 precondition, the WAL_READ_LOCK(1..WAL_NREADER-1) exclusive grab, the salt-1
+increment and salt-2 re-randomization, the fact that the file is rewound and NOT truncated
+(measured: size unchanged at 10512 bytes), and the reset of nBackfill and the read marks.
+Lesson 20 should reference that as covered and take instead: reset as initiated by a
+CHECKPOINT rather than a writer, journal_size_limit / walLimitSize interaction, and the
+TRUNCATE mode. Lesson 19 measured TRUNCATE's effect (mxFrame -> 0) without opening it.
+
+(c) A finding lesson 20 and lesson 29 should build on rather than rediscover: Wal.nCkpt is
+assigned in exactly ONE place outside walRestartHdr(), namely wal.c:1488 inside
+walIndexRecover(). A connection that opened a healthy WAL and never ran recovery therefore
+carries a PRIVATE counter, and walFrames() writes that private value into WAL header bytes
+12-15 on every restart (wal.c:4181). Measured: ckptSeq stayed 1 across two resets performed by
+two different connections. So the on-disk checkpoint sequence number is NOT a global generation
+count. Its only consumer is savepoint bookkeeping (sqlite3WalSavepoint, wal.c:3909;
+sqlite3WalSavepointUndo, 3924-3931), for which per-connection is sufficient — lesson 29
+(savepoints) should take that pair of functions, which lesson 19 only named.
+
+(d) Lesson 19 applied lesson 18's note (d) rather than re-measuring it: POWERSAFE_OVERWRITE is
+set on ext4, so sqlite3WalOpen() clears padToSectorBoundary (wal.c:1770-1772) and the padding
+loop at wal.c:4283-4295 is unreachable on an ordinary Linux filesystem. Measured confirmation:
+identical frame counts (5) at synchronous=NORMAL and FULL, with FULL costing exactly one extra
+fdatasync of the -wal per commit. Lesson 31 (mmap and memory allocation) still owns everything
+about xFetch beyond what lesson 18 took; lesson 19 did not touch mmap at all.
+
+One sub-measurement that did NOT reproduce, recorded so nobody builds on it: reading the
+-shm file's POSIX lock records out of /proc/locks was intermittent. Structurally identical
+scripts sometimes showed the expected records at bytes 124-127 (plus the unix VFS's DMS byte at
+128) and sometimes showed none for that inode, while the database file's SHARED lock was always
+visible. The byte offsets observed agree with wal.c:1713-1723 and the read-mark VALUES were
+reproducible every time, so the lesson presents the values and effects as the evidence and
+flags the /proc/locks view as corroborating only. The cause was not isolated; a plausible
+hypothesis, stated as such in the lesson, is lock coalescing interacting with the
+single-process lock emulation lesson 18 covered. Worth settling by re-running the readers in
+separate processes.
 -->
 
 ## Completed Subjects
