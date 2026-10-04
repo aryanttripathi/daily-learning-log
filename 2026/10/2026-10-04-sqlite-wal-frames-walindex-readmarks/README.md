@@ -628,3 +628,422 @@ files present: ['h.db', 'h.db-wal', 'h.db.lock']
 ```
 
 WAL mode, five committed transactions, a fully valid checksum chain — and **no `-shm` file in the directory at all**. (`h.db.lock` is the dotfile VFS's lock *directory*, nothing to do with the wal-index.) Every number the wal-index would have held existed only in this process's heap and vanished with it.
+
+## Hands-On
+
+Everything below ran against system `libsqlite3` 3.45.1 via Python's `sqlite3` module (same library version), x86-64 Linux 6.18, ext4. No `sqlite3` CLI is needed. Two helper decoders do all the work; neither calls into SQLite.
+
+**One trap to know first:** closing the last connection to a WAL database checkpoints and deletes the `-wal` and `-shm` files. Every inspection below therefore happens **while a connection is still open**, from inside the same process. A script that writes, closes, and then looks at the files will find nothing.
+
+### Helper 1 — `waldump.py`: decode the WAL and re-verify the whole chain
+
+```python
+import struct, sys
+
+def cksum(data, native_be, s0=0, s1=0):
+    n = len(data)//4
+    fmt = ('>' if native_be else '<') + 'I'*n
+    x = struct.unpack(fmt, data[:n*4])
+    for i in range(0, n, 2):
+        s0 = (s0 + x[i]   + s1) & 0xffffffff
+        s1 = (s1 + x[i+1] + s0) & 0xffffffff
+    return s0, s1
+
+def dump(path, nmax=12):
+    b = open(path,'rb').read()
+    magic, ver, pgsz, nckpt, salt1, salt2, c1, c2 = struct.unpack('>8I', b[:32])
+    be = (magic & 1) == 1
+    print(f"-- {path}: {len(b)} bytes")
+    print(f"WAL header: magic=0x{magic:08x} ({'big' if be else 'little'}-endian cksums) "
+          f"version={ver} pgsz={pgsz} ckptSeq={nckpt} "
+          f"salt1=0x{salt1:08x} salt2=0x{salt2:08x} cksum=({c1:#x},{c2:#x})")
+    s0, s1 = cksum(b[:24], be)
+    print(f"  header cksum recomputed over bytes 0..23: ({s0:#x},{s1:#x})  match={s0==c1 and s1==c2}")
+    frame_sz = 24 + pgsz
+    n = (len(b) - 32)//frame_sz
+    run0, run1 = c1, c2                      # chain seeds on the HEADER's checksum
+    for i in range(1, min(n, nmax)+1):
+        off = 32 + (i-1)*frame_sz
+        pgno, ntrunc, fs1, fs2, fc1, fc2 = struct.unpack('>6I', b[off:off+24])
+        run0, run1 = cksum(b[off:off+8],        be, run0, run1)   # frame hdr bytes 0..7 only
+        run0, run1 = cksum(b[off+24:off+24+pgsz], be, run0, run1) # then the page image
+        print(f"  frame {i:3d} @0x{off:06x}: pgno={pgno:5d} nTrunc={ntrunc:5d} "
+              f"salt_ok={fs1==salt1 and fs2==salt2} cksum=({fc1:#010x},{fc2:#010x}) "
+              f"chain_ok={run0==fc1 and run1==fc2}"
+              + ("  <-- COMMIT" if ntrunc else ""))
+        if run0!=fc1 or run1!=fc2: run0, run1 = fc1, fc2
+```
+
+**What to look for:** `chain_ok=True` on every frame. That is the proof that the checksum is cumulative and seeded from the WAL header — if it were per-frame, seeding from zero would also work, and it does not. Also note which frames carry `nTruncate != 0`: exactly one per committed transaction, on its last frame.
+
+### Helper 2 — `shmdump.py`: decode the wal-index
+
+```python
+import struct, sys
+HDR=136; NPAGE=4096; NSLOT=8192
+NPAGE_ONE = NPAGE - HDR//4          # 4062
+PGSZ = 2*NSLOT + 4*NPAGE            # 32768
+
+def hdr(b, off):
+    iVersion, unused, iChange = struct.unpack('<3I', b[off:off+12])
+    isInit, bigEnd, szPage    = struct.unpack('<2BH', b[off+12:off+16])
+    mxFrame, nPage            = struct.unpack('<2I', b[off+16:off+24])
+    return dict(iVersion=iVersion, iChange=iChange, isInit=isInit, bigEndCksum=bigEnd,
+                szPage=szPage, mxFrame=mxFrame, nPage=nPage,
+                aFrameCksum=struct.unpack('<2I', b[off+24:off+32]),
+                aSalt=tuple(f"0x{s:08x}" for s in struct.unpack('<2I', b[off+32:off+40])),
+                aCksum=struct.unpack('<2I', b[off+40:off+48]))
+
+def dump(path, show_map=0):
+    b=open(path,'rb').read()
+    print(f"-- {path}: {len(b)} bytes  (WALINDEX_PGSZ={PGSZ}, HASHTABLE_NPAGE_ONE={NPAGE_ONE})")
+    h0=hdr(b,0)
+    print("  copy0:", h0); print("  copy1:", hdr(b,48))
+    print("  two copies identical:", b[0:48]==b[48:96])
+    nBackfill, = struct.unpack('<I', b[96:100])
+    marks      = struct.unpack('<5I', b[100:120])
+    nBfA, _    = struct.unpack('<2I', b[128:136])
+    print(f"  nBackfill={nBackfill}  nBackfillAttempted={nBfA}")
+    print(f"  aLock[120..127]={b[120:128].hex()}")
+    for i,m in enumerate(marks):
+        print(f"  aReadMark[{i}] @ offset {100+4*i:3d} = "
+              f"{'NOT_USED' if m==0xffffffff else m}")
+    if show_map:
+        mx=h0['mxFrame']
+        apgno=struct.unpack('<%dI'%NPAGE_ONE, b[HDR:HDR+4*NPAGE_ONE])
+        ahash=struct.unpack('<%dH'%NSLOT, b[HDR+4*NPAGE_ONE:HDR+4*NPAGE_ONE+2*NSLOT])
+        print("  aPgno (frame -> pgno):", [(i+1, apgno[i]) for i in range(min(mx, show_map))])
+        nz=[(k,ahash[k]) for k in range(NSLOT) if ahash[k]]
+        print(f"  non-zero aHash slots ({len(nz)}): {nz[:show_map]}")
+        for i in range(min(mx, show_map)):
+            p=apgno[i]; k=(p*383)%NSLOT
+            print(f"    frame {i+1} pgno {p}: walHash={k}, aHash[{k}]={ahash[k]}")
+```
+
+**What to look for:** `two copies identical: True` (the torn-write detector agrees), `aLock[120..127]` all zero forever (SQLite never writes those bytes — they exist only as `fcntl` targets), and the `aSalt` values appearing **byte-swapped** relative to the WAL header, because that one field keeps WAL byte order inside an otherwise native-endian struct.
+
+### A. The frame format and the checksum chain
+
+```python
+import sqlite3, subprocess
+c=sqlite3.connect('t.db', isolation_level=None)
+c.execute('pragma page_size=1024')
+print('journal_mode ->', c.execute('pragma journal_mode=wal').fetchone())
+c.execute('pragma synchronous=NORMAL')
+c.execute('create table t(a integer primary key, b text)')
+c.execute('begin'); c.execute("insert into t values(1,'alpha')"); c.execute('commit')
+c.execute('begin'); c.execute("insert into t values(2,'beta')");  c.execute('commit')
+c.execute('begin')
+for i in range(3,40): c.execute("insert into t values(?,?)",(i,'x'*200))
+c.execute('commit')
+subprocess.run(['python3','waldump.py','t.db-wal'])     # connection still open
+subprocess.run(['python3','shmdump.py','t.db-shm'])
+```
+
+Measured:
+
+```
+-- t.db-wal: 16800 bytes
+WAL header: magic=0x377f0682 (little-endian cksums) version=3007000 pgsz=1024
+            ckptSeq=0 salt1=0x26ee4254 salt2=0xbc50021c cksum=(0x2911f139,0xfcf0199a)
+  header cksum recomputed over bytes 0..23: (0x2911f139,0xfcf0199a)  match=True
+  16 frame slots of 1048 bytes
+  frame   1 @0x000020: pgno=    1 nTrunc=    0 ... chain_ok=True
+  frame   2 @0x000438: pgno=    2 nTrunc=    2 ... chain_ok=True  <-- COMMIT
+  frame   3 @0x000850: pgno=    2 nTrunc=    2 ... chain_ok=True  <-- COMMIT
+  frame   4 @0x000c68: pgno=    2 nTrunc=    2 ... chain_ok=True  <-- COMMIT
+  frame   5 @0x001080: pgno=    1 nTrunc=    0 ... chain_ok=True
+  ...
+-- t.db-shm: 32768 bytes  (WALINDEX_PGSZ=32768, HASHTABLE_NPAGE_ONE=4062)
+  copy0: {... 'szPage': 1024, 'mxFrame': 16, 'nPage': 12,
+          'aSalt': ('0x5442ee26', '0x1c0250bc') ...}
+  two copies identical: True
+  nBackfill=0  nBackfillAttempted=0
+  aLock[120..127]=0000000000000000
+```
+
+16800 = 32 + 16×1048 exactly. `0x26ee4254` in the WAL header is `0x5442ee26` in the `-shm` — the same four bytes, read with opposite endianness.
+
+### B. `walHash()` is a permutation, and real collisions
+
+First the arithmetic, with no database involved:
+
+```python
+NSLOT=8192; H=383
+seen={}; coll=0
+for p in range(NSLOT):
+    k=(p*H)&(NSLOT-1)
+    if k in seen: coll+=1
+    seen[k]=p
+print("distinct slots hit by p=0..8191:", len(seen), " collisions:", coll)
+print("383^-1 mod 8192 =", pow(H,-1,NSLOT))
+print("pages 1 and 8193 ->", (1*H)&8191, (8193*H)&8191)
+import collections
+c=collections.Counter(((p*H)&8191) for p in range(1,4097))
+print("distinct pages 1..4096 in one table: max occupancy =", max(c.values()),
+      " load factor =", 4096/NSLOT)
+```
+
+```
+distinct slots hit by p=0..8191: 8192  collisions: 0
+383^-1 mod 8192 = 7807
+pages 1 and 8193 -> 383 383
+distinct pages 1..4096 in one table: max occupancy = 1  load factor = 0.5
+```
+
+Then the live table. Create a database whose WAL contains page 1 twice and page 2 twice, and dump the mapping with `show_map`:
+
+```python
+c.execute('begin')
+for i in range(1,40): c.execute("insert into t values(?,?)",(i,'x'*200))
+c.execute('commit')
+subprocess.run(['python3','shmdump.py','8','t.db-shm'])
+```
+
+```
+  aPgno[0..7] (frame -> pgno): [(1,1),(2,2),(3,1),(4,2),(5,3),(6,4),(7,5),(8,6)]
+  non-zero aHash slots (14): [(383,1),(384,3),(766,2),(767,4),(1149,5),(1532,6),(1915,7),(2298,8)]
+    frame 1 pgno 1: walHash=383, aHash[383]=1
+    frame 3 pgno 1: walHash=383, aHash[384]=3
+```
+
+**What to look for:** the 14 non-zero hash slots exactly equal `mxFrame=14`. Pages 1 and 2 each occupy *two* slots — 383/384 and 766/767 — and the probe run is in frame order, so the **second** slot in each run holds the newer frame. This is the picture of why `walFindFrame()` must not break on its first match, and it is why a `(p*383)&8191` "hash" is adequate: the only collisions that occur are the intentional ones.
+
+### C. In-place frame overwrite and `walRewriteChecksums()`
+
+```python
+import sqlite3, struct, io, contextlib, os, sys
+sys.path.insert(0,'.'); import waldump
+c=sqlite3.connect('o.db', isolation_level=None)
+c.execute('pragma page_size=1024'); c.execute('pragma journal_mode=wal')
+c.execute('pragma synchronous=NORMAL'); c.execute('pragma wal_autocheckpoint=0')
+c.execute('pragma cache_size=10')                       # force spills
+c.execute('create table t(a integer primary key, b text)')
+c.execute('begin')
+for i in range(1,1500): c.execute("insert into t values(?,?)",(i,'z'*200))
+for i in range(1,60):   c.execute("update t set b='W' where a=?", (i,))
+c.execute('commit')
+mx,=struct.unpack('<I',open('o.db-shm','rb').read()[16:20])
+buf=io.StringIO()
+with contextlib.redirect_stdout(buf): waldump.dump('o.db-wal', 2000)
+lines=[l for l in buf.getvalue().split('\n') if 'chain_ok=' in l]
+print("mxFrame =", mx, " file size =", os.path.getsize('o.db-wal'),
+      " expected 32+mx*1048 =", 32+mx*1048)
+print("frames:", len(lines), " chain failures:", sum('chain_ok=False' in l for l in lines),
+      " commit frames:", sum('COMMIT' in l for l in lines),
+      " salt mismatches:", sum('salt_ok=False' in l for l in lines))
+print("integrity_check:", c.execute('pragma integrity_check').fetchone())
+```
+
+Run it under `strace -f -e trace=openat,pwrite64 -o ov.txt`, then map the `-wal` fd from the `openat` lines and count:
+
+```bash
+grep 'openat.*o\.db' ov.txt            # the LAST o.db-wal openat gives the right fd (4 here;
+                                       # fd 4 is reused from the -journal of the mode conversion)
+grep -c "pwrite64(4, .*, 24,"   ov.txt   # 764
+grep -c "pwrite64(4, .*, 1024," ov.txt   # 407
+```
+
+Measured:
+
+```
+mxFrame = 383   file size = 401416   expected 32+mx*1048 = 401416
+frames: 383   chain failures: 0   commit frames: 2   salt mismatches: 0
+integrity_check: ('ok',)
+24-byte pwrite64 to -wal : 764
+1024-byte pwrite64 to -wal: 407
+```
+
+**What to look for:** the two arithmetic gaps. `407 − 383 = 24` page writes that produced no frame — those are the in-place overwrites at `wal.c:4244`, writing only the payload at `walFrameOffset(iWrite) + 24`. And `764 − 383 = 381` frame-header writes beyond the appends — `walRewriteChecksums()` repairing the chain from `iReCksum` to the end at commit. The chain verifies on all 383 frames afterwards, which is the proof the repair is complete rather than best-effort.
+
+### D. Read-mark allocation
+
+```python
+import sqlite3, os, struct
+NAMES={120:'WRITE',121:'CKPT',122:'RCVR',123:'Rd0',124:'Rd1',125:'Rd2',126:'Rd3',127:'Rd4',128:'DMS'}
+def state(tag):
+    b=open('t.db-shm','rb').read()
+    mx,=struct.unpack('<I',b[16:20]); nb,=struct.unpack('<I',b[96:100])
+    m=struct.unpack('<5I',b[100:120])
+    f=lambda v:'NOT_USED' if v==0xffffffff else str(v)
+    print("%-33s mxFrame=%-3d nBackfill=%-3d aReadMark=%s"%(tag,mx,nb,[f(x) for x in m]))
+
+w=sqlite3.connect('t.db', isolation_level=None)
+w.execute('pragma page_size=1024'); w.execute('pragma journal_mode=wal')
+w.execute('pragma synchronous=NORMAL'); w.execute('pragma wal_autocheckpoint=0')
+w.execute('create table t(a integer primary key, b text)')
+R=[]
+for k in range(5):
+    w.execute('begin'); w.execute("insert into t values(?,?)",(k+1,'y'*100)); w.execute('commit')
+    r=sqlite3.connect('t.db', isolation_level=None)
+    r.execute('begin'); r.execute('select count(*) from t').fetchone()   # pins a snapshot
+    R.append(r)
+    state("reader %d open"%(k+1))
+```
+
+```
+reader 1 open    mxFrame=3  nBackfill=0  aReadMark=['0','3','NOT_USED','NOT_USED','NOT_USED']
+reader 2 open    mxFrame=4  nBackfill=0  aReadMark=['0','3','4','NOT_USED','NOT_USED']
+reader 3 open    mxFrame=5  nBackfill=0  aReadMark=['0','3','4','5','NOT_USED']
+reader 4 open    mxFrame=6  nBackfill=0  aReadMark=['0','3','4','5','6']
+reader 5 open    mxFrame=7  nBackfill=0  aReadMark=['0','3','4','5','6']
+```
+
+**What to look for:** four distinct snapshots and no more. Reader 5 commits nothing and changes nothing — it quietly shares mark 4 at frame 6 and reads a snapshot one commit older than it could have. `wal_autocheckpoint=0` matters: with the default 1000, a checkpoint fires mid-run and collapses the marks.
+
+To see the lock bytes rather than the values, read `/proc/locks` and filter on the `-shm` inode:
+
+```python
+ino=str(os.stat('t.db-shm').st_ino)
+for line in open('/proc/locks'):
+    fl=line.split()
+    if len(fl)>=8 and fl[5].rsplit(':',1)[-1]==ino: print(line.rstrip())
+```
+
+With one reader this gave `POSIX ADVISORY READ <pid> fe:00:<ino> 124 124` (that is `WAL_READ_LOCK(1)`) plus a second record at byte **128** — which is not a WAL lock at all but the unix VFS's DMS byte, immediately past the eight. With three readers the kernel reported a single coalesced record `124 126`.
+
+**Honest caveat on this one sub-measurement.** The `/proc/locks` view was *not reliably reproducible* here: structurally identical scripts sometimes showed the expected records and sometimes showed none for the `-shm` inode, while the database file's `SHARED` lock was always visible. The byte offsets the records did show agree with `wal.c:1713-1723`, and the read-mark **values** were reproducible every time. So treat the byte-offset observation as corroborating and the values and effects (D, E) as the real evidence. The cause of the flakiness was not isolated; it may be lock coalescing interacting with the single-process lock emulation [lesson 18](../2026-10-03-sqlite-vfs-locking-styles-inode-emulation/README.md) covered, since all connections here are in one process and the unix VFS keeps one process-level `fcntl` lock per byte with per-connection counts tracked internally. That is a hypothesis, not a finding.
+
+### E. The backfill floor, `BUSY_SNAPSHOT`, and a WAL reset — all from one script
+
+```python
+w.execute('begin'); w.execute("insert into t values(1,'a')"); w.execute('commit')
+old=sqlite3.connect('t.db', isolation_level=None)
+old.execute('begin'); old.execute('select count(*) from t').fetchone()   # pin mxFrame=3
+for k in range(2,6):
+    w.execute('begin'); w.execute("insert into t values(?,?)",(k,'b'*300)); w.execute('commit')
+print("PASSIVE ->", w.execute('pragma wal_checkpoint(PASSIVE)').fetchone())
+old.execute('rollback')
+print("PASSIVE ->", w.execute('pragma wal_checkpoint(PASSIVE)').fetchone())
+
+a=sqlite3.connect('t.db', isolation_level=None); b_=sqlite3.connect('t.db', isolation_level=None)
+a.execute('begin'); a.execute('select count(*) from t').fetchone()        # snapshot S
+b_.execute('begin'); b_.execute("insert into t values(99,'z')"); b_.execute('commit')
+try:
+    a.execute("insert into t values(100,'y')")
+except sqlite3.Error as e:
+    print("stale reader -> ", type(e).__name__, repr(str(e)), e.sqlite_errorname)
+```
+
+```
+  PASSIVE checkpoint -> (0, 10, 3)      # busy=0, nLog=10, nCkpt=3  <-- stopped at aReadMark[1]
+after PASSIVE ckpt WITH old reader   mxFrame=10 nBackfill=3  nBackfillAttempted=3
+  old reader still sees count = 1
+  PASSIVE checkpoint -> (0, 10, 10)
+after PASSIVE ckpt, reader gone      mxFrame=10 nBackfill=10 nBackfillAttempted=10
+
+stale reader ->  OperationalError 'database is locked' SQLITE_BUSY_SNAPSHOT
+
+WAL before full checkpoint   size=10512  ckptSeq=1  salt1=0xcec8a878 salt2=0xcaff79c3
+  FULL checkpoint -> (0, 1, 1)
+WAL after next write         size=10512  ckptSeq=1  salt1=0xcec8a879 salt2=0x620da983
+after the post-reset commit  mxFrame=1   nBackfill=0  aReadMark=['0','0','NOT_USED',...]
+```
+
+**What to look for — four separate findings in one run:**
+
+1. `(0, 10, 3)` is the backfill floor. The first argument is `busy`, and it is **0** — the checkpoint did not fail, it succeeded partially and said so only through the third value. Code that treats `PRAGMA wal_checkpoint` as done-or-busy will believe a 30%-complete checkpoint finished.
+2. `nBackfillAttempted == nBackfill == 3`, so this checkpoint did not crash mid-backfill. A gap between those two numbers is the signature that one did.
+3. `SQLITE_BUSY_SNAPSHOT` arrives with the message `database is locked` and primary code `SQLITE_BUSY`. Only `sqlite_errorname` (or `sqlite3_extended_errcode()`) distinguishes "retry me" from "roll back first, retrying is pointless".
+4. The reset: salt-1 **+1** (`...78 → ...79`), salt-2 entirely new, **size unchanged at 10512** — the file was rewound, not truncated — and `nBackfill`/`aReadMark[1]` zeroed. Meanwhile `ckptSeq` stayed **1** across two resets by two different connections, because `Wal.nCkpt` is private per connection (§12).
+
+### F. What `synchronous=FULL` actually buys
+
+```bash
+for m in NORMAL FULL; do
+  rm -f s.db*
+  strace -f -e trace=openat,fsync,fdatasync -o st.$m.txt python3 sync2.py $m
+  grep 'openat.*s\.db-wal' st.$m.txt        # -> fd 4
+  echo "$m: fdatasync(4) = $(grep -c 'fdatasync(4)' st.$m.txt)"
+done
+```
+
+where `sync2.py` sets `page_size=1024`, `journal_mode=wal`, `wal_autocheckpoint=0`, `synchronous=$1`, creates one table and commits three inserts (four commits counting the `CREATE TABLE`), then dumps the WAL from inside the process.
+
+```
+NORMAL: fdatasync(4) = 4     5 frames in -wal
+FULL:   fdatasync(4) = 8     5 frames in -wal
+```
+
+**What to look for:** the frame counts are **equal**. No padding frames appear in `FULL`, because `padToSectorBoundary` was cleared at open by `SQLITE_IOCAP_POWERSAFE_OVERWRITE` — so the `wal.c:4283-4295` padding loop never runs on this filesystem. The only difference is exactly four extra `fdatasync` calls for four commits: one per commit, the sync at `wal.c:4298`.
+
+### G. WAL mode with no `-shm` file at all
+
+```python
+c=sqlite3.connect('file:h.db?vfs=unix-dotfile', uri=True, isolation_level=None)
+print("locking_mode ->", c.execute('pragma locking_mode=EXCLUSIVE').fetchone())
+print("journal_mode ->", c.execute('pragma journal_mode=wal').fetchone())
+c.execute('create table t(a integer primary key, b text)')
+for k in range(1,6):
+    c.execute('begin'); c.execute("insert into t values(?,?)",(k,'h'*80)); c.execute('commit')
+print("files present:", sorted(f for f in os.listdir('.') if f.startswith('h.db')))
+subprocess.run(['python3','waldump.py','h.db-wal'])
+```
+
+```
+locking_mode -> ('exclusive',)
+journal_mode -> ('wal',)
+files present: ['h.db', 'h.db-wal', 'h.db.lock']
+-- h.db-wal: 28872 bytes ... 7 frame slots of 4120 bytes, all chain_ok=True
+```
+
+**What to look for:** `journal_mode` returned `wal` on a VFS with **no `xShmMap` at all**, and no `h.db-shm` exists. (`h.db.lock` is the dotfile VFS's lock directory.) The wal-index is identical in layout but lives in `sqlite3MallocZero(32768)` blocks (`wal.c:813`). Drop `locking_mode=EXCLUSIVE` and `journal_mode=wal` silently returns `delete` instead — the short-circuit [lesson 18](../2026-10-03-sqlite-vfs-locking-styles-inode-emulation/README.md) measured.
+
+## Where This Breaks Down
+
+**Four snapshots, hard-coded.** `WAL_NREADER = SQLITE_SHM_NLOCK - 3 = 5`, and `SQLITE_SHM_NLOCK` is 8 because the lock bytes must fit in the 8 reserved bytes of a 136-byte header that cannot change without breaking the wal-index format. So four distinct pinned snapshots, maximum, forever. Beyond that, readers silently fall back to an older snapshot — measured in Hands-On D. Nothing errors; a workload with many long readers at staggered times just quietly gets staler data than it asked for.
+
+**One reader can stall a checkpoint indefinitely, and the API hides it.** Measured: `(0, 10, 3)`. The `busy` flag is 0, so the checkpoint "succeeded". A single long-lived read transaction holds `nBackfill` down, the WAL grows without bound, every subsequent read pays a longer probe, and `wal_autocheckpoint` keeps firing checkpoints that keep succeeding at doing almost nothing. The only signal is the third return value, which most code ignores. This is the single most common WAL operational failure and its cause is exactly the read-mark floor.
+
+**The hash is unseeded and fully public.** `(pgno * 383) & 8191`, no seed, identical in every database. Within one block it is a permutation, so this costs nothing *for page numbers* — the keys are dense small integers the application does not choose directly. But it is worth being precise about why it is safe: not because the function is good, but because the key space is controlled, the load factor is bounded at 0.5 by construction, and `nCollide` caps every probe. Change any one of those three and the function becomes indefensible. (Today's [Daily Diff digest](daily-diff.md) takes this up against a survey of adversarial attacks on exactly this family of multiply-mask hashes.)
+
+**The wal-index has no deletion.** Entries are only ever added, or wiped wholesale by `walCleanupHash()`/the `idx==1` `memset`. There is no tombstone and no way to remove one page's entries. That is what makes lock-free concurrent reads work, and it means the index can only be reclaimed by resetting the whole WAL.
+
+**A WAL reset requires a coincidence that may never happen.** `walRestartLog()` fires only when `nBackfill == mxFrame` *and* no reader holds marks 1–4 *and* a write arrives. Under continuous read load the WAL never rewinds, and because a checkpoint does not truncate by default, the file stays at its high-water mark. `journal_size_limit` is the lever, and it applies only on the commit that completes the WAL's first transaction (`wal.c:4306-4313`).
+
+**Shared memory is the constraint that rules out network filesystems.** The wal-index must be the same bytes in every process, which means a real shared mapping, which means a local filesystem. This is not a conservative recommendation; it is structural. The heap-memory mode of §14 is the escape hatch and it costs all concurrency.
+
+**Reader cost grows with WAL length, not database size.** `walFindFrame()` searches blocks from `walFramePage(iLast)` down to `walFramePage(minFrame)`. A 400 MB WAL at 4 KiB pages is 100000 frames across 25 blocks, and a page present only near the front is found after walking most of them. Checkpointing frequently makes reads fast and writes slow; the 1000-page default is a guess about a workstation.
+
+**`synchronous=NORMAL` is not durable, and nothing says so.** Measured: zero `fdatasync` of the `-wal` per commit. Commits are atomic and immediately visible to other connections, and a power cut loses the most recent ones. The database is not corrupt — the checksum chain truncates it cleanly — which is precisely what makes the loss easy to miss.
+
+**The padding path is unreachable on ordinary Linux.** `padToSectorBoundary` is cleared by `POWERSAFE_OVERWRITE`, which is set on ext4 here. Any claim about sector-aligned WAL commits is about hardware this measurement cannot reach, and §13 reports the measurement rather than the code path.
+
+## Further Study
+
+- [How SQLite Scales Read Concurrency](https://fly.io/blog/sqlite-internals-wal/) — a walkthrough of WAL read concurrency from the outside; useful as a cross-check on the read-mark model built here from source
+- [Configure an auto-checkpoint — `sqlite3_wal_autocheckpoint()`](https://www.sqlite.org/c3ref/wal_autocheckpoint.html) — the C-level interface behind `PRAGMA wal_autocheckpoint`, and the right starting point for lesson 20
+- [Pragma statements supported by SQLite](https://www.sqlite.org/pragma.html) — `wal_checkpoint`, `journal_size_limit`, `locking_mode`, `synchronous`, all with their return-value semantics; the `(busy, nLog, nCkpt)` triple that §Where This Breaks Down leans on is specified here
+- [SQLite User Forum: WAL journal file-size keeps on growing…](https://sqlite.org/forum/forumpost/6c571ebbae) — the read-mark floor as it actually presents to users, in their words rather than in `nBackfill`'s
+- [SQLite: Vacuuming the WALs](https://www.theunterminatedstring.com/sqlite-vacuuming/) — WAL growth and reclamation in practice; relevant again at lesson 33
+
+## Next Steps
+
+1. Extend `waldump.py` to walk a WAL the way `walIndexRecover()` does: stop at the first frame whose checksum breaks the chain *or* whose salts mismatch, and report the recovered `mxFrame`. Then `SIGKILL` a writer mid-transaction and confirm the recovered value is the last commit frame, not the last written frame.
+2. Reproduce the `walCleanupHash()` path deliberately: `SIGKILL` a writer that has spilled but not committed, then have a new writer append to the same block, and dump `aPgno[]`/`aHash[]` before and after to see the stale tail wiped.
+3. Force a second wal-index block. At `page_size=1024` that needs `mxFrame > 4062`, so a transaction touching ~4100 distinct pages. Verify `iZero == 4062` for block 1 and that `aHash[]` slot values restart at 1 — i.e. that a `u16` slot really is block-local.
+4. Build the probe-length histogram for a real workload: for each frame, count the probes `walFindFrame()` would take for its page. Compare a WAL of many distinct pages against one of few pages rewritten repeatedly; the second should show the long runs and the first essentially none.
+5. Measure read cost against WAL length directly: fix the database, grow the WAL to 1000 / 10000 / 100000 frames with `wal_autocheckpoint=0`, and time a point lookup of a page that lives near the *front* of the WAL. That isolates the block-walk cost from everything else.
+6. Determine whether `/proc/locks` flakiness in Hands-On D is process-local lock emulation or kernel coalescing, by running the readers in **separate processes** and re-checking. If the records become stable, the single-process emulation is the cause.
+7. Confirm the §12 finding about `Wal.nCkpt` the other way round: open a connection *after* several resets so `walIndexRecover()` sets its counter from the file, and check that its next reset writes a larger value than a long-lived connection's would.
+
+## Sources
+
+- [WAL-mode File Format](https://www.sqlite.org/walformat.html) — the wal-index header field table with byte offsets, `WalCkptInfo`, the five read marks, the eight lock bytes with their `xShmLock` indexes and file offsets, the 32 KiB block layout, and the hash lookup algorithm. Note this document names the constant `HASHTABLE_NPAGE_FIRST`; the source calls it `HASHTABLE_NPAGE_ONE`
+- [Write-Ahead Logging](https://www.sqlite.org/wal.html) — the end mark and snapshot isolation, the wal-index's purpose and its ~32 KiB size, writer-initiated WAL reset, the `SQLITE_DEFAULT_WAL_AUTOCHECKPOINT = 1000` default, `PASSIVE`/`FULL`/`RESTART`, and the stated limitations including the shared-memory requirement and per-database (not cross-database) atomicity
+- [Database File Format](https://www.sqlite.org/fileformat2.html) — the 32-byte WAL header and 24-byte frame header tables with offsets and the magic numbers `0x377f0682`/`0x377f0683`, and the `s0`/`s1` Fibonacci-weighted checksum pseudocode
+- [Pragma statements supported by SQLite](https://www.sqlite.org/pragma.html) — `wal_checkpoint` return triple, `wal_autocheckpoint`, `journal_size_limit`, `locking_mode`, `synchronous`
+- `sqlite/sqlite` read by file and line range through a code index during this run, at commit `9696acb0` and re-read at `ccbdec84` with identical line numbering for every region cited: `src/wal.c` (160-210, 258, 278-300, 303-333, 335-400, 420-466, 468-501, 502-561, 563-575, 576-636, 639-661, 663-680, 772-818, 837-890, 888-944, 946-954, 969-986, 988-1025, 1027-1035, 1117-1177, 1182-1230, 1235-1256, 1260-1326, 1328-1409, 1412-1420, 1486-1490, 1649-1661, 1679-1773, 1796-1800, 2000, 2108-2149, 2213-2248, 2250-2282, 2317-2345, 2420-2470, 2483-2527, 2552-2573, 2725, 2742, 2762-2767, 2874-2912, 3022-3041, 3082-3102, 3195-3354, 3360-3380, 3456, 3575, 3607-3733, 3740, 3785-3846, 3848-3860, 3900-3931, 3961-4001, 4003-4065, 4067-4075, 4124-4352, 4354-4375, 4377-4398, 4480-4490, 4525, 4558-4604, 4611, 4683, 4719, 4739)
+- Measurements taken during this run: system `libsqlite3` 3.45.1 (`libsqlite3-dev` 3.45.1-1ubuntu2.8) via Python 3 `sqlite3` (reporting `sqlite_version` 3.45.1), x86-64 Linux 6.18, ext4, `page_size=1024` unless stated, `strace -f`, `/proc/locks`, and the seven scripts reproduced in full in Hands-On A–G
+
+## Takeaways
+
+- **The commit record is one 4-byte field.** `nTruncate` at frame-header offset 4 is non-zero on exactly the last frame of each committed transaction and zero everywhere else. Measured: 383 frames, 2 commit frames. There is no separate commit marker and no transaction count on disk.
+- **The frame checksum is a chain seeded on the WAL header's own checksum, and it covers only 8 of the 24 header bytes** plus the page image. That is what makes recovery "stop at the first bad frame" correct without any valid-frame count in the file, and it is why an in-place overwrite incurs a `walRewriteChecksums()` debt over every later frame. Measured: 381 frame headers rewritten to repair 24 overwrites.
+- **`walHash()` is not a hash, it is a permutation.** 383 is odd, so `(p*383) & 8191` is invertible mod 2^13: distinct page numbers *never* share a slot unless they differ by 8192, and the load factor is capped at 0.5 because `NSLOT = 2*NPAGE`. Measured: 8192 distinct slots for 8192 keys, max occupancy 1 at load factor 0.5, `383^-1 = 7807`. Every collision that actually occurs is the intentional kind — one page in several frames.
+- **`walFindFrame()` deliberately does not stop at its first match**, because `walIndexAppend()` places later frames at later slots in the same probe run. Measured: page 1 at slots 383 and 384 → a reader at `iLast=14` gets frame 3, one at `iLast=2` gets frame 1, with no locking between them. Snapshot isolation is two range predicates in a probe loop.
+- **Nothing in the `-shm` file is authoritative and nothing in it is synced.** The two header copies, written copy-1-first with a barrier, are a torn-write detector for a region with no locking; the eight lock bytes are never read or written as data. Measured: `aLock[120..127]` stays `0000000000000000` always, and the `aSalt` field stays in WAL byte order inside an otherwise native-endian struct.
+- **Four snapshots, and one of them can stall a checkpoint while reporting success.** Measured: `PRAGMA wal_checkpoint(PASSIVE)` returned `(0, 10, 3)` — not busy, 3 of 10 frames moved — because one reader held `aReadMark[1] = 3`. If you monitor one number about a WAL database, monitor the third return value, not the first.
+- **WAL mode's write conflict detection is a single `memcmp` of a 48-byte header**, and it produces `SQLITE_BUSY_SNAPSHOT`, which no busy handler can resolve. Measured: it surfaces as `database is locked` with primary code `SQLITE_BUSY`; only the extended code distinguishes "retry" from "roll back first".
+- **A WAL reset rewinds, it does not truncate**, and the checkpoint-sequence number it writes is per-connection, not global. Measured: salt-1 +1, salt-2 re-randomized, file size unchanged at 10512 bytes, and `ckptSeq` stuck at 1 across two resets by two connections. Its only consumer is savepoint bookkeeping, for which private is sufficient.
+- **The `-shm` file is optional.** Measured: WAL mode with five commits, a valid chain, and no `-shm` in the directory, on `unix-dotfile` with `locking_mode=EXCLUSIVE`. Same layout, `malloc` instead of `mmap`, no sharing — which is the honest summary of what shared memory buys WAL mode: all of the concurrency and none of the format.
