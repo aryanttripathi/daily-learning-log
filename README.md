@@ -13,9 +13,9 @@ Every lesson is written to be *runnable*: it carries a hands-on exercise you can
 
 ## Current Track
 
-**SQLite Internals**: Lesson 19 of 33 · started 2026-09-16 · [syllabus and progress →](TRACK.md)
+**SQLite Internals**: Lesson 20 of 33 · started 2026-09-16 · [syllabus and progress →](TRACK.md)
 
-Part I (the on-disk format and the b-tree layer) and Part II (the pager, journals, and the OS interface) are complete. **Part III — write-ahead logging in depth — is now underway.** Lesson 19 took the `-wal` file's frame format and cumulative checksum chain, the `-shm` wal-index with its 32 KiB hash-table blocks, and the five read-mark slots that bound how far a checkpoint may go. Lesson 20 closes Part III with the checkpoint algorithm itself, before Part IV moves up into the SQL compiler and the bytecode engine.
+Part I (the on-disk format and the b-tree layer), Part II (the pager, journals, and the OS interface) and now **Part III (write-ahead logging in depth) are complete.** Lesson 19 took the append side — the `-wal` frame format, the `-shm` wal-index hash tables, and the five read-mark slots. Lesson 20 closed Part III with the checkpoint itself: how `mxSafeFrame` is computed and the read marks rewritten, the two `WalIterator` algorithms, the exactly-two fsyncs, and why `SQLITE_CHECKPOINT_RESTART` resets nothing on disk. **Part IV begins next** with the SQL compiler and the bytecode engine, starting at `tokenize.c` and the Lemon-generated `parse.y`.
 
 ## Format
 
@@ -72,3 +72,4 @@ Entries before 2026-09-16 predate the track model. They came from a five-slot to
 | 2026-10-02 | 17 | [Hot Journals and the Super-Journal — A 285-Byte File Decides Whether Three Databases Commit](2026/10/2026-10-02-sqlite-hot-journals-super-journal-recovery/README.md) | SQLite | [digest (edition 2026-10-01)](2026/10/2026-10-02-sqlite-hot-journals-super-journal-recovery/daily-diff.md) |
 | 2026-10-03 | 18 | [The VFS — Two Dispatch Tables, Five Locking Styles, and the File Descriptor That Outlives Its Connection](2026/10/2026-10-03-sqlite-vfs-locking-styles-inode-emulation/README.md) | SQLite | [digest (edition 2026-09-30)](2026/10/2026-10-03-sqlite-vfs-locking-styles-inode-emulation/daily-diff.md) |
 | 2026-10-04 | 19 | [The WAL and Its Index — Frame Append, a Hash That Is a Permutation, and Five Read Marks](2026/10/2026-10-04-sqlite-wal-frames-walindex-readmarks/README.md) | SQLite | [digest (edition 2026-10-02)](2026/10/2026-10-04-sqlite-wal-frames-walindex-readmarks/daily-diff.md) |
+| 2026-10-05 | 20 | [The Checkpoint — mxSafeFrame, the WAL Iterator, and SQLITE_BUSY With All the Work Done](2026/10/2026-10-05-sqlite-wal-checkpoint-algorithm/README.md) | SQLite | [digest (edition 2026-10-03)](2026/10/2026-10-05-sqlite-wal-checkpoint-algorithm/daily-diff.md) |
