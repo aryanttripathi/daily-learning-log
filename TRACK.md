@@ -3,7 +3,7 @@ track-state
 subject: SQLite
 started: 2026-09-16
 lessons-total: 33
-lessons-done: 19
+lessons-done: 20
 -->
 
 # Current Track: SQLite Internals
@@ -38,7 +38,7 @@ The order follows SQLite's actual layering (see sqlite.org/arch.html and filefor
 
 ### Part III — Write-ahead logging, revisited in depth (`wal.c`)
 - [x] 19 — WAL frame append, wal-index hash tables, and read-mark slots
-- [ ] 20 — Checkpoint algorithm, wal_autocheckpoint, and WAL reset/restart
+- [x] 20 — Checkpoint algorithm, wal_autocheckpoint, and WAL reset/restart
 
 ### Part IV — The SQL compiler and bytecode engine
 - [ ] 21 — From SQL text to parse tree: tokenize.c and the Lemon-generated parse.y
@@ -271,6 +271,61 @@ flags the /proc/locks view as corroborating only. The cause was not isolated; a 
 hypothesis, stated as such in the lesson, is lock coalescing interacting with the
 single-process lock emulation lesson 18 covered. Worth settling by re-running the readers in
 separate processes.
+
+scope note 2026-10-05 (lesson 20): no lesson added, removed, reordered or split;
+lessons-total stays 33. Part III is now complete. Lesson 20 took exactly the scope lesson 19's
+note (a) assigned it and treated the backfill floor as already measured, explaining the
+algorithm instead: walCheckpoint() (2250-2477), the mxSafeFrame loop, the salt re-check under
+WAL_READ_LOCK(0), the WalIterator with both algorithms, the two fsyncs, the four modes,
+walLimitSize() and the autocheckpoint hook. It referenced lesson 19's walRestartLog() rather
+than re-teaching it, and took reset-as-initiated-by-a-checkpoint (TRUNCATE calling
+walRestartHdr at 2465) plus the journal_size_limit path, as note (b) directed. Source read at
+commit ccbdec84, same as lesson 19: wal.c (394-400, 404-466, 511-535, 576-636, 1796-1838,
+1863-1901, 1920-1978, 2000-2085, 2189-2207, 2234-2248, 2250-2477, 2483-2491, 2627-2637,
+1782-1784, 3368-3403, 4192, 4306-4313, 4346, 4388-4518, 4525-4532), pager.c (7550-7553),
+main.c (2498-2539, 3721) and pragma.c (2398-2435).
+
+Four things to record for the lessons that follow:
+
+(a) Two measured corrections to common belief, both worth citing rather than re-deriving.
+First: SQLITE_CHECKPOINT_RESTART does NOT reset the wal-index header. Measured on 3.45.1 with
+no readers, RESTART returned (0, 32, 32) and left mxFrame=32, nBackfill=32 and the 131872-byte
+-wal file exactly as they were; only TRUNCATE calls walRestartHdr() from the checkpointer
+(2465), after which mxFrame/nBackfill/nBackfillAttempted/aReadMark[1] are all 0, slots 2-4 are
+0xffffffff and the file is 0 bytes. Second: a non-PASSIVE checkpoint that cannot take
+WAL_WRITE_LOCK is silently downgraded (eMode2 = PASSIVE, 4448) and the SQLITE_BUSY the caller
+sees comes from the final line (4517), NOT from a failure to do work — measured as
+(1, 29, 29), i.e. busy with the backfill 100% complete. Lesson 29 (SQL-level transactions)
+may want that distinction when discussing what SQLITE_BUSY means to an application.
+
+(b) Documentation discrepancies verified against source AND measurement, recorded because
+they will come up again: pragma.html states "By default, the checkpoint is RESTART", but
+pragma.c:2400 initializes eMode = SQLITE_CHECKPOINT_PASSIVE (measured: plain
+PRAGMA wal_checkpoint returned (0, 29, 21) with a reader pinned, where explicit RESTART
+returned (1, 29, 21)). Also, pragma.html documents -1 in the first result column for busy;
+3.45.1 returns 1. Treat "nonzero" as busy.
+
+(c) Lesson 20 measured the checkpoint's I/O shape with strace on a 50-frame WAL under
+TRUNCATE: 52 pread64, 52 pwrite64, exactly 2 fdatasync (the -wal before the copy at 2359, the
+database after a COMPLETE copy at 2415) and 2 ftruncate (the database down to nPage*szPage at
+2413, the -wal to zero at 2466). Lesson 31 (mmap) and lesson 32 (integrity_check) can
+reference the database-truncate as the only mechanism that shrinks a WAL-mode database file,
+and the fact that a PARTIAL checkpoint neither syncs nor truncates the database.
+
+(d) journal_size_limit in WAL mode is lazy and that is now measured: sqlite3WalLimit() ->
+Wal.mxWalSize is consumed only at the first commit after a reset (truncateOnCommit, set at
+4192 when a fresh WAL header is written, consumed at 4306-4313) and at close in persistent-WAL
+mode (2629-2637, truncating to zero, not to the limit). Measured: limit 32768 with a 2476152-
+byte -wal, RESTART checkpoint left the file at 2476152, and the NEXT single-row commit cut it
+to exactly 32768. Lesson 29 may reference this when covering what a COMMIT can be charged for.
+Also recorded: walLimitSize() (2483-2491) wraps its ftruncate in BeginBenignMalloc and ignores
+errors by design, so an over-limit WAL has no diagnostic.
+
+Unfinished thread, recorded rather than guessed: lesson 20 did not manage to produce
+nBackfillAttempted > nBackfill, which requires killing a checkpointer between 2356 and 2419.
+The lesson states the condition from the source comment (348-353) and lists the experiment as
+a Next Step. Whoever gets to lesson 32 (integrity_check) should find out whether a database
+left in that state reports anything.
 -->
 
 ## Completed Subjects
