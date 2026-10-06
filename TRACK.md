@@ -3,7 +3,7 @@ track-state
 subject: SQLite
 started: 2026-09-16
 lessons-total: 33
-lessons-done: 20
+lessons-done: 21
 -->
 
 # Current Track: SQLite Internals
@@ -41,7 +41,7 @@ The order follows SQLite's actual layering (see sqlite.org/arch.html and filefor
 - [x] 20 — Checkpoint algorithm, wal_autocheckpoint, and WAL reset/restart
 
 ### Part IV — The SQL compiler and bytecode engine
-- [ ] 21 — From SQL text to parse tree: tokenize.c and the Lemon-generated parse.y
+- [x] 21 — From SQL text to parse tree: tokenize.c and the Lemon-generated parse.y
 - [ ] 22 — Name resolution and the Expr/Select trees (resolve.c)
 - [ ] 23 — The VDBE: bytecode programs, registers, and Mem cells (vdbe.c, vdbemem.c)
 - [ ] 24 — Type affinity, collating sequences, and value comparison
@@ -326,6 +326,77 @@ nBackfillAttempted > nBackfill, which requires killing a checkpointer between 23
 The lesson states the condition from the source comment (348-353) and lists the experiment as
 a Next Step. Whoever gets to lesson 32 (integrity_check) should find out whether a database
 left in that state reports anything.
+
+scope note 2026-10-06 (lesson 21): no lesson added, removed, reordered or split;
+lessons-total stays 33. Part IV opens. The ordering held: lesson 21 needed nothing from
+Parts I-III except the general shape of a prepared statement, and it stops exactly where
+lesson 22 begins — at the point where a reduce action is about to build an Expr/Select tree.
+Source read at trunk commit 466e0851 (NOT the ccbdec84 used by lessons 19-20): tokenize.c
+(all 899 lines; aiClass 61, keywordhash.h include 148, sqlite3IsIdChar 190, getToken 197,
+analyzeWindowKeyword/OverKeyword/FilterKeyword 246/254/261, sqlite3GetToken 273 with switch
+arms 279-589, ID tail 592-594, sqlite3RunParser 600), parse.y (1-70, 255-345, 588-606 and the
+%fallback/%token_class/precedence blocks), lempar.c (193-197, 292-333, 549-608, 643, 701, 951,
+1090-1092), mkkeywordhash.c (all 722 lines), sqliteLimit.h (88-118), sqliteInt.h (SQLITE_N_LIMIT
+1577), main.c (2985-3079).
+
+Five things to record for the lessons that follow:
+
+(a) Lesson 21 deliberately stopped at the grammar-symbol boundary. It did NOT read resolve.c,
+did NOT explain any reduce action's body, and did NOT touch the Expr/ExprList/Select/SrcList
+structures beyond naming them as what the actions build. Lesson 22 (name resolution and the
+Expr/Select trees) keeps all of that. The one thing lesson 21 took that lesson 22 would
+otherwise want: the double-quoted-string misfeature was measured at the TOKENIZER level only
+("zzz" is TK_ID out of sqlite3GetToken; SELECT "zzz" FROM q returns the TEXT 'zzz'), and
+the lesson explicitly defers the resolution step that reinterprets it. Lesson 22 should take
+sqlite3VdbeUsesDoubleQuotedString, the DQS_DDL/DQS_DML db_config flags and the -DSQLITE_DQS
+build options, and may cite lesson 21's measurement rather than redoing it.
+
+(b) Lesson 21 read vdbeaux.c not at all and vdbe.c not at all, so lesson 23 (the VDBE) is
+untouched. It did, however, measure three VDBE-adjacent limits from the outside and those
+should be referenced rather than re-measured: SQLITE_LIMIT_COLUMN caps a result set at 2000
+terms (SELECT 1,1,... fails at 2001 with "too many columns in result set"),
+SQLITE_LIMIT_COMPOUND_SELECT at 500 arms (fails at 501), and SQLITE_LIMIT_EXPR_DEPTH at 1000
+("Expression tree is too large (maximum depth 1000)", reached by the left-recursive
+SELECT 1+1+1+... chain at 1001 terms). All three are enforced in reduce actions or later,
+NOT by the automaton. Lesson 23 or 25 owns sqlite3ExprCheckHeight() itself.
+
+(c) The measured list of all twelve settable limits on 3.45.1, for anyone who needs it without
+re-probing: LENGTH 1000000000, SQL_LENGTH 1000000000, COLUMN 2000, EXPR_DEPTH 1000,
+COMPOUND_SELECT 500, VDBE_OP 250000000, FUNCTION_ARG 127, ATTACHED 10,
+LIKE_PATTERN_LENGTH 50000, VARIABLE_NUMBER 250000, TRIGGER_DEPTH 1000, WORKER_THREADS 0.
+sqlite3_limit(db, 12, -1) returns -1 on 3.45.1, i.e. SQLITE_N_LIMIT is 12 there.
+
+(d) A trunk-versus-3.45.1 discrepancy that is NOT the usual benign kind, recorded in full
+because it bit this lesson and will bite lesson 29 (SQL-level transactions) if it reuses the
+limit list. sqliteLimit.h:112-114 at trunk says "Prior to version 3.45.0 (2024-01-15), the
+parser stack was hard-coded to 100 entries", implying 3.45.0+ has the growable stack with
+SQLITE_MAX_PARSER_DEPTH 2500 and the "Recursion limit" message. Measured on 3.45.1 the
+opposite holds: the message is "parser stack overflow" (the pre-rework text), the boundary is
+93/94 nested parens (consistent with a 100-entry hard cap), 3.45.1's own parse.y has no
+%stack_size directive, its lempar.c has only the YYSTACKDEPTH<=0 form with no YYGROWABLESTACK,
+and there is no settable SQLITE_LIMIT_PARSER_DEPTH. So the comment's version attribution is
+wrong, or the rework landed after 3.45.1. The lesson reports both and resolves neither; a Next
+Step is to bisect for the commit that introduced %stack_size / %stack_size_limit /
+SQLITE_MAX_PARSER_DEPTH and, if the comment is wrong, report it upstream. Do not cite
+"2500" or "Recursion limit" as observable behaviour on a 3.45.x build.
+
+(e) Three findings later lessons should build on rather than repeat. First: the %fallback set
+is derivable from outside, and the arithmetic closes exactly — 73 token names in parse.y's
+%fallback block (default build) expand to 78 keyword spellings (COLUMNKW->COLUMN,
+LIKE_KW->LIKE/GLOB/REGEXP, CTIME_KW->the three CURRENT_*, TEMP->TEMP/TEMPORARY), plus the 7
+JOIN_KW spellings and INDEXED from %token_class idj = 86 predicted usable as a bare table
+name; 88 measured. The two differences are both mechanism: IF is in the fallback list but
+fails as a table name because ifnotexists ::= IF NOT EXISTS gives TK_IF an action in that
+state (fallback fires only on NO action), and WINDOW/OVER/FILTER succeed despite being absent
+from the list because the tokenizer decides them. Second: zKWText[] is readable out of a
+loaded libsqlite3 by taking the minimum of the 147 sqlite3_keyword_name() pointers as a base —
+measured 666 bytes holding 860 bytes of keyword text, 341 bytes saved over NUL-terminated
+storage. Third: sqlite3_error_offset() is exactly pParse->sLastToken.z - zSql, so it points at
+the offending token's first byte for a tokenizer error, at the lookahead token for a syntax
+error, and returns -1 for anything raised after parsing. Lesson 32 (SQLite's test strategy)
+may want the fact that PRAGMA parser_trace and lemon's FALLBACK/WILDCARD/stack-growth traces
+all require -DSQLITE_DEBUG and are therefore unobservable on a release build — every automaton
+claim in lesson 21 is source-read, not measured.
 -->
 
 ## Completed Subjects
