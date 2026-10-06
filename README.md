@@ -13,9 +13,9 @@ Every lesson is written to be *runnable*: it carries a hands-on exercise you can
 
 ## Current Track
 
-**SQLite Internals**: Lesson 20 of 33 · started 2026-09-16 · [syllabus and progress →](TRACK.md)
+**SQLite Internals**: Lesson 21 of 33 · started 2026-09-16 · [syllabus and progress →](TRACK.md)
 
-Part I (the on-disk format and the b-tree layer), Part II (the pager, journals, and the OS interface) and now **Part III (write-ahead logging in depth) are complete.** Lesson 19 took the append side — the `-wal` frame format, the `-shm` wal-index hash tables, and the five read-mark slots. Lesson 20 closed Part III with the checkpoint itself: how `mxSafeFrame` is computed and the read marks rewritten, the two `WalIterator` algorithms, the exactly-two fsyncs, and why `SQLITE_CHECKPOINT_RESTART` resets nothing on disk. **Part IV begins next** with the SQL compiler and the bytecode engine, starting at `tokenize.c` and the Lemon-generated `parse.y`.
+Part I (the on-disk format and the b-tree layer), Part II (the pager, journals, and the OS interface) and Part III (write-ahead logging in depth) are complete. **Part IV — the SQL compiler and bytecode engine — opened with lesson 21** at the opposite end of the stack from everything before it: `tokenize.c`'s 256-byte `aiClass[]` character-class table, the generated keyword hash that packs 147 keywords into a measured 666 bytes, Lemon's `%fallback` as an action-table retry rather than a grammar rule, and the three keywords (`WINDOW`, `OVER`, `FILTER`) that `%fallback` provably cannot handle and that the tokenizer decides by hand. Lesson 22 takes the trees the reduce actions build and resolves the names in them.
 
 ## Format
 
@@ -73,3 +73,4 @@ Entries before 2026-09-16 predate the track model. They came from a five-slot to
 | 2026-10-03 | 18 | [The VFS — Two Dispatch Tables, Five Locking Styles, and the File Descriptor That Outlives Its Connection](2026/10/2026-10-03-sqlite-vfs-locking-styles-inode-emulation/README.md) | SQLite | [digest (edition 2026-09-30)](2026/10/2026-10-03-sqlite-vfs-locking-styles-inode-emulation/daily-diff.md) |
 | 2026-10-04 | 19 | [The WAL and Its Index — Frame Append, a Hash That Is a Permutation, and Five Read Marks](2026/10/2026-10-04-sqlite-wal-frames-walindex-readmarks/README.md) | SQLite | [digest (edition 2026-10-02)](2026/10/2026-10-04-sqlite-wal-frames-walindex-readmarks/daily-diff.md) |
 | 2026-10-05 | 20 | [The Checkpoint — mxSafeFrame, the WAL Iterator, and SQLITE_BUSY With All the Work Done](2026/10/2026-10-05-sqlite-wal-checkpoint-algorithm/README.md) | SQLite | [digest (edition 2026-10-03)](2026/10/2026-10-05-sqlite-wal-checkpoint-algorithm/daily-diff.md) |
+| 2026-10-06 | 21 | [From SQL Text to Parse Tree — aiClass, a 666-Byte Keyword Table, and the Three Keywords %fallback Could Not Fix](2026/10/2026-10-06-sqlite-tokenizer-and-lemon-parser/README.md) | SQLite | [digest (edition 2026-10-05)](2026/10/2026-10-06-sqlite-tokenizer-and-lemon-parser/daily-diff.md) |
