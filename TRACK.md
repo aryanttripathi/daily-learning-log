@@ -3,7 +3,7 @@ track-state
 subject: SQLite
 started: 2026-09-16
 lessons-total: 33
-lessons-done: 21
+lessons-done: 22
 -->
 
 # Current Track: SQLite Internals
@@ -42,7 +42,7 @@ The order follows SQLite's actual layering (see sqlite.org/arch.html and filefor
 
 ### Part IV — The SQL compiler and bytecode engine
 - [x] 21 — From SQL text to parse tree: tokenize.c and the Lemon-generated parse.y
-- [ ] 22 — Name resolution and the Expr/Select trees (resolve.c)
+- [x] 22 — Name resolution and the Expr/Select trees (resolve.c)
 - [ ] 23 — The VDBE: bytecode programs, registers, and Mem cells (vdbe.c, vdbemem.c)
 - [ ] 24 — Type affinity, collating sequences, and value comparison
 - [ ] 25 — Code generation for INSERT/UPDATE/DELETE: OP_MakeRecord, OP_Insert, and index maintenance
@@ -397,6 +397,87 @@ error, and returns -1 for anything raised after parsing. Lesson 32 (SQLite's tes
 may want the fact that PRAGMA parser_trace and lemon's FALLBACK/WILDCARD/stack-growth traces
 all require -DSQLITE_DEBUG and are therefore unobservable on a release build — every automaton
 claim in lesson 21 is source-read, not measured.
+
+scope note 2026-10-07 (lesson 22): no lesson added, removed, reordered or split;
+lessons-total stays 33. The ordering held exactly. Lesson 22 took precisely the scope lesson
+21's note (a) assigned it — resolve.c in full, the Expr/ExprList/Select/SrcList/NameContext
+structures, and the DQS resolution step — and it cited lesson 21's tokenizer-level DQS
+measurement rather than redoing it. It stops where lesson 23 begins: at the point where every
+TK_ID has become TK_COLUMN with an iTable cursor number and an iColumn index, and emits no
+bytecode of its own. Source read at trunk commit 9f05c6e6 (NOT lesson 21's 466e0851; trunk
+moved): resolve.c (all 2367 lines — see the lesson's Sources for the per-function ranges),
+sqliteInt.h (1897-1898, 2584, 3071-3133, 3141-3172, 3271-3311, 3393-3445, 3457, 3519-3586,
+3629-3691), select.c (6493, 6554, 6578-6592).
+
+Five things to record for the lessons that follow:
+
+(a) ONE DEVIATION from lesson 21's note (a), recorded explicitly: that note assigned lesson 22
+"sqlite3VdbeUsesDoubleQuotedString, the DQS_DDL/DQS_DML db_config flags and the -DSQLITE_DQS
+build options". Lesson 22 took the flags and the policy function in full
+(areDoubleQuotedStringsEnabled, resolve.c:161-177; SQLITE_DqsDDL/DqsDML at sqliteInt.h:
+1897-1898; SQLITE_DBCONFIG_DQS_DML=1013 / DQS_DDL=1014) and measured the complete eight-row
+truth table including the anomalous writable_schema && DqsDML row. It did NOT take
+sqlite3VdbeUsesDoubleQuotedString / sqlite3VdbeAddDblquoteStr, because those sit behind
+SQLITE_ENABLE_NORMALIZE (resolve.c:733-735) which the system 3.45.1 build does not define,
+making them unmeasurable here. Lesson 23 (the VDBE) should take that pair if it covers
+sqlite3_normalized_sql at all; otherwise lesson 32 (test strategy) is the right home, since
+SQLITE_ENABLE_NORMALIZE is a test-build option.
+
+(b) Lesson 22 read NO vdbe.c and NO vdbeaux.c, so lesson 23 remains untouched. It did use
+EXPLAIN output as a measuring instrument in four places (the NOT NULL fold, the inlined
+coalesce, the IS-TRUE equality, the nullable-column NotNull test) but treated opcodes purely
+as evidence and explained no opcode semantics. Lesson 23 owns OP_Column's p5 (which is
+Expr.op2 for a TK_COLUMN node — lesson 22 named the field and its meaning without following
+it into codegen), register allocation, and Mem cells. Lesson 25 (code generation for
+INSERT/UPDATE/DELETE) keeps pParse->oldmask / newmask, which lesson 22 only observed being
+SET in lookupName:570-580.
+
+(c) Three findings later lessons should build on rather than rediscover. First: lesson 22
+REFINES lesson 21's note (e) third item. Lesson 21 stated that sqlite3_error_offset() "returns
+-1 for anything raised after parsing". That is too strong. Name-resolution errors DO carry an
+offset, by a different mechanism — sqlite3RecordErrorOffsetOfExpr() reading Expr.w.iOfst, not
+pParse->sLastToken. Measured: "no such column: zzz" in SELECT a, zzz FROM t gives offset 10;
+"ambiguous column name: a" gives 7; "no such function: nosuchfn" gives 7. The offset is -1
+only where the raising call site passes no Expr, which is exactly sqlite3ResolveOrderGroupBy:
+1770 passing pError=0. Lessons 23-29 should use the corrected rule: the offset is present iff
+the error site has an Expr to point at. Second: three distinct code paths raise the identical
+"Nth ORDER BY term out of range" text, and sqlite3_error_offset() is the ONLY externally
+visible way to tell them apart (-1 from pass 2, the term's offset from pass 1 when iCol>0xffff,
+the term's offset from resolveCompoundOrderBy). The 65535/65536 boundary is measured. Third:
+sqlite3ExprColUsed (resolve.c:179-200) returns ALLBITS for ANY reference to a generated column,
+so one generated-column reference marks every column of the table as used. Lesson 26 (the
+query planner) should reference that rather than rediscovering why a covering index stops
+covering; lesson 9 established what colUsed is for.
+
+(d) A trunk-versus-3.45.1 discrepancy that is a WRONG ANSWER, not a cosmetic difference, and
+the most important thing in this lesson to carry forward. Trunk's TK_ISNULL/TK_NOTNULL arm
+(resolve.c:1061-1098) requires NC_Where on every NameContext before folding
+"<NOT NULL column> IS NOT NULL" to TRUE, under a comment dated 2024-03-28 explaining that an
+aggregated table's bare column can be NULL despite NOT NULL. 3.45.1 (released 2024-01-30) does
+NOT have that guard, and the consequence is reproducible: on an EMPTY table with a INT NOT
+NULL, "SELECT a, a IS NULL, a IS NOT NULL, count(*) FROM e" returns (NULL, 0, 1, 0) where
+(NULL, 1, 0, 0) is correct. Measured, with EXPLAIN confirming the fold (three instructions,
+Integer 1 / ResultRow, no NULL test at all). The null-extended LEFT JOIN case IS guarded in
+3.45.1, by a different mechanism — EP_CanBeNull set in lookupName:507-509 — and returns the
+correct (NULL, 1, 0). Anyone re-running lessons 23-29 on a 3.45.x build must not treat
+IS NULL on a NOT NULL column in an aggregate result set as trustworthy. A Next Step is to
+bisect 3.45.1..3.46.0 for the commit that adds the NC_Where loop.
+
+(e) Two unfinished threads, recorded rather than guessed. First: the error string
+"misuse of aliased aggregate" IS present in the shipped 3.45.1 library (confirmed with
+strings) but NO construction reached it — WHERE, HAVING, GROUP BY, ORDER BY and a scalar
+subquery all produced different errors from different layers ("misuse of aggregate: count()",
+"aggregate functions are not allowed in the GROUP BY clause", or success). The structural
+reason is that NC_AllowAgg is cleared only at resolveSelectStep:2014, i.e. only when the
+result set contains no aggregate and there is no GROUP BY, in which case no alias in that
+result set can be an aggregate either. The sibling branch
+"misuse of aliased window function" IS reachable (NC_AllowWin is cleared at 2002, right after
+the result set) and was measured. Whether the aggregate branch is dead or merely needs
+UPDATE...FROM / a trigger / a converted compound is unresolved; lesson 25 or 29 may settle it.
+Second: anRef[8] in the TK_NOTNULL arm bounds the nRef save AND restore at eight contexts
+while the NC_Where test loop between them is unbounded, so past eight nesting levels the fold
+can fire with only a partial nRef restore. Predicted consequence (a subquery wrongly marked
+CORRELATED past level 8) was NOT measured; it is listed as a Next Step.
 -->
 
 ## Completed Subjects
