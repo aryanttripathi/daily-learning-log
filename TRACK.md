@@ -3,7 +3,7 @@ track-state
 subject: SQLite
 started: 2026-09-16
 lessons-total: 33
-lessons-done: 22
+lessons-done: 23
 -->
 
 # Current Track: SQLite Internals
@@ -43,7 +43,7 @@ The order follows SQLite's actual layering (see sqlite.org/arch.html and filefor
 ### Part IV — The SQL compiler and bytecode engine
 - [x] 21 — From SQL text to parse tree: tokenize.c and the Lemon-generated parse.y
 - [x] 22 — Name resolution and the Expr/Select trees (resolve.c)
-- [ ] 23 — The VDBE: bytecode programs, registers, and Mem cells (vdbe.c, vdbemem.c)
+- [x] 23 — The VDBE: bytecode programs, registers, and Mem cells (vdbe.c, vdbemem.c)
 - [ ] 24 — Type affinity, collating sequences, and value comparison
 - [ ] 25 — Code generation for INSERT/UPDATE/DELETE: OP_MakeRecord, OP_Insert, and index maintenance
 - [ ] 26 — The query planner: WhereLoop objects, cost estimation, and the path solver (where.c)
@@ -478,6 +478,98 @@ Second: anRef[8] in the TK_NOTNULL arm bounds the nRef save AND restore at eight
 while the NC_Where test loop between them is unbounded, so past eight nesting levels the fold
 can fire with only a partial nRef restore. Predicted consequence (a subquery wrongly marked
 CORRELATED past level 8) was NOT measured; it is listed as a Next Step.
+
+scope note 2026-10-08 (lesson 23): no lesson added, removed, reordered or split;
+lessons-total stays 33. The ordering held exactly. Lesson 23 took the scope lesson 22's note
+(b) assigned it — OP_Column's p5, register allocation, and Mem cells — and it began where
+lesson 22 stopped, turning iTable/iColumn into OP_Column.p1/p2. Source read at trunk commit
+74675a9e (NOT lesson 22's 9f05c6e6; trunk moved again): vdbe.h (all 449 lines), vdbeInt.h
+(all, with per-struct ranges in the lesson's Sources), vdbe.c (9580 lines; allocateCursor
+253-320, sqlite3VdbeExec 903-1010, the jump sites, OP_Move/Copy/SCopy/IntCopy 1662-1780,
+OP_ResultRow 1807-1846, OP_RealAffinity 2195-2199, OP_Column 3014-3390, OP_TypeCheck
+3427-3500, OP_MakeRecord 3578-3640), vdbeaux.c (5766 lines; sqlite3VdbeChangeP5 1303-1306,
+sqlite3VdbeTypeofColumn 1308-1321, allocSpace 2560-2599, sqlite3VdbeRewind 2601-2637,
+sqlite3VdbeMakeReady 2639-2756), expr.c (the OP_SCopy site 6016-6035, ExprCodeExprList 6060-
+6115, the TK_ISNULL/TK_NOTNULL arms 6336-6352 and 6534-6550, the temp-register allocator
+7710-7830), sqliteInt.h (OPFLAG_* 4109-4129, Parse register fields 3928/3954-3958/3990),
+vdbemem.c (2280 lines, read for the Mem helpers named in the lesson). vdbeInt.h was ALSO
+fetched at tag version-3.45.1 (tree 189e44df) specifically to license the ctypes probes.
+
+Six things to record for the lessons that follow:
+
+(a) Lesson 23 did NOT take sqlite3VdbeUsesDoubleQuotedString / sqlite3VdbeAddDblquoteStr,
+which lesson 22's note (a) offered it conditionally. It does not cover sqlite3_normalized_sql
+at all, and this build has no SQLITE_ENABLE_NORMALIZE. Per that note, lesson 32 (test
+strategy) is now the owner of that pair.
+
+(b) Lesson 23 deliberately stopped at the register file's edge. It did NOT explain
+applyAffinity, sqlite3MemCompare, any collating-sequence lookup, or any OP_Eq-family
+semantics — lesson 24 keeps all of that, and will need the MEM_* flag word this lesson
+establishes. It did NOT follow a value into a record: OP_MakeRecord was read ONLY for the two
+lines that set MEM_IntReal (vdbe.c:3630-3633), and OP_TypeCheck ONLY for the 6-byte
+MEM_IntReal branch (3472-3491). Lesson 25 keeps OP_MakeRecord, OP_Insert, OP_IdxInsert and all
+index maintenance, including the OPFLAG_NCHANGE / APPEND / USESEEKRESULT / PREFORMAT meanings
+of p5 — lesson 23 took only OPFLAG_LENGTHARG / TYPEOFARG / BYTELENARG, which are OP_Column's.
+Lesson 28 keeps vdbesort.c entirely; lesson 23 named CURTYPE_SORTER and nothing more.
+Lesson 30 keeps CURTYPE_VTAB, xBestIndex and OPFLAG_NOCHNG; lesson 31 keeps lookaside and
+memsys, which bear on the measured szMalloc=128 minimum but were not opened.
+
+(c) Validated struct offsets for x86-64 on the measured build, so later lessons need not
+re-derive them. Vdbe: nMem 36, nCursor 40, pc 48, aMem 104, apArg 112, apCsr 120, aVar 128,
+aOp 136, nOp 144, nOpAlloc 148, eVdbeState 199, pFree 256. Mem (56 bytes): u 0, z 8, n 16,
+flags 20, enc 22, eSubtype 23, db 24, szMalloc 32, uTemp 36, zMalloc 40, xDel 48; MEMCELLSIZE
+= 24. sizeof(Op) = 24. The validations used, both of which must be re-run if the build changes:
+nOp read from the struct equals the EXPLAIN row count (checked over 25 statements, no
+mismatch), and aMem - aOp equals ROUND8(24*nOp) + ROUNDDOWN8(24*(nOpAlloc-nOp)) - 56*nMem
+(exact on SELECT 1 -> 1088, SELECT a,b,c,d FROM t -> 920, SELECT * FROM t,u -> 752). The
+Vdbe prefix through aVar, the whole sqlite3_value struct and all sixteen MEM_* constants are
+byte-identical between trunk 74675a9e and the version-3.45.1 tag; the two differences found
+are VdbeCursor.aType (u32 aType[1] at 3.45.1, FLEXARRAY at trunk) and sqlite3_context.argc
+(u8 at 3.45.1, u16 at trunk), neither of which any measurement touched.
+
+(d) Four findings later lessons should cite rather than rediscover. First: the register file
+IS the cursor table — cursor 0 at aMem[0], cursor i at aMem[nMem-i], the VdbeCursor plus its
+BtCursor living in that register's zMalloc, proven as nine exact apCsr[i] == aMem[idx].zMalloc
+matches across four statements with flags == MEM_Undefined on every one. nMem - nCursor is
+therefore exactly pParse->nMem, which is a free way to read the code generator's register
+high-water mark from outside. Second: pParse->nMem is a monotone high-water mark and each
+DISTINCT literal costs one permanent register via constant factoring, measured as 4+k for
+k = 1,2,4,8,16 distinct constants against a flat 6 for the same count of identical terms; the
+aTempReg[8] LIFO fully recycles sequential temps and shows NO discontinuity at eight (nested
+live temps grow a dead-straight +3 per level through depth 12). Third: constant subexpressions
+are evaluated once in a prologue block that lives AFTER OP_Halt, reached by OP_Init's forward
+jump and left by a trailing OP_Goto; OP_Transaction lives in that same block, which is why
+table-touching programs end Halt / Transaction / Goto. Lesson 29 may want that when discussing
+where a transaction actually starts. Fourth: MEM_Zero makes a 100 MB zeroblob cost 3 us to
+typeof() or length(), 227 ms once || forces ExpandBlob(), and the compact form does NOT
+survive a round trip through a table (read back: MEM_Blob|MEM_Dyn, n = 100000).
+
+(e) A documentation-versus-codegen gap worth carrying, and a candidate patch. opcode.html says
+OPFLAG_TYPEOFARG is set when the result "will only be used by the typeof() function or the
+IS NULL or IS NOT NULL operators or the equivalent". True of the flag; NOT true of the code
+generator. sqlite3VdbeTypeofColumn() (vdbeaux.c:1313-1321) is a last-opcode peephole called
+ONLY from expr.c:6346 (sqlite3ExprIfTrue) and expr.c:6544 (sqlite3ExprIfFalse) — i.e. only on
+the jump paths. sqlite3ExprCodeTarget's TK_ISNULL/TK_NOTNULL arm never calls it. Measured on
+ten 1.2 MB blobs: "SELECT id FROM big WHERE payload IS NULL" takes 0.0025 ms with Column
+p5=0x80, while "SELECT payload IS NULL FROM big" takes 2.2764 ms with p5=0x00 — the same
+predicate, ~900x apart, differing only in where it sits in the statement. Lesson 23 lists the
+two-line fix as a Next Step. Do not repeat the claim that IS NULL always gets the flag.
+
+(f) Two unfinished threads, recorded rather than guessed. First: MEM_IntReal was NOT verified
+by measurement. It is set in exactly two places on trunk, both write paths (OP_MakeRecord
+3630-3633 and OP_TypeCheck 3472-3491), and the read path's OP_RealAffinity produces MEM_Real
+instead, so no UDF argument in 19 cases showed 0x0020. Lesson 24 (affinity) or lesson 25
+(OP_MakeRecord) should settle it, ideally by inserting integers on both sides of the 6-byte
+boundary (140737488355327 / 140737488355328) into a STRICT REAL column and decoding the
+serial type on disk with lesson 2's decoder. Second: OP_SCopy appeared only 3 times in 61
+statements, all on the INSERT/upsert path, and ZERO times in roughly 45 read-only statements
+including every ORDER BY shape tried; OP_Copy carried 44. The emission sites are expr.c:6031
+(sqlite3ExprCode when inReg != target and the expr is neither a subquery nor TK_REGISTER) and
+expr.c:6092 (ExprCodeExprList without SQLITE_ECEL_DUP). Whether a SELECT can reach either is
+unresolved. This matters because OP_SCopy's correctness invariant is enforced only by
+Mem.pScopyFrom / mScopyFlags / bScopy and memAboutToChange(), all inside #ifdef SQLITE_DEBUG,
+so the dangerous opcode's safety net is absent from every shipping build. Lesson 25 owns the
+INSERT path and should say which construct emits it and why.
 -->
 
 ## Completed Subjects
