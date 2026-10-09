@@ -3,7 +3,7 @@ track-state
 subject: SQLite
 started: 2026-09-16
 lessons-total: 33
-lessons-done: 23
+lessons-done: 24
 -->
 
 # Current Track: SQLite Internals
@@ -44,7 +44,7 @@ The order follows SQLite's actual layering (see sqlite.org/arch.html and filefor
 - [x] 21 — From SQL text to parse tree: tokenize.c and the Lemon-generated parse.y
 - [x] 22 — Name resolution and the Expr/Select trees (resolve.c)
 - [x] 23 — The VDBE: bytecode programs, registers, and Mem cells (vdbe.c, vdbemem.c)
-- [ ] 24 — Type affinity, collating sequences, and value comparison
+- [x] 24 — Type affinity, collating sequences, and value comparison
 - [ ] 25 — Code generation for INSERT/UPDATE/DELETE: OP_MakeRecord, OP_Insert, and index maintenance
 - [ ] 26 — The query planner: WhereLoop objects, cost estimation, and the path solver (where.c)
 - [ ] 27 — ANALYZE statistics: sqlite_stat1 and sqlite_stat4 and how the planner uses them
@@ -570,6 +570,84 @@ unresolved. This matters because OP_SCopy's correctness invariant is enforced on
 Mem.pScopyFrom / mScopyFlags / bScopy and memAboutToChange(), all inside #ifdef SQLITE_DEBUG,
 so the dangerous opcode's safety net is absent from every shipping build. Lesson 25 owns the
 INSERT path and should say which construct emits it and why.
+
+scope note 2026-10-09 (lesson 24): no lesson added, removed, reordered or split;
+lessons-total stays 33. The ordering held. Lesson 24 took exactly what lesson 23's note
+handed it — applyAffinity, sqlite3MemCompare and the OP_Eq family — and it stopped at the
+register file's edge on the write side, leaving OP_MakeRecord's serialisation loop, OP_Insert
+and index maintenance to lesson 25. Source read at trunk commit 9cba4634 (lesson 23 read
+74675a9e; trunk moved again): vdbe.c (9562 lines; alsoAnInt 329-336, applyNumericAffinity
+339-371, applyAffinity 373-426, sqlite3_value_numeric_type 436-451, sqlite3ValueApplyAffinity
+455-461, computeNumericType 469-491, numericType 500-512, the OP_Eq/Ne/Lt doc blocks 2242-2333,
+case OP_Eq..OP_Ge 2334-2478, OP_TypeCheck 3427-3500, OP_Affinity 3526-3550), vdbeaux.c (5766
+lines; sqlite3VdbeSerialType 3904-3998 behind #if 0, vdbeCompareMemStringWithEncodingChange
+4423-4447, vdbeCompareMemString 4449-4462, sqlite3BlobCompare 4481-4506, sqlite3IntFloatCompare
+4524-4540, sqlite3MemCompare 4552-4641), expr.c (sqlite3ExprAffinity 29-94, sqlite3ExprCollSeq
+240-320, sqlite3ExprNNCollSeq 327-333, sqlite3ExprCollSeqMatch 337-343, sqlite3CompareAffinity
+350-366, comparisonAffinity 372-388, sqlite3IndexAffinityOk 395-403, binaryCompareP5 409-418,
+sqlite3BinaryCompareCollSeq 432-452, sqlite3ExprCompareCollSeq 460-466, codeCompare 471-495,
+the TK_EQ arms 5296-5330 and 6306-6340), build.c (sqlite3AffinityType 1710-1776), sqliteInt.h
+(SQLITE_AFF_* 2370-2385, struct CollSeq 2341-2347, the p5 flag bits 2396-2398), main.c
+(sqlite3BinaryCompare 1061-1078, rtrimCollFunc 1084-1094, sqlite3IsBinary 1100-1105,
+nocaseCollatingFunc 1116-1128, createCollation 2907-2975, the five registrations 3579-3586),
+callback.c (in full), util.c (sqlite3StrICmp 423-441, sqlite3_strnicmp 442-453).
+
+Five things lesson 24 established that later lessons should NOT re-derive:
+
+(a) Affinity is seven consecutive ASCII characters 0x40-0x46 masked by SQLITE_AFF_MASK = 0x47,
+sharing the p5 byte with SQLITE_JUMPIFNULL (0x10) and SQLITE_NULLEQ (0x80). "Is it numeric" is
+one >= compare. EXPLAIN exposes p4 and p5 as ordinary result columns, so the affinity character
+and the NULL-semantics flags are readable with NO debug build — p5 & 0x47 read as ASCII gives
+'D'/'B'/'A'/'C' for INTEGER/TEXT/BLOB/NUMERIC, measured. Later lessons can use that instrument.
+
+(b) Column affinity is ONE left-to-right pass with a rolling u32 4-byte window
+(h = (h<<8) + sqlite3UpperToLower[x]). The documented five-rule precedence is encoded as guard
+conditions: CHAR/CLOB/TEXT unguarded, BLOB guarded on aff in {NUMERIC,REAL}, REAL/FLOA/DOUB
+guarded on aff == NUMERIC, and INT breaks out of the loop. Measured on 29 declared type names:
+BLOBTEXT and TEXTBLOB are both TEXT, REALCHAR and CHARREAL are both TEXT, FLOATING POINT is
+INTEGER (the 'oint' window). Do not re-explain this; cite section 2.
+
+(c) The OP_Eq family UNDOES its affinity conversion at the end of the opcode (pIn1->flags =
+flags1; pIn3->flags = flags3), so the conversion is correct but uncacheable. Verified
+behaviourally: hex(t) is still 316533 after a numeric comparison, and both conjunct orders of
+"t = n AND t = '1e3'" return the row. Measured cost of the per-row re-parse on 300k rows:
+1.61x for '299999', 1.82x for '2.99999e5', 2.10x for a 20-char zero-padded literal, versus
+0.97x for CAST('299999' AS INTEGER) — which is constant-folded into lesson 23's run-once
+prologue. Lesson 26 may want this when discussing why a sargable term should be a bound
+parameter or a CAST rather than a string literal.
+
+(d) Lesson 23's note (f) first unfinished thread is now SETTLED, and the answer is on disk.
+A REAL column keeps an integer serial type up to six bytes and reverts to serial type 7 past
+that, because sqlite3VdbeSerialType's MEM_IntReal branch converts to MEM_Real exactly when the
+integer would need 8 bytes. Measured, one row per value, serial type decoded from the page
+bytes: 1 -> serial 9 (ZERO payload bytes), 2 and 127 -> serial 1, 128 and 32767 -> serial 2,
+8388607 -> 3, 2147483647 -> 4, 2^40 -> 5 (6 bytes), 2^50 -> 7 (8-byte double), 1.5 -> 7. All
+ten report typeof() = 'real'. MAX_6BYTE is 140737488355327, so lesson 23's guessed boundary
+pair was exactly right. Lesson 25 does not need to re-measure this; it should instead explain
+the serialisation loop that consumes the flags.
+
+(e) Two scope notes for later lessons. Lesson 26 (where.c) inherits one UNRESOLVED row: with
+an index on a TEXT column, "tcol = CAST(icol AS TEXT)" is NOT blocked by sqlite3IndexAffinityOk
+(both sides TEXT -> the two-column branch returns SQLITE_AFF_BLOB -> aff < SQLITE_AFF_TEXT ->
+return 1), yet the plan is a SCAN. Lesson 24 recorded this as unverified rather than guessing;
+where.c must be read to answer it. Measured plans that ARE explained: tcol = 'x' and tcol = 5
+both SEARCH (TEXT affinity, TEXT index); tcol = icol and tcol = ncol both SCAN (NUMERIC
+affinity vs TEXT index); tcol = 5 COLLATE NOCASE degrades to a covering-index SCAN on a
+COLLATION mismatch, not an affinity one — so the plan's verb alone does not identify which
+gate closed. Lesson 28 (the sorter) inherits the collation call counts: a user collation on a
+500-row table was invoked 500 times for an equality scan, 499 for ORDER BY ... LIMIT 1, and
+~3730 for count(DISTINCT), so the sorter's merge is where collation cost actually lives.
+Lesson 29 (savepoints) inherits a cross-engine framing already written into that day's digest:
+SQLite needs no per-row lock-holder encoding because it has a single writer, which is why it
+has nothing like PostgreSQL's MultiXact subsystem.
+
+Also recorded: NOCASE's comparison stops at an embedded NUL byte (the *a!=0 guard in
+sqlite3_strnicmp, util.c:451), and this reaches constraint enforcement — a UNIQUE ... COLLATE
+NOCASE index rejects 'a'||char(0)||'c' as a duplicate of 'a'||char(0)||'b', both three stored
+bytes. And NOCASE/RTRIM are registered for UTF-8 only while BINARY is registered three times,
+so on a UTF-16 database every NOCASE comparison takes
+vdbeCompareMemStringWithEncodingChange() — two ephemeral Mem cells and two transcodes per
+comparison. That penalty is UNMEASURED and is in lesson 24's Next Steps.
 -->
 
 ## Completed Subjects
