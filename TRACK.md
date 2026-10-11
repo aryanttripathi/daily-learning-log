@@ -3,7 +3,7 @@ track-state
 subject: SQLite
 started: 2026-09-16
 lessons-total: 33
-lessons-done: 25
+lessons-done: 26
 -->
 
 # Current Track: SQLite Internals
@@ -46,7 +46,7 @@ The order follows SQLite's actual layering (see sqlite.org/arch.html and filefor
 - [x] 23 — The VDBE: bytecode programs, registers, and Mem cells (vdbe.c, vdbemem.c)
 - [x] 24 — Type affinity, collating sequences, and value comparison
 - [x] 25 — Code generation for INSERT/UPDATE/DELETE: OP_MakeRecord, OP_Insert, and index maintenance
-- [ ] 26 — The query planner: WhereLoop objects, cost estimation, and the path solver (where.c)
+- [x] 26 — The query planner: WhereLoop objects, cost estimation, and the path solver (where.c)
 - [ ] 27 — ANALYZE statistics: sqlite_stat1 and sqlite_stat4 and how the planner uses them
 - [ ] 28 — Sorting and temporary storage: the VDBE sorter (vdbesort.c) and external merge sort
 
@@ -794,6 +794,136 @@ table names but does not implement. Lesson 30 gets OP_VUpdate and the virtual-ta
 sqlite3Insert/DeleteFrom/Update, all of which lesson 25 skipped. Lesson 32
 (integrity_check) gets sqlite3GenerateIndexKey, which it reuses to re-derive index keys
 from table rows.
+
+scope note 2026-10-11 (lesson 26): no lesson added, removed, reordered or split;
+lessons-total stays 33. The ordering held exactly. Lesson 26 needed aiRowLogEst[] only as an
+INPUT and nothing from ANALYZE's machinery, so the 26/27 boundary is clean: lesson 26 owns the
+WhereLoop object, the five cost formulas, whereLoopInsert/FindLesser, wherePathSolver and
+whereShortCut; lesson 27 owns every question about where the numbers come from.
+
+Both of lesson 25's named handoffs are CLOSED.
+
+(a) sqlite3WhereOkOnePass (where.c:173-183) is a pure getter -- memcpy of aiCurOnePass[] plus
+`return pWInfo->eOnePass`. The decision is at where.c:7228-7248, after the solver. ONEPASS_SINGLE
+is nothing but WHERE_ONEROW on the chosen loop, which is why a DELETE by rowid gets it: whereShortCut
+sets WHERE_COLUMN_EQ|WHERE_IPK|WHERE_ONEROW at where.c:6392-6398. ONEPASS_MULTI additionally
+requires WHERE_ONEPASS_MULTIROW from the caller, a non-virtual table, and either no WHERE_MULTI_OR
+or WHERE_DUPLICATES_OK (DELETE only) -- the comment at 7217-7227 says the OR exclusion exists
+because UPDATE reads aiCurOnePass[1] and that is "not set accurately for scans that use the OR
+optimization". One finding not in lesson 25: when ONEPASS is granted on a rowid table whose chosen
+loop was COVERING, where.c:7240-7245 STRIPS WHERE_IDX_ONLY from the already-selected WhereLoop and
+does not recompute rRun. The plan is costed as index-only and then run as not-index-only.
+
+(b) The affinity-string trimming is codeApplyAffinity(), wherecode.c:446-481, NOT in where.c at all,
+and it is NOT the same rule as sqlite3TableAffinityStr's backward loop. It trims BOTH ends on
+`zAff[i] <= SQLITE_AFF_BLOB` (so NONE or BLOB), the leading loop ALSO ADVANCES `base`, and the two
+guards are asymmetric (leading `n>0`, trailing `n>1`); if nothing survives, no opcode is emitted.
+That explains lesson 25's "Affinity p1=2 p2=3 p4='CCB' for a four-column index with four constrained
+terms" completely: the leading character was BLOB, so it was stripped AND p1 was advanced by one.
+Measured four ways on 3.45.1 with the A=BLOB/B=TEXT/C=NUMERIC coding from lesson 24:
+  q(w, x numeric, y numeric, z text)          'ACCB' -> Affinity p1=2 p2=3 p4='CCB'
+  q2(w numeric, x numeric, y numeric, z text)  'CCCB' -> Affinity p1=1 p2=4 p4='CCCB'
+  q3(w numeric, x numeric, y numeric, z)       'CCCA' -> Affinity p1=1 p2=3 p4='CCC'
+  q4(w, x, y, z)                               'AAAA' -> no OP_Affinity emitted
+Caller is codeAllEqualityTerms at wherecode.c:941; updateRangeAffinityStr (494-508) separately
+rewrites characters to BLOB for range terms.
+
+Lesson 24's open `tcol = CAST(icol AS TEXT)` row is NOT closed. It now has a named place to look --
+sqlite3ExprNeedsNoAffinityChange, called from updateRangeAffinityStr -- and that is lesson 26's
+Next Steps item 7.
+
+Measured facts later lessons can rely on (all on stock 3.45.1, no debug build, SQLITE_ENABLE_STAT4
+confirmed ABSENT via PRAGMA compile_options, so where.c:4172's #else branch is the live one and
+full-scan rRun == rSize+16 unconditionally):
+
+- sqlite3LogEst/LogEstAdd/LogEstToInt/estLog were reimplemented from util.c:2055-2128 and verified
+  against all nine assert()s in where.c and build.c: LogEst(28)=48, LogEst(2)=10, LogEst(20)=43,
+  LogEst(18)=42, LogEst(10)=33, LogEst(15)=39, LogEst(1000)=99, LogEst(5)=23, LogEst(1)=0.
+- estLog(LogEst N) applies sqlite3LogEst to a LogEst, giving LogEst(log2(N)) -- the b-tree depth.
+  Measured: estLog(99)=33 (10 units), estLog(166)=40 (16), estLog(199)=43 (20), estLog(265)=47 (26).
+  Any later lesson quoting rLogSize must use this, not rSize-33.
+- THE CENTRAL RESULT. For a single table with one == term, non-covering index, the SEARCH/SCAN
+  crossover is closed-form and was predicted to the single row at four table sizes with ZERO
+  mismatches. Formulas: scan rRun = rSize+16; index rRun = LogEstAdd(LogEstAdd(rLogSize,
+  nOut+1+(15*szIdxRow)/szTabRow), nOut+16). Measured boundaries for t(a integer, b text) index (a),
+  szTabRow=LogEst(28)=48, szIdxRow=LogEst(8)=30, ratio term = 9:
+    N=10000     flip between k=5631 (rRun 146) and 5632 (148), scan 148
+    N=100000    flip between k=61439 (181) and 61440 (182), scan 182
+    N=1000000   flip between k=589823 (213) and 589824 (215), scan 215
+    N=10000000  flip between k=5767167 (246) and 5767168 (248), scan 248
+  TIE RULE, measured four times: equal cost goes to the FULL TABLE SCAN, because whereLoopAddBtree
+  inserts the IPK loop before looping over real indexes and every comparison in wherePathSolver
+  (where.c:6071-6085) is strict `<`. The crossover ratio k/N is 0.56-0.61, NOT the 10-20% folklore.
+- szTabRow and szIdxRow are LogEst(width*4) from build.c:2305-2330, fully determined by the DDL.
+  Column.szEst is 1 for INTEGER, 5 for a bare TEXT/BLOB/CLOB (v=16, then v/4+1 at build.c:1771),
+  k/4+1 for VARCHAR(k). estimateIndexWidth iterates nColumn, so a rowid table's index includes the
+  trailing rowid at weight 1. Changing a column's DECLARED TYPE moves the crossover with no change
+  to any stored byte.
+- Skip-scan fires at exactly 18 duplicates, never 17 (where.c:3633, aiRowLogEst[nEq+1]>=42).
+  Measured k=14..23 with stat1 "1000000 k 1": SCAN at 14-17, "ANY(a) AND b=?" at 18+. LogEst(16)=
+  LogEst(17)=40 and LogEst(18)=42 -- there is NO integer with LogEst 41 in that range, because of
+  the 3-bit mantissa in sqlite3LogEst's a[] table. Several of where.c's integer thresholds may sit
+  in such gaps; enumerating them is lesson 26's Next Steps item 5.
+- Automatic-index boundary derived from rSetup = rLogSize+rSize+28 (where.c:4091-4104) composed
+  through the solver's cost rule (where.c:5970-5979), then measured: for a 1,000,000-row inner table
+  the auto-index appears at exactly 9 outer rows. Path A (scan inner, auto-index outer) is flat at
+  246 across 6..12 rows because rSetup is >31 LogEst units below the inner scan and LogEstAdd
+  discards it; path B (scan outer, scan inner) moves 241/243/245/247/248/251. Predicted = measured
+  at every point. The solver also REVERSED the join order and added a Bloom filter.
+- The solver runs TWICE when there is an ORDER BY: wherePathSolver(pWInfo,0) to get nRowOut, then
+  whereInterstageHeuristic (6313-6356, sets prereq=ALLBITS on unconstrained loops of tables the
+  first pass searched), then wherePathSolver(pWInfo,nRowOut+1). where.c:7115-7121.
+- mxChoice = 1 / 5 / 12 / 18 (where.c:5871-5888, computeMxChoice 5663-5810 returns
+  bStarUsed?18:12). This matches queryplanner-ng.html's published N values exactly.
+- whereLoopOutputAdjust RETURNS EARLY for a single table with no ORDER BY (where.c:3074-3079).
+  That is why the crossover predictions above needed no adjustment term, and it means the same
+  table+index+WHERE gets a different nOut once it appears in a join.
+- whereShortCut cannot use a UNIQUE index with 4+ key columns: aLTermSpace[3] (whereInt.h:174,
+  tested at where.c:6407). Verified that 3-column and 4-column cases produce IDENTICAL
+  EXPLAIN QUERY PLAN output, so the shortcut is invisible from outside and must be measured at
+  prepare() time, not query time. That is lesson 26's Next Steps item 4.
+
+Two comment-versus-code disagreements recorded, both in where.c:4158-4176:
+
+- The comment says the STAT4 full-scan penalty is "2.75". The code is `rSize + 16 - 2`, and
+  LogEst 14 is 2**1.4 = 2.639, while 10*log2(2.75)=14.59 would round to 15. The code is 2.64x,
+  one unit more aggressive than its own comment. ("3.0" for LogEst 16 = 3.031 is honest.)
+  The same rounding slack appears at where.c:3644, where a "1.375 fudge factor" is coded as +5,
+  i.e. 1.414.
+- UNRESOLVED, handed to lesson 27. The comment claims that at 2.75 "a full table scan is preferred
+  over using an index on a column with just two distinct values where each value has about an equal
+  number of appearances." Substituting nOut = LogEst(N/2) gives index rRun = rSize+13 at N = 1e4,
+  4e5, 1e6, 1e7 and 1e8 -- below rSize+14 as well as rSize+16, so the 2-unit reduction does NOT
+  flip the decision; the index still wins by one unit (~7%). The claim can therefore only hold if
+  STAT4 also replaces nOut via whereEqualScanEst. That is a derivation, not a measurement, because
+  this build has STAT4 off. Lesson 27 should settle it with a -DSQLITE_ENABLE_STAT4 build and
+  WHERETRACE 0x2.
+
+Cost-model accuracy, measured with a stopwatch (file-backed, cache large enough to hold the table,
+best of 5, forced full scan via the unary-+ trick):
+
+- Uniform distribution, 400,000 rows, stat1's average IS the truth. Real crossover is near 10
+  distinct values (index/scan = 0.90); the model's is at k/N ~ 0.58. In between the planner keeps
+  the index and loses: 1.53x at 4 distinct values, 2.41x at 3, 3.20x at 2. At 1 distinct value the
+  model finally says SCAN and the two are equal (1.02x).
+- Skewed distribution, same table, matching fraction varied 5%..95% over 8 total values: stat1's k
+  stayed at exactly 50000 (= N/8) in EVERY run, because stat1 stores only the average. The correct
+  answer moved by 12x while the planner's input did not move at all. At 95% the index costs 1.64x.
+  This is the motivating measurement for lesson 27 and for sqlite_stat4's existence.
+
+Handed forward: lesson 27 gets the stat1/stat4 format and all four estimators (whereKeyStats 1713,
+whereRangeScanEst 2087, whereEqualScanEst 2269, whereInScanEst 2333), sqlite3AnalysisLoad, the
+hasStat1 flag, and the unresolved 2.75 claim above. Lesson 28 gets whereSortingCost's
+implementation side -- OP_SorterInsert vs OP_IdxInsert and the "extra factor of 2.0 or 3.0" the
+comment at where.c:5562-5564 mentions but does not code here -- plus the external merge itself.
+Lesson 29 gets WHERE_ONEPASS_DESIRED / WHERE_ONEPASS_MULTIROW / WHERE_DUPLICATES_OK as a
+caller-side contract and sqlite3MultiWrite. Lesson 30 gets whereLoopAddVirtual (4685),
+whereLoopAddVirtualOne (4361), allocateIndexInfo (1408), vtabBestIndex (1669), the
+sqlite3_vtab_collation/in/rhs_value/distinct accessors (4557-4646) and the whole xBestIndex
+protocol, all untouched here. Lesson 31 gets sqlite3StackAllocRawNN, which wherePathSolver uses for
+its aTo/aFrom/aSortCost block (where.c:6042-6049). Lesson 32 gets OptimizationEnabled() and the
+SQLITE_TESTCTRL_OPTIMIZATION bit table that where.c references in six places (SQLite's own
+".testctrl opt -starquery" is named in computeMxChoice's comment).
 -->
 
 ## Completed Subjects
