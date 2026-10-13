@@ -33,11 +33,18 @@ commit you reach them through.
 
 | Lessons | Subject | Where the notes live | `TRACK.md` blob SHA at that commit |
 |---|---|---|---|
-| 13 – 24 | SQLite Internals | commit `724c164b9a3edfddd6993c458cbfa87c0c521805` (2026-10-12, the last commit before the trim) | `e3aa5a6715fee568a4dfdead028d3d7624ca883f` |
+| 13 – 24 | SQLite Internals | commit `724c164b9a3edfddd6993c458cbfa87c0c521805` (2026-10-12, the last commit before the first trim) | `e3aa5a6715fee568a4dfdead028d3d7624ca883f` |
+| 25 | SQLite Internals | commit `5429a52018a46573b419ac99bf80d8fb3b0777b9` (2026-10-13, the last commit before the second trim) | `29cf5381c8b006917033a062727d9e6ce68b2cfb` |
 
-That blob also contains the notes for lessons 25 and 26, which were retained in `TRACK.md` at the
-time of the trim. Lessons 01–12 predate the note block; those lessons have no handover notes, only
-their documents.
+Notes on the two rows:
+
+- The **13 – 24** blob also contains the notes for lessons 25 and 26, which were retained in
+  `TRACK.md` at the time of the first trim.
+- The **25** blob contains the notes for lessons 25, 26 and 27. It is the more convenient place to
+  read lesson 25's note, because the 13–24 blob is 68 KB.
+- Lessons 01–12 predate the note block; those lessons have no handover notes, only their documents.
+
+After the 2026-10-13 trim, `TRACK.md` holds the notes for lessons **26, 27 and 28**.
 
 ## Procedure for the next trim
 
