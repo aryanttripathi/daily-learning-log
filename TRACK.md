@@ -3,7 +3,7 @@ track-state
 subject: SQLite
 started: 2026-09-16
 lessons-total: 33
-lessons-done: 28
+lessons-done: 29
 -->
 
 # Current Track: SQLite Internals
@@ -56,7 +56,7 @@ The order follows SQLite's actual layering (see sqlite.org/arch.html and filefor
 
 ### Part V — Operational and advanced topics
 
-- [ ] 29 — Transactions at the SQL level: autocommit, savepoints, and statement journals
+- [x] 29 — Transactions at the SQL level: autocommit, savepoints, and statement journals
 - [ ] 30 — Virtual tables: the xBestIndex protocol, plus sqlite_dbpage and dbstat introspection
 - [ ] 31 — Memory-mapped I/O and memory allocation (mmap_size, memsys, lookaside)
 - [ ] 32 — Verifying a database: how PRAGMA integrity_check walks the file, and SQLite's test strategy
@@ -69,136 +69,6 @@ this file's own git history, and TRACK-ARCHIVE.md records exactly which commit a
 for which lessons. When this block grows past three lessons, move the oldest out and update
 TRACK-ARCHIVE.md. The lesson documents themselves are the real record; these notes exist only so
 that a fresh session knows what a previous run deliberately left alone.
-
-scope note 2026-10-11 (lesson 26): no lesson added, removed, reordered or split;
-lessons-total stays 33. The ordering held exactly. Lesson 26 needed aiRowLogEst[] only as an
-INPUT and nothing from ANALYZE's machinery, so the 26/27 boundary is clean: lesson 26 owns the
-WhereLoop object, the five cost formulas, whereLoopInsert/FindLesser, wherePathSolver and
-whereShortCut; lesson 27 owns every question about where the numbers come from.
-
-Both of lesson 25's named handoffs are CLOSED.
-
-(a) sqlite3WhereOkOnePass (where.c:173-183) is a pure getter -- memcpy of aiCurOnePass[] plus
-`return pWInfo->eOnePass`. The decision is at where.c:7228-7248, after the solver. ONEPASS_SINGLE
-is nothing but WHERE_ONEROW on the chosen loop, which is why a DELETE by rowid gets it: whereShortCut
-sets WHERE_COLUMN_EQ|WHERE_IPK|WHERE_ONEROW at where.c:6392-6398. ONEPASS_MULTI additionally
-requires WHERE_ONEPASS_MULTIROW from the caller, a non-virtual table, and either no WHERE_MULTI_OR
-or WHERE_DUPLICATES_OK (DELETE only) -- the comment at 7217-7227 says the OR exclusion exists
-because UPDATE reads aiCurOnePass[1] and that is "not set accurately for scans that use the OR
-optimization". One finding not in lesson 25: when ONEPASS is granted on a rowid table whose chosen
-loop was COVERING, where.c:7240-7245 STRIPS WHERE_IDX_ONLY from the already-selected WhereLoop and
-does not recompute rRun. The plan is costed as index-only and then run as not-index-only.
-
-(b) The affinity-string trimming is codeApplyAffinity(), wherecode.c:446-481, NOT in where.c at all,
-and it is NOT the same rule as sqlite3TableAffinityStr's backward loop. It trims BOTH ends on
-`zAff[i] <= SQLITE_AFF_BLOB` (so NONE or BLOB), the leading loop ALSO ADVANCES `base`, and the two
-guards are asymmetric (leading `n>0`, trailing `n>1`); if nothing survives, no opcode is emitted.
-That explains lesson 25's "Affinity p1=2 p2=3 p4='CCB' for a four-column index with four constrained
-terms" completely: the leading character was BLOB, so it was stripped AND p1 was advanced by one.
-Measured four ways on 3.45.1 with the A=BLOB/B=TEXT/C=NUMERIC coding from lesson 24:
-  q(w, x numeric, y numeric, z text)          'ACCB' -> Affinity p1=2 p2=3 p4='CCB'
-  q2(w numeric, x numeric, y numeric, z text)  'CCCB' -> Affinity p1=1 p2=4 p4='CCCB'
-  q3(w numeric, x numeric, y numeric, z)       'CCCA' -> Affinity p1=1 p2=3 p4='CCC'
-  q4(w, x, y, z)                               'AAAA' -> no OP_Affinity emitted
-Caller is codeAllEqualityTerms at wherecode.c:941; updateRangeAffinityStr (494-508) separately
-rewrites characters to BLOB for range terms.
-
-Lesson 24's open `tcol = CAST(icol AS TEXT)` row is NOT closed. It now has a named place to look --
-sqlite3ExprNeedsNoAffinityChange, called from updateRangeAffinityStr -- and that is lesson 26's
-Next Steps item 7.
-
-Measured facts later lessons can rely on (all on stock 3.45.1, no debug build, SQLITE_ENABLE_STAT4
-confirmed ABSENT via PRAGMA compile_options, so where.c:4172's #else branch is the live one and
-full-scan rRun == rSize+16 unconditionally):
-
-- sqlite3LogEst/LogEstAdd/LogEstToInt/estLog were reimplemented from util.c:2055-2128 and verified
-  against all nine assert()s in where.c and build.c: LogEst(28)=48, LogEst(2)=10, LogEst(20)=43,
-  LogEst(18)=42, LogEst(10)=33, LogEst(15)=39, LogEst(1000)=99, LogEst(5)=23, LogEst(1)=0.
-- estLog(LogEst N) applies sqlite3LogEst to a LogEst, giving LogEst(log2(N)) -- the b-tree depth.
-  Measured: estLog(99)=33 (10 units), estLog(166)=40 (16), estLog(199)=43 (20), estLog(265)=47 (26).
-  Any later lesson quoting rLogSize must use this, not rSize-33.
-- THE CENTRAL RESULT. For a single table with one == term, non-covering index, the SEARCH/SCAN
-  crossover is closed-form and was predicted to the single row at four table sizes with ZERO
-  mismatches. Formulas: scan rRun = rSize+16; index rRun = LogEstAdd(LogEstAdd(rLogSize,
-  nOut+1+(15*szIdxRow)/szTabRow), nOut+16). Measured boundaries for t(a integer, b text) index (a),
-  szTabRow=LogEst(28)=48, szIdxRow=LogEst(8)=30, ratio term = 9:
-    N=10000     flip between k=5631 (rRun 146) and 5632 (148), scan 148
-    N=100000    flip between k=61439 (181) and 61440 (182), scan 182
-    N=1000000   flip between k=589823 (213) and 589824 (215), scan 215
-    N=10000000  flip between k=5767167 (246) and 5767168 (248), scan 248
-  TIE RULE, measured four times: equal cost goes to the FULL TABLE SCAN, because whereLoopAddBtree
-  inserts the IPK loop before looping over real indexes and every comparison in wherePathSolver
-  (where.c:6071-6085) is strict `<`. The crossover ratio k/N is 0.56-0.61, NOT the 10-20% folklore.
-- szTabRow and szIdxRow are LogEst(width*4) from build.c:2305-2330, fully determined by the DDL.
-  Column.szEst is 1 for INTEGER, 5 for a bare TEXT/BLOB/CLOB (v=16, then v/4+1 at build.c:1771),
-  k/4+1 for VARCHAR(k). estimateIndexWidth iterates nColumn, so a rowid table's index includes the
-  trailing rowid at weight 1. Changing a column's DECLARED TYPE moves the crossover with no change
-  to any stored byte.
-- Skip-scan fires at exactly 18 duplicates, never 17 (where.c:3633, aiRowLogEst[nEq+1]>=42).
-  Measured k=14..23 with stat1 "1000000 k 1": SCAN at 14-17, "ANY(a) AND b=?" at 18+. LogEst(16)=
-  LogEst(17)=40 and LogEst(18)=42 -- there is NO integer with LogEst 41 in that range, because of
-  the 3-bit mantissa in sqlite3LogEst's a[] table. Several of where.c's integer thresholds may sit
-  in such gaps; enumerating them is lesson 26's Next Steps item 5.
-- Automatic-index boundary derived from rSetup = rLogSize+rSize+28 (where.c:4091-4104) composed
-  through the solver's cost rule (where.c:5970-5979), then measured: for a 1,000,000-row inner table
-  the auto-index appears at exactly 9 outer rows. Path A (scan inner, auto-index outer) is flat at
-  246 across 6..12 rows because rSetup is >31 LogEst units below the inner scan and LogEstAdd
-  discards it; path B (scan outer, scan inner) moves 241/243/245/247/248/251. Predicted = measured
-  at every point. The solver also REVERSED the join order and added a Bloom filter.
-- The solver runs TWICE when there is an ORDER BY: wherePathSolver(pWInfo,0) to get nRowOut, then
-  whereInterstageHeuristic (6313-6356, sets prereq=ALLBITS on unconstrained loops of tables the
-  first pass searched), then wherePathSolver(pWInfo,nRowOut+1). where.c:7115-7121.
-- mxChoice = 1 / 5 / 12 / 18 (where.c:5871-5888, computeMxChoice 5663-5810 returns
-  bStarUsed?18:12). This matches queryplanner-ng.html's published N values exactly.
-- whereLoopOutputAdjust RETURNS EARLY for a single table with no ORDER BY (where.c:3074-3079).
-  That is why the crossover predictions above needed no adjustment term, and it means the same
-  table+index+WHERE gets a different nOut once it appears in a join.
-- whereShortCut cannot use a UNIQUE index with 4+ key columns: aLTermSpace[3] (whereInt.h:174,
-  tested at where.c:6407). Verified that 3-column and 4-column cases produce IDENTICAL
-  EXPLAIN QUERY PLAN output, so the shortcut is invisible from outside and must be measured at
-  prepare() time, not query time. That is lesson 26's Next Steps item 4.
-
-Two comment-versus-code disagreements recorded, both in where.c:4158-4176:
-
-- The comment says the STAT4 full-scan penalty is "2.75". The code is `rSize + 16 - 2`, and
-  LogEst 14 is 2**1.4 = 2.639, while 10*log2(2.75)=14.59 would round to 15. The code is 2.64x,
-  one unit more aggressive than its own comment. ("3.0" for LogEst 16 = 3.031 is honest.)
-  The same rounding slack appears at where.c:3644, where a "1.375 fudge factor" is coded as +5,
-  i.e. 1.414.
-- UNRESOLVED, handed to lesson 27. The comment claims that at 2.75 "a full table scan is preferred
-  over using an index on a column with just two distinct values where each value has about an equal
-  number of appearances." Substituting nOut = LogEst(N/2) gives index rRun = rSize+13 at N = 1e4,
-  4e5, 1e6, 1e7 and 1e8 -- below rSize+14 as well as rSize+16, so the 2-unit reduction does NOT
-  flip the decision; the index still wins by one unit (~7%). The claim can therefore only hold if
-  STAT4 also replaces nOut via whereEqualScanEst. That is a derivation, not a measurement, because
-  this build has STAT4 off. Lesson 27 should settle it with a -DSQLITE_ENABLE_STAT4 build and
-  WHERETRACE 0x2.
-
-Cost-model accuracy, measured with a stopwatch (file-backed, cache large enough to hold the table,
-best of 5, forced full scan via the unary-+ trick):
-
-- Uniform distribution, 400,000 rows, stat1's average IS the truth. Real crossover is near 10
-  distinct values (index/scan = 0.90); the model's is at k/N ~ 0.58. In between the planner keeps
-  the index and loses: 1.53x at 4 distinct values, 2.41x at 3, 3.20x at 2. At 1 distinct value the
-  model finally says SCAN and the two are equal (1.02x).
-- Skewed distribution, same table, matching fraction varied 5%..95% over 8 total values: stat1's k
-  stayed at exactly 50000 (= N/8) in EVERY run, because stat1 stores only the average. The correct
-  answer moved by 12x while the planner's input did not move at all. At 95% the index costs 1.64x.
-  This is the motivating measurement for lesson 27 and for sqlite_stat4's existence.
-
-Handed forward: lesson 27 gets the stat1/stat4 format and all four estimators (whereKeyStats 1713,
-whereRangeScanEst 2087, whereEqualScanEst 2269, whereInScanEst 2333), sqlite3AnalysisLoad, the
-hasStat1 flag, and the unresolved 2.75 claim above. Lesson 28 gets whereSortingCost's
-implementation side -- OP_SorterInsert vs OP_IdxInsert and the "extra factor of 2.0 or 3.0" the
-comment at where.c:5562-5564 mentions but does not code here -- plus the external merge itself.
-Lesson 29 gets WHERE_ONEPASS_DESIRED / WHERE_ONEPASS_MULTIROW / WHERE_DUPLICATES_OK as a
-caller-side contract and sqlite3MultiWrite. Lesson 30 gets whereLoopAddVirtual (4685),
-whereLoopAddVirtualOne (4361), allocateIndexInfo (1408), vtabBestIndex (1669), the
-sqlite3_vtab_collation/in/rhs_value/distinct accessors (4557-4646) and the whole xBestIndex
-protocol, all untouched here. Lesson 31 gets sqlite3StackAllocRawNN, which wherePathSolver uses for
-its aTo/aFrom/aSortCost block (where.c:6042-6049). Lesson 32 gets OptimizationEnabled() and the
-SQLITE_TESTCTRL_OPTIMIZATION bit table that where.c references in six places (SQLite's own
-".testctrl opt -starquery" is named in computeMxChoice's comment).
 
 scope note 2026-10-12 (lesson 27): no lesson added, removed, reordered or split;
 lessons-total stays 33. Structural change to THIS FILE instead: the per-lesson scope notes for
@@ -457,6 +327,164 @@ not read -- carried over from lesson 27), sqlite3Stat4ProbeSetValue and the stat
 machinery in vdbemem.c, whereRangeSkipScanEst, and the vdbeSorterCompareReal /
 vdbeSorterCompareRealInt / vdbeSorterGetReal arm of the comparators (SORTER_TYPE_REAL was never
 exercised by a measurement this run).
+
+scope note 2026-10-14 (lesson 29): no lesson added, removed, reordered or split;
+lessons-total stays 33. The ordering held exactly. Lesson 29 needed lesson 16's rollback-journal
+record format as a contrast, lesson 15's pager states as the frame, lesson 03's page-type byte to
+read a captured page, and lesson 28's VFS-shim technique; nothing else. Also trimmed per the policy
+above: lesson 26's note moved out and indexed in TRACK-ARCHIVE.md (commit
+ad3839f8be496cef3cf2db47fd4866cc7733b04d, TRACK.md blob 68c8bcb936ccc25efac2076b649494b22a755cc2).
+Notes for 27, 28, 29 retained. Build: SQLite 3.53.4 from better-sqlite3@13.0.3's
+deps/sqlite3/sqlite3.c, gcc 13.3.0 -O2, 2-core container, page_size 4096 unless stated.
+
+BOTH of lessons 25/26's named handoffs are CLOSED, and the answer inverts lesson 26's premise.
+WHERE_ONEPASS_DESIRED / WHERE_ONEPASS_MULTIROW / WHERE_DUPLICATES_OK and sqlite3MultiWrite() are
+IRRELEVANT to statement journalling. The gate is
+  p->usesStmtJournal = (u8)(pParse->isMultiWrite && pParse->mayAbort);   sqlite3.c:90569
+and for a DELETE, mayAbort is never set (nothing in a DELETE can raise a constraint), so
+where.c's "if( eOnePass!=ONEPASS_SINGLE ) sqlite3MultiWrite(pParse)" sets a flag that the && then
+discards. MEASURED: "DELETE FROM t WHERE a>5" on a table with a UNIQUE index -> usesStmtJournal=0.
+A later lesson must not repeat lesson 26's expectation that ONEPASS controls this.
+
+THE OBSERVABLE, for any future lesson that needs it. sqlite3FinishCoding (sqlite3.c:126684) attaches
+VdbeComment((v, "usesStmtJournal=%d", pParse->mayAbort && pParse->isMultiWrite)) to the very
+OP_Transaction that consults the flag (sqlite3.c:126761). So on a -DSQLITE_DEBUG build (which turns
+on SQLITE_ENABLE_EXPLAIN_COMMENTS) the flag is readable off the "comment" column of EXPLAIN's
+Transaction row -- no patched build needed. The amalgamation in that npm package ships NO shell.c,
+so this needs a 20-line harness that looks the column up by name.
+
+Measured usesStmtJournal table (all on 3.53.4, schema-only decision -- data is never consulted):
+  INSERT..SELECT into a table with UNIQUE                      1
+  same with OR IGNORE / OR REPLACE / OR FAIL / OR ROLLBACK     0  (all four)
+  INSERT..SELECT into a bare "a INTEGER PRIMARY KEY" table     1  (rowid can collide)
+  INSERT..SELECT into a table with no PK and no constraints    0
+  INSERT..SELECT where target has NOT NULL, or CHECK           1
+  UPDATE of an indexed/UNIQUE column                           1
+  UPDATE of a non-indexed column, no constraint                0
+  DELETE, one row or many, with or without indexes             0
+  CREATE INDEX and CREATE UNIQUE INDEX                         1
+  single-row INSERT..VALUES                                    0
+  ... with an AFTER INSERT trigger whose body is RAISE(ABORT)  1
+  ... with an AFTER INSERT trigger that only writes            0
+  INSERT..SELECT into an FK child: foreign_keys=OFF 0, ON      1
+  single-row DELETE by rowid on the FK PARENT, foreign_keys=ON 1
+PRAGMA foreign_keys therefore changes the I/O profile of statements that never mention an FK.
+
+RUN-TIME gate, on top of the prepare-time flag (OP_Transaction, sqlite3.c:100747):
+  p->usesStmtJournal && pOp->p2 && (db->autoCommit==0 || db->nVdbeRead>1)
+and then p->iStatement = db->nSavepoint + db->nStatement (100750) -- a statement transaction IS a
+savepoint, numbered above every named one. MEASURED both ways with an identical abortable UPDATE
+(NOT NULL violation engineered onto the LAST row of 100,000 so the statement does real work first):
+inside BEGIN after an earlier UPDATE -> 307 sub-journal records, statement undone, earlier UPDATE
+survived, autocommit still 0; in autocommit -> 0 records, everything undone, autocommit 1.
+NOT ESTABLISHED: the db->nVdbeRead>1 arm. In autocommit with one writer the external outcome is
+identical either way because sqlite3VdbeHalt commits right after, so this harness could not
+distinguish it. Needs a build printing p->iStatement. Lesson 29's Next Steps item 1. Do not state
+it as measured.
+
+WHY FOUR HARNESSES FOUND NOTHING, and the trap for any future lesson. openSubJournal
+(sqlite3.c:64202) calls sqlite3JournalOpen with nSpill = sqlite3Config.nStmtSpill, so the
+sub-journal is a MEMJOURNAL first and the real VFS xOpen happens only on spill. Below the
+threshold a statement journal has ZERO filesystem footprint -- no xOpen, no name, nothing for a
+VFS shim or strace. Count records with PAGERTRACE instead: the "#if 0" above
+"int sqlite3PagerTrace=1;" (sqlite3.c:59751) flipped to "#if 1" makes subjournalPage print
+"STMT-JOURNAL %d page %d". sqlite3PagerTrace has PLAIN external linkage (not SQLITE_PRIVATE), so a
+separate TU can set it -- unlike sqlite3WhereTrace in lesson 27.
+
+THE SPILL BOUNDARY, predicted in closed form then measured to the single input row.
+SQLITE_STMTJRNL_SPILL defaults to 64*1024 (sqlite3.c:24052). memjrnlWrite spills on
+"(iAmt+iOfst) > p->nSpill". A sub-journal record is 4+page_size, so at 4096: 4100*16 = 65,600 >
+65,536 and 4100*15 = 61,500, i.e. the 16th record's PAGE write (not its 4-byte pgno write, which
+ends at 61,504) creates the file. Re-dirtying a prefix of a 581-page / 200,000-row table inside an
+open SAVEPOINT: K=6146 -> 15 records, xOpen 0. K=6147 -> 16 records, xOpen 1, exactly 2 xWrites
+(n=61504 off=0 from memjrnlCreateFile, then n=4096 off=61504), 65,600 bytes = 16*4100. The same
+arithmetic predicted the 307-record case to the write: 2 + (307-15-1)*2 = 584 writes and
+307*4100 = 1,258,700 bytes. MEASURED 584 and 1,258,700.
+PRAGMA journal_mode=memory forces nStmtSpill=-1: 657 records / 2,693,700 bytes became zero bytes.
+
+SUB-JOURNAL RECORD FORMAT, decoded off the shim at page_size 4096: 4-byte BIG-ENDIAN pgno then the
+raw page, 4100 per record, records at 0 / 4100 / 8200 with pgno 3 / 4 / 5 and first page byte 0x0d
+(lesson 03's table-leaf code). NO header, NO checksum, NO padding -- against the main journal's
+512-byte header and 4104 per record (pgno 4 / page 4096 / checksum 4), both visible in the same
+run. It can drop them because it is SQLITE_OPEN_SUBJOURNAL|DELETEONCLOSE with zName=NULL
+(measured flags 0x201e) and is never read after a crash.
+
+WHY THE SUB-JOURNAL IS USUALLY EMPTY (the thing that cost this run four harnesses). A savepoint
+stores a POSITION, not a snapshot: pagerOpenSavepoint (66601) records nOrig = dbSize,
+iOffset = journalOff, iSubRec = nSubRec and an EMPTY bitvec. pagerPlaybackSavepoint (63088) replays
+the MAIN journal from iOffset to journalOff into a pDone bitvec FIRST, then the sub-journal records
+iSubRec..nSubRec skipping anything in pDone. So a page first dirtied AFTER the savepoint opened is
+covered by the main journal and needs no sub-journal record at all. subjRequiresPage (60702) fires
+only for nOrig>=pgno with the bit clear -- i.e. a page dirtied EARLIER in the transaction and
+written again inside the savepoint. ONE record per page per savepoint. Its inner loop also clears
+bTruncateOnRelease on every LATER savepoint. To produce records at all the recipe is:
+BEGIN; <write pages>; SAVEPOINT (or an abortable multi-write statement); <write the same pages>.
+
+Record counts are explained by page layout, not row counts: 100,000-row p(a INTEGER PRIMARY KEY,
+b INTEGER UNIQUE, c INTEGER NOT NULL) has page_count 628 = ~307 table leaves + ~321 index pages,
+and an UPDATE of only the non-indexed c produced exactly 307 records.
+
+bTruncateOnRelease ONLY TRUNCATES IN MEMORY (sqlite3PagerSavepoint, 66689): nSubRec is rewound
+either way, but the sqlite3OsTruncate is gated on sqlite3JournalIsInMemory(sjfd). Once spilled, a
+sub-journal file never shrinks on RELEASE.
+
+sqlite3VdbeHalt (91190) decides RELEASE vs ROLLBACK: rc==OK or errorAction==OE_Fail -> RELEASE;
+OE_Abort -> ROLLBACK; anything else -> full sqlite3RollbackAll + CloseSavepoints + autoCommit=1.
+Of the four "special" errors only NOMEM and FULL are eligible for statement rollback, and only
+when usesStmtJournal; IOERR and INTERRUPT ALWAYS take the whole transaction down. vdbeCloseStatement
+(91094) runs ROLLBACK then RELEASE on the rollback path (the anonymous savepoint must vanish either
+way), and the commit branch sets db->nStatement = 0 wholesale rather than decrementing.
+
+SQL-LEVEL SEMANTICS, all measured:
+- SAVEPOINT outside BEGIN sets autoCommit=0 and isTransactionSavepoint=1 and is NOT counted in
+  nSavepoint; RELEASE of it sets autoCommit=1 and calls sqlite3VdbeHalt -- it IS the commit.
+  Observable oddity: right after "SAVEPOINT outer", sqlite3_get_autocommit()==0 while
+  sqlite3_txn_state()==SQLITE_TXN_NONE. Two APIs, two answers, same instant (deferred).
+- BEGIN with a non-empty stack -> SQLITE_ERROR "cannot start a transaction within a transaction".
+- ROLLBACK TO is idempotent and repeatable (3x ok), does NOT pop the named savepoint; only RELEASE
+  does, after which ROLLBACK TO gives "no such savepoint: k".
+- Duplicate names are a stack, not a dict: with two savepoints named s, RELEASE s pops the inner
+  one and a following ROLLBACK TO s finds the OUTER one and undoes pre-inner work (row count went
+  to 0, not 1).
+- A plain ROLLBACK empties the whole stack.
+- OP_Savepoint refuses SAVEPOINT and RELEASE while db->nVdbeWrite>0 ("SQL statements in progress",
+  SQLITE_BUSY); ROLLBACK TO is NOT on that list.
+- ROLLBACK TO restores nDeferredCons/nDeferredImmCons from the savepoint; RELEASE does not.
+- ROLLBACK TO across a schema change calls sqlite3ExpirePreparedStatements +
+  sqlite3ResetAllSchemasOfConnection and then re-sets DBFLAG_SchemaChange.
+
+COST OF AN OPEN SAVEPOINT, measured (300,000 rows, second full UPDATE pass over the same pages,
+best of 5): no savepoint 48.3 ms / 0 extra bytes; one savepoint open 53.3 ms / 657 records /
+2,693,700 bytes. Do NOT quote the ~10% wall-clock as the cost -- the temp file stayed in the host
+page cache. The reproducible number is the 2.69 MB of writes that did not exist before, on
+unchanged SQL. Also note subjRequiresPage is a LINEAR SCAN of aSavepoint[] on every write to an
+already-writeable page, so depth costs CPU as well as records.
+
+Handed forward: lesson 30 gets the whole xBestIndex protocol (whereLoopAddVirtual 4685,
+whereLoopAddVirtualOne 4361, allocateIndexInfo 1408, vtabBestIndex 1669, the
+sqlite3_vtab_collation/in/rhs_value/distinct accessors 4557-4646), sqlite_stat4-as-a-table, and now
+ALSO sqlite3VtabSavepoint: EVERY branch of OP_Savepoint and of vdbeCloseStatement calls it with the
+same index, so xSavepoint/xRelease/xRollbackTo is the savepoint stack re-exported to extensions --
+including the "db->autoCommit==0 || db->nVTrans==0" assert at sqlite3.c:100466. Lesson 31 gets
+sqlite3StackAllocRawNN, the loadStatTbl allocation cost, the unresolved sorter-mmap question from
+lesson 28, vdbesort.c's bulk-allocation mode, and now ALSO memjournal's FileChunk chain as a third
+allocator consumer (nChunkSize == nSpill == 64 KB for a sub-journal, so chunks are large) plus
+sqlite3_config(SQLITE_CONFIG_STMTJRNL_SPILL) as a tunable it should price. Lesson 32 gets
+OptimizationEnabled(), the SQLITE_TESTCTRL_OPTIMIZATION bit table, SQLITE_Stat4,
+SQLITE_TESTCTRL_SORTER_MMAP, and now the observation that PRAGMA integrity_check is read-only and
+so never reaches any of this -- but that sqlite3BtreeTripAllCursors(SQLITE_ABORT_ROLLBACK,
+isSchemaChange==0) on the ROLLBACK TO path is the mechanism behind SQLITE_ABORT_ROLLBACK, which a
+test-strategy lesson should cover. Lesson 33 (VACUUM) should note that VACUUM does not recompute
+statistics, that it reruns the CREATE INDEX sorter path once per index, and that CREATE INDEX
+itself has usesStmtJournal=1 (measured above), so a VACUUM inside a transaction is a statement-
+journal workload.
+
+NOT read this run, still unexamined: src/build.c's sqlite3DefaultRowEst (effect measured in lesson
+28, function still not read -- carried over from lessons 27 and 28), sqlite3Stat4ProbeSetValue and
+the stat4 probe-record machinery in vdbemem.c, whereRangeSkipScanEst, the vdbeSorterCompareReal
+arm of the sorter comparators, and -- new this run -- the WAL savepoint path
+(PagerSavepoint.aWalData, sqlite3WalSavepoint, sqlite3WalSavepointUndo) and sqlite3PagerMovepage's
+subjournal call site, neither of which any measurement here exercised.
 -->
 
 ## Completed Subjects
