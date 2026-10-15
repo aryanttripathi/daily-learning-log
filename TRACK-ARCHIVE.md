@@ -36,6 +36,7 @@ commit you reach them through.
 | 13 – 24 | SQLite Internals | commit `724c164b9a3edfddd6993c458cbfa87c0c521805` (2026-10-12, the last commit before the first trim) | `e3aa5a6715fee568a4dfdead028d3d7624ca883f` |
 | 25 | SQLite Internals | commit `5429a52018a46573b419ac99bf80d8fb3b0777b9` (2026-10-13, the last commit before the second trim) | `29cf5381c8b006917033a062727d9e6ce68b2cfb` |
 | 26 | SQLite Internals | commit `ad3839f8be496cef3cf2db47fd4866cc7733b04d` (2026-10-14, the last commit before the third trim) | `68c8bcb936ccc25efac2076b649494b22a755cc2` |
+| 27 | SQLite Internals | commit `8d6880a7dace31a374afc865d1556b9e3593caa4` (2026-10-15, the last commit before the fourth trim) | `e5e40ca598fb43fd2f26d090bc2bb10f576f4d5b` |
 
 Notes on the rows:
 
@@ -46,9 +47,15 @@ Notes on the rows:
 - The **26** blob contains the notes for lessons 26, 27 and 28, and is the most convenient place to
   read lesson 26's note — the one on the `WhereLoop` cost model, the closed-form `SEARCH`/`SCAN`
   crossover, and the tie rule.
+- The **27** blob contains the notes for lessons 27, 28 and 29, and is the most convenient place to
+  read lesson 27's note — the one on `sqlite_stat1` arithmetic, the `sqlite_stat4` sample
+  selection, and the `szTabRow` boundary where the scan-versus-index decision flips because of a
+  column the query never mentions. It also carries the standing reminder that `WHERETRACE` needs
+  **both** `SQLITE_DEBUG` and `SQLITE_ENABLE_WHERETRACE`, and that `sqlite3WhereTrace` is
+  `SQLITE_PRIVATE`, so a harness must `#include "sqlite3.c"` to set it.
 - Lessons 01–12 predate the note block; those lessons have no handover notes, only their documents.
 
-After the 2026-10-14 trim, `TRACK.md` holds the notes for lessons **27, 28 and 29**.
+After the 2026-10-15 trim, `TRACK.md` holds the notes for lessons **28, 29 and 30**.
 
 ## Procedure for the next trim
 
