@@ -3,7 +3,7 @@ track-state
 subject: SQLite
 started: 2026-09-16
 lessons-total: 33
-lessons-done: 29
+lessons-done: 30
 -->
 
 # Current Track: SQLite Internals
@@ -57,7 +57,7 @@ The order follows SQLite's actual layering (see sqlite.org/arch.html and filefor
 ### Part V — Operational and advanced topics
 
 - [x] 29 — Transactions at the SQL level: autocommit, savepoints, and statement journals
-- [ ] 30 — Virtual tables: the xBestIndex protocol, plus sqlite_dbpage and dbstat introspection
+- [x] 30 — Virtual tables: the xBestIndex protocol, plus sqlite_dbpage and dbstat introspection
 - [ ] 31 — Memory-mapped I/O and memory allocation (mmap_size, memsys, lookaside)
 - [ ] 32 — Verifying a database: how PRAGMA integrity_check walks the file, and SQLite's test strategy
 - [ ] 33 — VACUUM and VACUUM INTO: the temp-database rewrite in vacuum.c, the backup API it shares, and why it is the only way to change auto_vacuum mode
@@ -69,113 +69,6 @@ this file's own git history, and TRACK-ARCHIVE.md records exactly which commit a
 for which lessons. When this block grows past three lessons, move the oldest out and update
 TRACK-ARCHIVE.md. The lesson documents themselves are the real record; these notes exist only so
 that a fresh session knows what a previous run deliberately left alone.
-
-scope note 2026-10-12 (lesson 27): no lesson added, removed, reordered or split;
-lessons-total stays 33. Structural change to THIS FILE instead: the per-lesson scope notes for
-lessons 13-24 were moved out, because this comment block had reached 68 KB and every run has to
-rewrite the whole file to tick one checkbox. They are preserved verbatim in this file's git
-history and TRACK-ARCHIVE.md records exactly where. Nothing was deleted.
-
-Lesson 27 settled the question lesson 26 handed forward, and the answer was "both of you were
-right about different tables":
-- Built two binaries from ONE SQLite 3.53.4 amalgamation (the copy vendored in the better-sqlite3
-  npm package at deps/sqlite3/sqlite3.c), differing only in -DSQLITE_ENABLE_STAT4; a third adds
-  -DSQLITE_DEBUG -DSQLITE_ENABLE_WHERETRACE. NOTE FOR FUTURE RUNS: WHERETRACE needs BOTH
-  SQLITE_DEBUG and SQLITE_ENABLE_WHERETRACE (sqlite3.c's macro is
-  #if defined(SQLITE_DEBUG) && (defined(SQLITE_TEST) || defined(SQLITE_ENABLE_WHERETRACE))).
-  Defining only the latter compiles and traces nothing. sqlite3WhereTrace is SQLITE_PRIVATE in the
-  amalgamation, so the harness must #include "sqlite3.c" to set it; a separate TU cannot.
-- THE RESULT. t(a INTEGER, b <type>), 400,000 rows, a = i%2 (two values, equal counts), index on
-  (a), WHERE a=0. rSize = LogEst(400000) = 186. Scan rRun = 202 without STAT4 and 200 with it
-  (rSize+16 and rSize+16-2, both read verbatim out of WHERETRACE=0x8). Index rRun depends on the
-  DECLARED TYPE OF b, which the query never mentions:
-    b INTEGER / VARCHAR(1)  index 201  -> STAT4 picks SCAN (200), no-STAT4 picks the index (201)
-    b VARCHAR(4)            index 200  -> STAT4 picks SCAN on the TIE, no-STAT4 picks the index
-    b TEXT / VARCHAR(40)    index 199  -> both builds pick the index
-    b VARCHAR(400)          index 198  -> both builds pick the index
-  So where.c:4160's "at 2.75 a full table scan is preferred over using an index on a column with
-  just two distinct values" is TRUE, for narrow tables, and lesson 26's derivation (index wins by
-  one unit) was also true, for its own table, which was t(a integer, b text). The flip boundary is
-  a szTabRow boundary: Column.szEst 2 for VARCHAR(4) vs 5 for bare TEXT. Not one stored byte
-  differs between the two databases. Exact k in VARCHAR(k) where it flips: NOT narrowed; left as
-  lesson 27's Next Steps item 2.
-- "equality scan regions t_a(0): 200000" -- with two equal-count values STAT4's own estimate EQUALS
-  stat1's second integer, so the 2-unit rRun discount is the entire difference between the builds.
-  This is why lesson 26's substitution of nOut = LogEst(N/2) was the right substitution.
-- TIE RULE, a fifth confirmation: at b VARCHAR(4) the STAT4 build prices both loops at 200 and the
-  trace prints "skip:" for the index loop -- it is never inserted, because whereLoopAddBtree adds
-  the IPK loop first and whereLoopInsert needs strictly better.
-- The arithmetic complaint from lesson 26 STANDS: LogEst 14 = 2.639, the comment says 2.75, the
-  code is one unit more aggressive than its own prose. Only the DECISION the comment describes was
-  wrong-looking, not the discount.
-
-Other measurements lesson 27 owns, all original, all on the binaries above:
-- stat1 arithmetic: I = ceil(nRow/(anDLt[i]+1)) at analyze.c:868-872, with the special case
-  "if( iVal==2 && p->nRow*10 <= nDistinct*11 ) iVal = 1". First integer is nSkipAhead ? nEst : nRow.
-- WHICH stat1 ROWS EXIST. Measured: noidx|<NULL>|1000, withidx|wi|1000 143, wo|wo|1000 1. The
-  idx-IS-NULL row appears ONLY when the table has no non-partial index: needTableCnt is cleared at
-  analyze.c:1067 by any index with pPartIdxWhere==0, and the OP_Count row is emitted only at
-  analyze.c:1362 under "pOnlyIdx==0 && needTableCnt". For an indexed table the row count comes from
-  analysisLoader's pTable->nRowLogEst = pIndex->aiRowLogEst[0] (analyze.c:1636). WITHOUT ROWID uses
-  idx == tbl (resolved by the sqlite3_stricmp(argv[0],argv[1]) branch).
-- NOTHING IN SQLITE WRITES "sz=", "unordered" OR "noskipscan". grep -c '"sz="' sqlite3.c -> 0.
-  decodeIntArray (analyze.c:1556-1575) only READS them. They are a human-only hint channel.
-  MEASURED: hand-writing 'unordered' into stat1 then "ANALYZE sqlite_schema" turns
-  "SCAN t USING COVERING INDEX t_a" into "SCAN t + USE TEMP B-TREE FOR ORDER BY" and makes a
-  BETWEEN range abandon the index. WITHOUT the reload the edit is invisible -- stats are read once
-  at schema load. sz=4000 parsed but did NOT move an equality plan (cost 127 either way); what it
-  CAN move is lesson 27's Next Steps item 3, still open.
-- STAT4 SAMPLES, 400,000 rows, a=0 for 380,000 and a=1..20 for 1,000 each. stat1 "400000 19048".
-  sqlite_stat4 holds exactly 24 rows (SQLITE_STAT4_SAMPLES). 8 are PERIODIC with nLt[1] at 44444,
-  88889, 133334, ... stride 44445 = nEst/9+1 = nEst/(mxSample/3+1)+1, predicted before looking.
-  16 non-periodic, one per surviving distinct value -- and a = 2, 10, 12, 16 HAVE NO SAMPLE: all
-  twenty have nEq[0]=1000, so sampleIsBetter fell through sampleIsBetterPost to the iHash LCG
-  tiebreak (iPrn = 0x689e962d*nCol ^ 0xd0944565*nEst, advanced by *1103515245+12345). Predicting
-  that surviving set from the seed is lesson 27's Next Steps item 5.
-- aAvgEq DERIVED AND CONFIRMED TO THE UNIT. Sampled values estimate 1000; UNSAMPLED values (a=2)
-  and NONEXISTENT values (a=999) both estimate 1002, via whereKeyStats' aStat[1]=aAvgEq[nField-1].
-  initAvgEq: nDist100 = 100*400000/19048 = 2099 (truncating 2099.75); 17 samples end a distinct
-  prefix run (the last of the 8 periodics contributes 380000, the 16 singletons 1000 each) so
-  sumEq=396000, nSum100=1700; avgEq = 100*(400000-396000)/(2099-1700) = 400000/399 = 1002.5 -> 1002.
-  Both integer truncations are load-bearing. A nonexistent value is NEVER estimated at 0.
-- whereInScanEst sums: a IN (2,5,9) -> 1002+1000+1000 -> "IN row estimate: est=3002", exact.
-- whereRangeScanEst: a>5 -> "STAT4 range scan: 385000..400000 est=138", and 15000 IS the true count
-  (both bounds landed on sample boundaries). The unanalysed guess would have been 166 (a quarter of
-  the table), wrong by 6.7x. The "if( iLwrIdx==iUprIdx ){ nNew -= 20; }" 4x rule did not fire in
-  any measured case; finding a query where it does is NOT done.
-- THE STAT4 HEADLINE, same skewed table. stat1 alone prices WHERE a=0 and WHERE a=5 IDENTICALLY at
-  165 and picks the index for both -- 380,000 rows reached through an index. With STAT4: a=0 ->
-  SCAN (200), a=5 -> SEARCH (122). Timed, best of 4x8 reps, hot cache: no-STAT4 index path 25.1 ms
-  vs forced scan 18.3 ms = 1.37x penalty; STAT4 17.9 ms. Modest BECAUSE the table is cached; the
-  cold-cache version is lesson 27's Next Steps item 4, not done.
-- PRAGMA analysis_limit IS DANGEROUS, measured: limit 0 -> stat1 "400000 19048"; limit 100 ->
-  "400000 101", off by 190x, and the resulting plan costs 90 instead of 165 for BOTH a=0 and a=5 --
-  the planner became MORE confident while becoming less correct. And mxSample = nLimit==0 ? 24 : 0,
-  so sqlite_stat4 came back with 0 rows under the limit, silently. PRAGMA optimize turns a
-  temporary limit on BY DEFAULT (bit 0x10), measured writing "50000 96" where the truth is 100.
-  PRAGMA optimize(-1) prints the statement it would run, verbatim: 'ANALYZE "main"."t"'. It prints
-  nothing on a connection where stats are current and no query touched the table.
-
-Handed forward: lesson 28 gets whereSortingCost's implementation side -- OP_SorterInsert vs
-OP_IdxInsert and the "extra factor of 2.0 or 3.0" the comment at where.c:5562-5564 mentions but does
-not code there -- plus the external merge itself, and should check whether STAT4's sharper nOut
-improves the sorter estimate or is swamped by that factor. Lesson 29 still gets
-WHERE_ONEPASS_DESIRED / WHERE_ONEPASS_MULTIROW / WHERE_DUPLICATES_OK and sqlite3MultiWrite.
-Lesson 30 still gets the whole xBestIndex protocol (whereLoopAddVirtual 4685,
-whereLoopAddVirtualOne 4361, allocateIndexInfo 1408, vtabBestIndex 1669, the
-sqlite3_vtab_collation/in/rhs_value/distinct accessors 4557-4646), and now ALSO gets sqlite_stat4
-as a table that can be SELECTed and UPDATEd like any other -- the hand-edit technique in lesson 27
-section 8.2 is a vtab-adjacent introspection trick worth repeating there. Lesson 31 gets
-sqlite3StackAllocRawNN and should price the per-connection cost of loadStatTbl's allocation
-(IndexSample[nSample] plus 3*nIdxCol*nSample tRowcnts per index, paid at every schema load).
-Lesson 32 gets OptimizationEnabled() and the SQLITE_TESTCTRL_OPTIMIZATION bit table, and now also
-SQLITE_Stat4 as one of those bits (it gates both loadStat4 and statInit's mxSample). Lesson 33
-(VACUUM) should note that VACUUM does NOT recompute statistics.
-
-NOT read this run, still unexamined: src/build.c's sqlite3DefaultRowEst (the unanalysed fallback --
-lesson 26 read the szTabRow part of build.c but not this function), sqlite3Stat4ProbeSetValue and
-the rest of the stat4 probe-record machinery in vdbemem.c, and whereRangeSkipScanEst
-(where.c, called when nEq != nRecValid).
 
 scope note 2026-10-13 (lesson 28): no lesson added, removed, reordered or split;
 lessons-total stays 33. The ordering held exactly. Lesson 28 needed lesson 26's LogEst/estLog
@@ -485,6 +378,107 @@ the stat4 probe-record machinery in vdbemem.c, whereRangeSkipScanEst, the vdbeSo
 arm of the sorter comparators, and -- new this run -- the WAL savepoint path
 (PagerSavepoint.aWalData, sqlite3WalSavepoint, sqlite3WalSavepointUndo) and sqlite3PagerMovepage's
 subjournal call site, neither of which any measurement here exercised.
+
+scope note 2026-10-15 (lesson 30): no lesson added, removed, reordered or split;
+lessons-total stays 33. Per the NOTE BLOCK POLICY above, lesson 27's note was moved out this run
+and TRACK-ARCHIVE.md gained its row (commit 8d6880a7dace31a374afc865d1556b9e3593caa4, TRACK.md
+blob e5e40ca598fb43fd2f26d090bc2bb10f576f4d5b). This block now holds lessons 28, 29 and 30.
+
+Build used: the same SQLite 3.53.4 amalgamation from better-sqlite3@13.0.3
+(deps/sqlite3/sqlite3.c). NO SQLITE_DEBUG build was needed this run -- everything measured came
+out of ordinary builds plus EXPLAIN QUERY PLAN and stat(1). Three harnesses, all small and all
+rebuildable from the lesson's Hands-On section: an instrumented vtab printing the whole
+xBestIndex conversation; a cost-sweep variant; a malfunction-mode variant. Also
+-DSQLITE_ENABLE_DBSTAT_VTAB -DSQLITE_ENABLE_DBPAGE_VTAB for a small exec-and-print tool, since
+the amalgamation ships both modules compiled out by default and no shell.c is vendored.
+
+TRAP THAT COST TIME, FOR FUTURE RUNS. sqlite3_create_module returns SQLITE_OK even when the
+module is unusable: createModule (sqlite3.c:162533) does (void)sqlite3VtabCreateModule(...) and
+returns the rc it was passed. Worse, sqlite3VtabCallCreate (sqlite3.c:162681) reports
+"no such module: X" when pMod==0 OR xCreate==0 OR xDestroy==0. A module with a good xCreate and
+a NULL xDestroy is registered, works eponymously, and still fails CREATE VIRTUAL TABLE with
+"no such module". Fill in xDestroy.
+
+MEASUREMENTS THIS LESSON OWNS, all original:
+- Entry values of every xBestIndex output field, read from inside the callback:
+  estimatedCost = 5e+98 (SQLITE_BIG_DBL/2, SQLITE_BIG_DBL = 1e99 at sqlite3.c:15708),
+  estimatedRows = 25, idxNum = 0, idxFlags = 0, orderByConsumed = 0, aConstraintUsage zeroed.
+  Reset per call, not once (whereLoopAddVirtualOne, sqlite3.c:173212).
+- THE COST CLIFF. EXPLAIN QUERY PLAN's third column IS the loop's rRun. Swept one module's
+  estimatedCost: 1->0, 2->10, 10->33, 100->66, 1e6->199 (all = 10*log2), then 1e12->400 where
+  10*log2 = 399, and 5e98->3280 where 10*log2 = 3279. Above 2e9 sqlite3LogEstFromDouble
+  (sqlite3.c:38519) stops computing a log and reads the IEEE exponent field:
+  e = (a>>52)-1022; return e*10. So cost is quantised to one value per power of two above 2e9,
+  and both big values are a full unit off. rSetup is hard-wired to 0 for every vtab loop.
+- CALL SCHEDULE: 1 (all usable, +1 if bRetryLimit) + 1 (no IN) + K (distinct prereq masks)
+  + 1 (all disabled) + 1 (all disabled, no IN) = K+4 upper bound. Measured: WHERE a=5 -> 1 call
+  (the mBest==0 && !bIn short circuit); FROM vt,t1 WHERE a=t1.x -> 2; WHERE a IN (1,2,3) -> 2
+  calls and THREE xFilter calls.
+- WO_IN is folded to SQLITE_INDEX_CONSTRAINT_EQ in allocateIndexInfo; there is no
+  SQLITE_INDEX_CONSTRAINT_IN. LIMIT(73)/OFFSET(74) arrive with iColumn=0 and OFFSET before LIMIT.
+- colUsed verified as a used-columns mask: 0x1 / 0x7 / 0x5 / 0x3 for four different select lists.
+- MALFUNCTION: gap in argvIndex -> "vt.xBestIndex malfunction"; duplicate argvIndex -> same.
+  NOT TRIGGERED: the pIdxCons->usable==0 arm (the winning plan came from an all-usable call).
+  That is lesson 30's Next Steps item 2, left open deliberately.
+- DIRECTONLY is enforced at USE, not definition: CREATE VIEW v AS SELECT * FROM dbstat succeeds,
+  SELECT * FROM v then fails with 'unsafe use of virtual table "dbstat"'.
+- statBestIndex's idxNum bitmask confirmed through EQP text: WHERE name=? -> 0x2,
+  + ORDER BY name,path -> 0xa, bare -> 0x0, all in HEX because of SQLITE_INDEX_SCAN_HEX;
+  sqlite_dbpage prints decimal because it does not set that bit.
+- dbstat/dbpage CROSS-CHECK on a 120-page, 4096-byte-page file with users(3000 rows) +
+  users_name: root page 2 interior, ncell 103 = header bytes 3-4 0x0067, rightmost child
+  0x00000078 = 120 = count(*) FROM sqlite_dbpage. Leaf page 4: 0x0D, ncell 0x1E=30, content
+  start 0x0055=85; 8 + 2*30 + (4096-85) = 4079, so unused = 17, which is exactly dbstat's
+  unused for that page. Aggregate mode: users 105 pages 97.06% packed, users_name 14 pages
+  81.84%.
+- THE REAL FIND, and it closes lesson 29's sqlite3VtabSavepoint handoff. sqlite_dbpage's whole
+  truncation mechanism is DbpageTable.pgnoTrunc (one Pgno) + iDbTrunc, which explains three of
+  the four documented limitations mechanically (dbpageUpdate sqlite3.c:233046, dbpageSync,
+  dbpageRollbackTo). The FOURTH documented rule -- "any ROLLBACK TO will cancel the null-INSERT"
+  -- IS WRONG as stated. Measured on fresh 120-page copies, by file size:
+    BEGIN; INSERT(100,NULL); COMMIT;                                      -> 99 pages
+    BEGIN; INSERT(100,NULL); UPDATE ... pgno=3; COMMIT;                   -> 120 (no-op, as doc'd)
+    BEGIN; SAVEPOINT s1; INSERT(100,NULL); ROLLBACK TO s1; COMMIT;        -> 99  (NOT cancelled)
+    BEGIN; UPDATE ... pgno=3; SAVEPOINT s1; INSERT(100,NULL); ROLLBACK TO s1; COMMIT; -> 120
+    BEGIN; UPDATE ... pgno=3; SAVEPOINT s1; INSERT(100,NULL); RELEASE s1; COMMIT;     -> 99
+    BEGIN; INSERT(100,NULL); ROLLBACK;                                    -> 120
+  Cause: sqlite3VtabSavepoint (sqlite3.c:162995) only calls xRollbackTo
+  "if( xMethod && pVTab->iSavepoint>iSavepoint )", and pVTab->iSavepoint is set ONLY at
+  SAVEPOINT_BEGIN, and only for vtabs already in db->aVTrans[]. A vtab that joins the
+  transaction after the savepoint was taken has iSavepoint==0 and never hears about it.
+  NOT DONE: bisecting which version this changed in, and not reported upstream. Lesson 30's
+  Next Steps item 4. Do not re-derive this; extend it.
+  Also noted: sqlite3VtabSavepoint temporarily CLEARS SQLITE_Defensive around the callback.
+- Other exact error strings, each measured on a clean copy: DELETE FROM sqlite_dbpage ->
+  "cannot delete" (argc==1 arm); INSERT(1,NULL) -> "bad page value" (no page-1-specific
+  message); with SQLITE_DBCONFIG_DEFENSIVE set, UPDATE -> rc=11 and the "read-only" arm;
+  null-INSERT at pgno=121 on a 120-page header -> no-op (the
+  pgnoTrunc < sqlite3BtreeLastPage guard in dbpageSync, visible from outside).
+- Zeroing a live page then PRAGMA integrity_check -> "Tree 2 page 99: btreeInitPage() returns
+  error code 11" + "wrong # of entries in index users_name". Hand that to lesson 32.
+
+DELIBERATELY NOT TAKEN: sqlite_stat4-as-a-table, which lessons 27 and 29 both handed to lesson 30.
+The vtab/xBestIndex material filled the day on its own and the stat4-table angle belongs with
+whichever later lesson revisits the planner's inputs. It is NOT closed -- re-hand it forward.
+
+Handed forward: lesson 31 still gets sqlite3StackAllocRawNN, the loadStatTbl allocation cost,
+the unresolved sorter-mmap question from lesson 28, vdbesort.c's bulk-allocation mode,
+memjournal's FileChunk chain, and now ALSO allocateIndexInfo's one-malloc-for-four-arrays plus
+SZ_HIDDENINDEXINFO as a flexible-array-member sibling of the lookaside question. Lesson 32 gets
+xIntegrity (the iVersion 4 method, never exercised here), the corrupted databases this run
+produced, and btreeInitPage's error path. Lesson 33 (VACUUM) gets the backup API and should note
+that sqlite_dbpage's xSync calls sqlite3PagerTruncateImage, which is NOT how VACUUM shrinks.
+sqlite_stat4-as-a-table goes to whichever of 31-33 revisits the planner's inputs.
+
+NOT read this run, still unexamined: src/build.c's sqlite3DefaultRowEst (carried over from
+lessons 27, 28 and 29 -- still not read), sqlite3Stat4ProbeSetValue, whereRangeSkipScanEst, the
+WAL savepoint path (PagerSavepoint.aWalData, sqlite3WalSavepoint, sqlite3WalSavepointUndo) and
+sqlite3PagerMovepage's subjournal call site (both carried from lesson 29), and -- new this run --
+sqlite3_vtab_in/distinct/rhs_value's implementations beyond the struct fields they read,
+xShadowName and SQLITE_VTAB_INNOCUOUS/CONSTRAINT_SUPPORT, xFindFunction and
+sqlite3VtabOverloadFunction, and dbstat's cursor walk (statNext/statDecodePage), whose output I
+verified against raw bytes without reading its code.
+
 -->
 
 ## Completed Subjects
