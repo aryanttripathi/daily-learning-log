@@ -3,7 +3,7 @@ track-state
 subject: SQLite
 started: 2026-09-16
 lessons-total: 33
-lessons-done: 30
+lessons-done: 31
 -->
 
 # Current Track: SQLite Internals
@@ -58,7 +58,7 @@ The order follows SQLite's actual layering (see sqlite.org/arch.html and filefor
 
 - [x] 29 — Transactions at the SQL level: autocommit, savepoints, and statement journals
 - [x] 30 — Virtual tables: the xBestIndex protocol, plus sqlite_dbpage and dbstat introspection
-- [ ] 31 — Memory-mapped I/O and memory allocation (mmap_size, memsys, lookaside)
+- [x] 31 — Memory-mapped I/O and memory allocation (mmap_size, memsys, lookaside)
 - [ ] 32 — Verifying a database: how PRAGMA integrity_check walks the file, and SQLite's test strategy
 - [ ] 33 — VACUUM and VACUUM INTO: the temp-database rewrite in vacuum.c, the backup API it shares, and why it is the only way to change auto_vacuum mode
 
@@ -69,157 +69,6 @@ this file's own git history, and TRACK-ARCHIVE.md records exactly which commit a
 for which lessons. When this block grows past three lessons, move the oldest out and update
 TRACK-ARCHIVE.md. The lesson documents themselves are the real record; these notes exist only so
 that a fresh session knows what a previous run deliberately left alone.
-
-scope note 2026-10-13 (lesson 28): no lesson added, removed, reordered or split;
-lessons-total stays 33. The ordering held exactly. Lesson 28 needed lesson 26's LogEst/estLog
-arithmetic and lesson 24's record-comparison semantics as inputs, lesson 02's record format to
-decode PMA bytes, and lesson 25's p5 flag table to read OPFLAG_USESEEKRESULT off a CREATE INDEX;
-nothing else. Also trimmed: lesson 25's note moved out of this block per the policy above and
-indexed in TRACK-ARCHIVE.md (commit 5429a52018a46573b419ac99bf80d8fb3b0777b9, TRACK.md blob
-29cf5381c8b006917033a062727d9e6ce68b2cfb). Notes for 26, 27, 28 retained.
-
-Both of lesson 27's named handoffs are CLOSED.
-
-(a) THE 2.0x/3.0x FACTOR IS CODED, in whereSortingCost itself, as two TUNING lines:
-"rSortCost += 10" under WHERE_USE_LIMIT (LogEst 10 = 2.00x) and a further "+= 6" when
-nSorted!=0 (total +16 = 2**1.6 = 3.03x). The comment that says the factor applies "if the sort
-is built using OP_IdxInsert and OP_Sort rather than with OP_SorterInsert" and the TUNING comment
-that says "Extra 2.0x if using LIMIT" describe THE SAME TWO LINES, because WHERE_USE_LIMIT ==
-SF_FixedLimit and SF_FixedLimit implies p->iLimit!=0, which is the condition that selects
-OP_IdxInsert. Lesson 27's reading of the comment was correct.
-
-(b) THE CENTRAL FINDING, and the one later lessons are most likely to need. The switch between
-the two sorts is ONE LINE in sqlite3Select at tag-select-0650:
-"if( p->iLimit==0 && sSort.addrSortIndex>=0 ){ ChangeOpcode(OP_SorterOpen); sortFlags |=
-SORTFLAG_UseSorter; }". An OP_OpenEphemeral is emitted speculatively and REWRITTEN IN PLACE to
-OP_SorterOpen only when there is no LIMIT clause of ANY kind. Measured on EXPLAIN: ORDER BY
-alone -> SorterOpen/SorterInsert/SorterSort/SorterData/SorterNext + OpenPseudo (a sorter cursor
-cannot answer OP_Column); LIMIT 10, LIMIT 10 OFFSET 5, LIMIT ?, LIMIT -1 and LIMIT (SELECT 10)
-ALL -> OpenEphemeral/Sequence/IdxInsert/Sort/Next. pushOntoSorter's bSeq = !(UseSorter) adds the
-OP_Sequence tie-breaker column, measured as exactly +1 VDBE instruction per row (vmstep
-2,000,009 -> 2,200,009 on 200k rows), because a b-tree needs a unique key and the sorter does
-not (vdbeSorterMerge takes p1 on res<=0, so the merge is stable by construction).
-THE MODEL AND THE CODE GENERATOR DISAGREE: LIMIT ? and LIMIT -1 get useLimit=0, iLimit=320 and
-sort cost 254 -- byte-identical to no LIMIT -- while generating the b-tree plan. Measured
-best-of-five on 200k rows: sorter 46.5 ms / 3,282,330 temp bytes; LIMIT -1 127.3 ms /
-3,465,216 temp bytes = 2.74x SLOWER for 1.06x the bytes. The cost is b-tree insertion
-(lessons 11-12), not I/O. LIMIT -1 is semantically unbounded and is a pure 2.7x pessimisation.
-LIMIT 10 itself is a BOUNDED HEAP, not a sort: IfNotZero/Last/IdxLE/Delete run before the insert
-so the ephemeral index never exceeds LIMIT rows (9.6 ms, zero temp bytes), and non-ORDER-BY
-columns are loaded only after the pruning (pSort->pDeferredRowLoad / innerLoopLoadRow:
-Column 0,1 at addr 5 but Column 0,0 at addr 11).
-
-Measured facts later lessons can rely on (all on SQLite 3.53.4 built from better-sqlite3@13.0.3's
-deps/sqlite3/sqlite3.c, gcc -O2, 2-core container, page_size 4096, threads 0):
-
-- THE FLUSH THRESHOLD IS A MEMORY THRESHOLD. mnPmaSize = SQLITE_SORTER_PMASZ(250) * pgsz;
-  mxPmaSize = MAX(mnPmaSize, MIN(cache_size bytes, SQLITE_MAX_PMASZ = 1<<29)). Spill test is
-  "iMemory + nReq > mxPmaSize" with iMemory += ROUND8(nVal + sizeof(SorterRecord)) = ROUND8(nVal+16)
-  and szPMA += nVal + varintLen(nVal). Every record on the test table was 11-16 bytes, so every one
-  cost EXACTLY 32 bytes of iMemory: PMAs held 64000/64000/64000/8000 records at mxPmaSize 2,048,000
-  (= 2048000/32, exact four times over). On-disk PMA content was 1,010,793-1,085,898 bytes, about
-  49% of the threshold -- a 1.95x memory inflation that is pure SorterRecord header plus rounding.
-- SPILL BOUNDARY PREDICTED TO THE SINGLE ROW: 200,000 x 32 = 6,400,000, so cache_size=-6250
-  (6,400,000) spills NOTHING and -6249 (6,398,976) spills everything. Confirmed first try.
-- mnPmaSize FLOOR CONFIRMED: cache_size -100 and -500 give byte-identical spill (3,282,339,
-  7 PMAs) because both clamp UP to 250*4096 = 1,024,000. The docs for SQLITE_CONFIG_PMASZ say
-  threads launch when content exceeds page_size times the "MINIMUM of the PRAGMA cache_size
-  setting and this value"; the code is MAX and the measurement agrees with the code. mnPmaSize
-  appears in exactly two places in vdbesort.c -- that MAX, and the
-  "szPMA > mnPmaSize && sqlite3HeapNearlyFull()" arm of the per-record allocation mode -- and in
-  NO thread-launch test.
-- PMA FORMAT VERIFIED BY HEXDUMP. One leading varint = total content bytes, then varint-length-
-  prefixed records packed end to end, no padding/checksum/page structure. First bytes:
-  "bd d8 69" = 1,010,793 (content length); "0b" = 11; "03 17 03 72 6f 77 2d 31 06 87 17" =
-  header 3, serial types 0x17 (text len 5) and 0x03 (3-byte int), "row-1", 428823. Field order is
-  (orderby..., data...) from makeSorterRecord's OP_MakeRecord regBase+nOBSat, nBase-nOBSat.
-  A PMA is sorted in sqlite3VdbeRecordCompare order, NOT byte order: a memcmp check reports
-  unsorted for every PMA while decoding field 1 reports sorted for every PMA, because the leading
-  serial-type byte varies with text length ("row-9" 0x17 sorts before "row-10" 0x19 byte-wise).
-- SQLITE_DBSTATUS_TEMPBUF_SPILL (verb 13) IS EXACT FOR THE SORTER AND BLIND TO EPHEMERAL TABLES.
-  Matched an independent VFS-shim xWrite byte count to the byte (3,282,330 = sum of four PMA
-  content lengths 3,282,318 + four 3-byte varints). But it reported 0 for the LIMIT -1 sort that
-  wrote 3,465,216 bytes, because its b-tree arm reads only db->aDb[1].pBt (the TEMP database) and
-  an OP_OpenEphemeral table is a separate transient Btree. The documentation claims it covers
-  "writes to intermediate tables that are part of complex queries". It also only lands at
-  sqlite3VdbeSorterClose, i.e. at finalize/reset -- a read before finalize sees 0.
-- THE 16-PMA CLIFF, predicted to the single page of cache_size. SORTER_MAX_MERGE_COUNT = 16 and
-  vdbeSorterTreeDepth returns 0 for <=16 PMAs. With page_size=512 (mnPmaSize 128,000) and a
-  POSITIVE cache_size: 782 pages -> mxPma 400,384 -> 12,512 rec/PMA -> 16 PMAs -> 1 temp file,
-  3,282,366 bytes, 56.5 ms. 781 pages -> 399,872 -> 12,496 rec/PMA -> 17 PMAs -> 2 temp files
-  (pTask->file2, used by the single-threaded IncrMergers), 6,564,686 bytes = 2.0001x, 67.4 ms.
-  EVERY RECORD IS WRITTEN TWICE above the cliff. The wall-clock ratio was only 1.19x BECAUSE the
-  3 MB temp file stayed in the host page cache -- do not quote 1.19x as the cost of the extra
-  merge level; the BYTE ratio is the reproducible result. Depth 2 begins at 257 PMAs.
-- typeMask: three gates at Init (nAllField<13, aColl[0]==0 or ==db->pDfltColl, and
-  KEYINFO_ORDER_BIGNULL clear), then narrowed per Write by the serial type of field 1.
-  nAllField = (ORDER BY terms) + (result columns) + 1, measured: 1 orderby + 10 cols = 12 keeps
-  0x01; + 11 cols = 13 loses it; 2 orderby + 9 cols = 12 keeps, + 10 cols = 13 loses.
-  Timed on a 300k single-key in-memory sort, best of 3: INTEGER fast path 85.4 ms vs 114.7 with
-  NULLS LAST (1.34x); TEXT 114.1 vs 159.4 (1.40x); COLLATE NOCASE 191.1. THE CONTROL that makes
-  it the BIGNULL BIT and not null semantics: DESC keeps 0x01 (NULLS LAST is DESC's default, bit
-  clear, 100.0 ms) while DESC NULLS FIRST loses it (131.0 ms). Verified by printing typeMask at
-  Rewind from a patched build. On a 12-FIELD record the effect was unmeasurable (209 vs 212 ms) --
-  record decode dominates there.
-- whereSortingCost DECOMPOSED EXACTLY from a patched build: nCol = LogEst((nExpr+59)/30) is a
-  THREE-STEP STAIRCASE -- 10 for 1-30 result columns, 16 for 31-60, 20 for 61+ -- so "sorting cost
-  proportional to the number of output columns" buys nothing for essentially every real query.
-  No LIMIT: 201 + 10 + estLog(201)=43 -> 254. LIMIT 10: 201 + 10 + 10 + estLog(33)=17 -> 238,
-  i.e. LOWER than the unlimited sort, correctly, because nRow collapses to the limit before
-  estLog. LIMIT 100000 -> 261, above 254. pWInfo->iLimit is a LogEst, not a row count (33 =
-  LogEst(10)), arriving as sqlite3WhereBegin's iAuxArg from p->nSelectRow (320 when unlimited).
-  WHERETRACE 0x002 prints "---- sort cost=N (Y/X) increases cost A to B".
-- sqlite3DefaultRowEst MEASURED (lesson 27 listed it as unexamined). An unanalysed table gets
-  rSize = LogEst 200 = 2**20 = 1,048,576 assumed rows: nRowIn=201 and sort cost 254 before
-  ANALYZE, nRowIn=177 and 229 after (stat1 "t|NULL|200000", LogEst(200000)=176), with rUnsort
-  216 -> 192. A 5.2x cardinality over-estimate inflates the sorting cost by 25 LogEst units.
-  The FUNCTION ITSELF IS STILL NOT READ -- only its effect. Lesson 33 or any later cost work
-  should read it; it sets the baseline for every number in lessons 26-28.
-- CREATE INDEX drain loop: SorterSort / SorterData / OP_SeekEnd / IdxInsert p5=16
-  (OPFLAG_USESEEKRESULT, lesson 25's flag table) / SorterNext. Sorting first converts random
-  b-tree insertion into pure appends to the rightmost leaf -- that is why the sorter exists for
-  DDL. CREATE UNIQUE INDEX is the ONLY user of OP_SorterCompare: "SorterCompare 3 22 9 1" then
-  "Halt 2067 2 0 t.b" (2067 = SQLITE_CONSTRAINT_UNIQUE), i.e. uniqueness is checked between
-  ADJACENT keys in the sorted stream, never by a per-row index probe.
-- PRAGMA threads=4 on this 2-core box: nTask=5, 14 temp files, 9,846,966 spill bytes (3.0x the
-  single-threaded 3,282,330) and 62 ms against 46.5. Each task writes its own level-0 PMAs and
-  each multi-threaded IncrMerger keeps two staging files. threads=0 is the right default on
-  small machines; a later lesson quoting multi-threaded sorter numbers must say the core count.
-- Build properties: SQLITE_ENABLE_SORTER_REFERENCES is NOT defined in this amalgamation, so every
-  measurement carries the full row through the sorter (the documented default for
-  SQLITE_CONFIG_SORTERREF_SIZE is "never use this optimization" anyway).
-  SQLITE_TESTCTRL_SORTER_MMAP(db, 0) gates BOTH vdbeSorterMapFile AND vdbeSorterExtendFile's
-  CHUNK_SIZE/SIZE_HINT preallocation.
-
-UNRESOLVED, handed to lesson 31 (mmap_size). vdbeSorterOpenTempFile explicitly sets
-SQLITE_FCNTL_MMAP_SIZE to SQLITE_MAX_MMAP_SIZE on the PMA temp file, so it is MEANT to be mapped
-regardless of PRAGMA mmap_size. Instrumented: 8 xFetch calls on the temp file, 0 successful
-mappings, and all 3.28 MB came back through buffered xRead. Disabling the path entirely made no
-measurable difference (48.3 vs 46.5 ms best-of-five), consistent with the map never having
-happened. WHY the unix VFS declined was NOT established -- candidates are the
-sqlite3GlobalConfig.mxMmap/szMmap clamp in unixFileControl, the zero-length map attempted at
-extend time, or the DELETEONCLOSE locking style. This is also a caveat on every READ count above;
-the WRITE byte counts are unaffected. Lesson 28's Next Steps item 1.
-
-Handed forward: lesson 29 still gets WHERE_ONEPASS_DESIRED / WHERE_ONEPASS_MULTIROW /
-WHERE_DUPLICATES_OK and sqlite3MultiWrite, and now ALSO gets statement journals as the one kind of
-temporary file lesson 28 deliberately did not touch (tempfiles.html lists nine kinds; lesson 28
-covered transient indices and the sorter's own temp files only). Lesson 30 still gets the whole
-xBestIndex protocol and sqlite_stat4-as-a-table. Lesson 31 gets sqlite3StackAllocRawNN, the
-loadStatTbl allocation cost, the unresolved sorter-mmap question above, and should note that
-vdbesort.c's bulk-allocation mode (list.aMemory, doubled by sqlite3Realloc, links threaded by
-OFFSET because the block moves) is a second large consumer of the allocator alongside the page
-cache. Lesson 32 gets OptimizationEnabled(), the SQLITE_TESTCTRL_OPTIMIZATION bit table,
-SQLITE_Stat4, and now SQLITE_TESTCTRL_SORTER_MMAP as another testctrl knob that changes measured
-behaviour. Lesson 33 (VACUUM) should note that VACUUM does not recompute statistics AND that its
-rebuild recreates every index, i.e. it runs the CREATE INDEX sorter path in section 9 once per
-index.
-
-NOT read this run, still unexamined: src/build.c's sqlite3DefaultRowEst (effect measured, function
-not read -- carried over from lesson 27), sqlite3Stat4ProbeSetValue and the stat4 probe-record
-machinery in vdbemem.c, whereRangeSkipScanEst, and the vdbeSorterCompareReal /
-vdbeSorterCompareRealInt / vdbeSorterGetReal arm of the comparators (SORTER_TYPE_REAL was never
-exercised by a measurement this run).
 
 scope note 2026-10-14 (lesson 29): no lesson added, removed, reordered or split;
 lessons-total stays 33. The ordering held exactly. Lesson 29 needed lesson 16's rollback-journal
@@ -479,6 +328,151 @@ xShadowName and SQLITE_VTAB_INNOCUOUS/CONSTRAINT_SUPPORT, xFindFunction and
 sqlite3VtabOverloadFunction, and dbstat's cursor walk (statNext/statDecodePage), whose output I
 verified against raw bytes without reading its code.
 
+
+scope note 2026-10-16 (lesson 31): no lesson added, removed, reordered or split;
+lessons-total stays 33. The ordering held exactly. Per the NOTE BLOCK POLICY above, lesson 28's
+note was moved out this run and TRACK-ARCHIVE.md gained its row (commit
+815ea964987e5764d01f917e944ca8a7eb5e2851, TRACK.md blob
+b11a76fdd03a5ee9ede69de38ec2585b029d0efd). This block now holds lessons 29, 30 and 31.
+
+Build used: the same SQLite 3.53.4 amalgamation from better-sqlite3@13.0.3
+(deps/sqlite3/sqlite3.c), gcc 13.3.0 -O2, -DSQLITE_THREADSAFE=0, 2-core container, system page
+size 4096. Test db: t(a INTEGER PRIMARY KEY, b TEXT, c INTEGER) 200,000 rows + index tc ON t(c),
+page_size 4096, 3,836 pages / 15,712,256 bytes. Five variant builds this run: default,
+-DSQLITE_ENABLE_SORTER_MMAP, -DSQLITE_ENABLE_MEMSYS5, -DSQLITE_ENABLE_MEMORY_MANAGEMENT, and one
+12-line patched build adding "int sqlite3FetchTrace" + an fprintf inside unixFetch. That symbol
+has PLAIN external linkage by construction (I added it), unlike sqlite3WhereTrace in lesson 27 --
+so a separate TU can flip it; it is NOT in stock SQLite, do not look for it.
+
+LESSON 28'S NAMED HANDOFF IS CLOSED, and lesson 28's three candidate causes were ALL WRONG.
+Sorter mmap fails for two stacked reasons:
+(a) db->nMaxSorterMmap is set to 0x7FFFFFFF ONLY inside #ifdef SQLITE_ENABLE_SORTER_MMAP
+    (sqlite3.c:190846-190853), which this amalgamation does not define, so the field is 0 and
+    BOTH gates -- vdbeSorterMapFile's "pFile->iEof <= nMaxSorterMmap" (107150) and
+    vdbeSorterExtendFile's "nByte <= nMaxSorterMmap" (107838) -- are false for any real PMA.
+    MEASURED: default build, 200k-row ORDER BY spilling 11,088,919 bytes over 8 PMAs,
+    cache_size=-2000, threads=0 -> ZERO xFetch on temp files. With the compile flag, or with
+    sqlite3_test_control(SQLITE_TESTCTRL_SORTER_MMAP, db, 0x7FFFFFFF) on a default build -> 16
+    xFetch, STILL ZERO mapped. Timing is identical: 46.5 ms default vs 47.0 ms SORTER_MMAP,
+    best-of-5 (46.5 is byte-identical to lesson 28's number on the same db).
+(b) EVEN WHEN ENABLED IT CANNOT SUCCEED. Traced from the patched build:
+      FETCH (temp) iOff=0 nAmt=11088919 need=11089175 mmapSize=11088925
+                   mmapSizeMax=2147418112 st_size=11091968 -> null
+    mmapSizeMax is the FULL SQLITE_MAX_MMAP_SIZE, so the unixFileControl clamp lesson 28
+    suspected DID NOT FIRE and the VFS declined nothing -- the mapping exists and is exactly
+    mmapSize = the SIZE_HINT value, because SQLITE_FCNTL_SIZE_HINT (44292-44303) calls
+    unixMapfile(pFile, nByte). vdbeSorterMapFile asks for the ENTIRE file at offset 0 and
+    unixFetch demands mmapSize >= iOff+nAmt+256. The only slack the sorter ever creates is
+    vdbeSorterExtendFile(db, fd, iEof + szPMA + 9) at 108132 -- NINE bytes. Final gap: 250 bytes.
+    Not fixable through any API-exposed knob. NOT DONE: trying a VFS whose xFetch has no EOF
+    buffer, and bisecting the release where this stopped working. Lesson 31 Next Steps item 1.
+
+THE 256-BYTE EOF BUFFER IS THE CENTRAL FACT OF THIS LESSON and later lessons will need it.
+unixFetch (45912) returns NULL unless mmapSize >= iOff+nAmt+256; the mapping can never exceed the
+file length; therefore THE LAST PAGE OF EVERY DATABASE IS UNMAPPABLE AT EVERY mmap_size. Measured
+to the byte on the 15,712,256-byte db: mmap_size 15,708,160 -> 579 of 581 pages mapped;
+15,708,416 -> 580; 15,712,256 -> 580. One page per 256 bytes, predicted first try from
+floor((min(mmap_size,fileSize)-256)/page_size). The comment says the buffer exists because a
+CORRUPT page can make SQLite overread "a few bytes" -- hand that to lesson 32.
+
+mmap FACTS MEASURED (index-only scan touching 581 pages, cache_size=-2000):
+- mmap_size is a PREFIX WINDOW, not a hot-page cache. unixMapfile always maps from offset 0,
+  min(st_size, mmapSizeMax). 262144 / 1048576 / 4194304 ALL gave 581 xFetch and ZERO mapped and
+  582 xRead, because index tc lives past the 4 MB mark. No partial credit, no warning.
+- mmap_size=20971520: 2 xRead (page 1 + last page), 581 xFetch, 580 mapped,
+  sqlite3_memory_used 146,864 vs 2,166,280 (14.8x), CACHE_USED 14,136 vs 2,103,096,
+  CACHE_MISS 2 vs 582, heap growth during the scan 656 B vs 2,020,072 B.
+- WALL CLOCK IS THE SMALL PART: best-of-7 6.4 -> 5.6 ms (1.14x) at cache_size=-2000 and
+  6.0 -> 5.7 at cache_size=-10, on a host-page-cache-resident file. Do NOT quote 1.14x as the
+  value of mmap; the 14.8x memory figure is the reproducible one.
+- A READ INSIDE A WRITE TRANSACTION IS STILL MAPPED (PAGER_GET_READONLY satisfies the
+  eState==PAGER_READER || flags test). BEGIN IMMEDIATE; SELECT -> 580 mapped. The UPDATE itself
+  -> ZERO xFetch. Rule is "a page you will WRITE is never mapped", not "no mmap during writes".
+- WAL EATS THE MAPPING. Same db in wal: scan before an UPDATE of 200 rows -> 581 xFetch/580
+  mapped; scan after -> 399 xFetch/398 mapped. 182 pages had moved into the WAL and
+  sqlite3WalFindFrame()!=0 routes them to getPageNormal. Decays per commit, restored by
+  checkpoint. NOT MEASURED: the recovery after wal_checkpoint(TRUNCATE) -- predicted to return
+  to 581, left as Hands-On exercise 3.
+- Page 1 is never mapped (pgno>1 is unconditional; the assert at 65155 depends on it).
+- A mapped page is sizeof(PgHdr)+nExtra ONLY, flags=PGHDR_MMAP, recycled via
+  pPager->pMmapFreelist, and NOT in the pcache hash -- sqlite3PagerLookup cannot find it.
+- One mmap() failure sets pFd->mmapSizeMax=0 permanently for that file (45853).
+
+ALLOCATOR FACTS MEASURED:
+- pcache1 szAlloc = szPage + szExtra + ROUND8(sizeof(PgHdr1)) = 4368 AT page_size 4096, i.e.
+  272 bytes / 6.6% overhead per page. Clean staircase of +4368 and one malloc per page; a
+  5000-row scan step was +266,448 = 61 x 4368 exactly. cache_size=-2000 therefore holds 468
+  pages, not 500.
+- pcache1InitBulk: first fetch into an empty cache allocates szAlloc * SQLITE_DEFAULT_PCACHE_INITSZ
+  = 20 * 4368 = 87,360 in ONE malloc (measured as the +88,424 at schema-read time and as the
+  "largest allocation" in every sqlite3_status run). Bulk pages have isBulkLocal=1 and go back on
+  pCache->pFree, never to sqlite3_free. Disabled entirely when SQLITE_CONFIG_PAGECACHE is set
+  (58416-58422) or nMax<3.
+- MEMSYS5 COSTS 1.81x. Same scan: system malloc 2,165,680 vs memsys5 (32 MB CONFIG_HEAP,
+  mnReq=32) 3,917,376; mnReq=512 -> 3,936,768; mnReq=4096 -> 4,104,192. Cause is power-of-two
+  rounding on the DOMINANT allocation: 4368 -> 8192. Unavoidable at any legal page size because
+  szAlloc is always 2^k + 272. NOT TESTED: whether SQLITE_CONFIG_PAGECACHE + CONFIG_HEAP removes
+  it by keeping page buffers out of memsys5. Lesson 31 Next Steps item 5.
+- THE SOFT HEAP LIMIT WORKS WITHOUT SQLITE_ENABLE_MEMORY_MANAGEMENT, and not by reclaiming.
+  sqlite3_release_memory is literally "return 0" without that flag, yet measured heap tracked the
+  limit within 1.2% in BOTH builds (limit 200,000 -> 202,400 default / 197,952 with the flag;
+  500,000 -> 503,792 / 499,344; 2,000,000 -> 2,004,064 / 1,999,616). The two builds differ by
+  4,448 bytes = one page. Mechanism is mem0.nearlyFull -> pcache1UnderMemoryPressure (58204),
+  consulted TWICE in pcache1FetchStage2: to refuse a createFlag==1 allocation and to make step 4
+  recycle an LRU page. THE TELL: CACHE_MISS was identical at 582 in every row, so no page was
+  evicted and re-read -- the cache stopped GROWING, it was not SHRUNK.
+  sqlite3HeapNearlyFull() has exactly one other caller in the amalgamation: vdbesort.c:108375,
+  the spill arm lesson 28 could not trigger. The soft heap limit is the knob that triggers it.
+
+LOOKASIDE, PREDICTED IN CLOSED FORM THEN MATCHED AT EVERY CONFIGURATION:
+setupLookaside (188162): sz = ROUNDDOWN8(sz); if sz <= sizeof(LookasideSlot*) (8) then sz = 0;
+szAlloc = sz*cnt; then three branches with LOOKASIDE_SMALL = 128 --
+  sz>=384          : nBig = szAlloc/(384+sz), nSm = (szAlloc - sz*nBig)/128
+  384 > sz >= 256  : nBig = szAlloc/(128+sz), nSm = (szAlloc - sz*nBig)/128
+  sz < 256         : nBig = szAlloc/sz,       nSm = 0
+Measured high-water of SQLITE_DBSTATUS_LOOKASIDE_USED, holding statements open until MISS_FULL
+climbs: 1200,40 -> 123 (30+93, THE DEFAULT); 1200,100 -> 309 (75+234); 1201,100 -> 309 and a
+120,000-byte buffer (ROUNDDOWN8); 384,1000 -> 2000; 256,1000 -> 1334; 248,1000 -> 1000;
+128,500 -> 500; 16,100 -> 100; 8,100 -> 0 slots and NO buffer. Every one correct first try.
+- THE DEFAULT IS 1200,40 = 48,000 BYTES, not 1200,100 = 120,000, because
+  SQLITE_OMIT_TWOSIZE_LOOKASIDE is not defined (24069-24075). Confirmed independently:
+  sqlite3_memory_used right after sqlite3_open is 9,184 with lookaside off and 57,184 with the
+  default -- exactly 48,000 apart. cnt IS A BYTE BUDGET FACTOR, NOT A SLOT COUNT, since 3.31.0.
+- Speed, 300 x prepare+finalize of a 2-way self-join with GROUP BY/HAVING/ORDER BY/LIMIT:
+  1200,100 -> 10.4 us; 128,500 -> 9.7 us; lookaside off -> 13.6 us. So 1.31x, and 64,000 bytes of
+  small slots BEAT 120,000 bytes of 1200-byte slots on this statement. Treat 1.31x as an UPPER
+  bound (prepare is the lookaside-heaviest operation), not a typical figure.
+- The ceiling is hard: 400 held statements against 1200,100 gave used=307, hi=309 and 42,818
+  MISS_FULL. sqlite3_db_config(SQLITE_DBCONFIG_LOOKASIDE) returns SQLITE_BUSY while any slot is
+  out, so it cannot be resized under load.
+- TRAP: a request <=128 bytes that finds no small slot FALLS THROUGH and consumes a full-size
+  slot (32134-32160). And when bDisable>0 (sz forced to 0) MISS_SIZE is NOT incremented, so
+  anStat[1] undercounts by whatever ran inside DisableLookaside regions.
+
+Handed forward: lesson 32 gets xIntegrity (iVersion 4, never exercised), the corrupted databases
+lesson 30 produced, btreeInitPage's error path, OptimizationEnabled() and the
+SQLITE_TESTCTRL_OPTIMIZATION bit table, SQLITE_TESTCTRL_SORTER_MMAP as a testctrl that changes
+measured behaviour, and NOW ALSO the 256-byte overread allowance as the read-path counterpart of
+what integrity_check looks for. Lesson 33 (VACUUM) gets the backup API, the fact that VACUUM does
+not recompute statistics, that it reruns the CREATE INDEX sorter path once per index, that
+CREATE INDEX has usesStmtJournal=1, that sqlite_dbpage's xSync calls sqlite3PagerTruncateImage
+which is NOT how VACUUM shrinks, and NOW ALSO that a memory-mapped file cannot be truncated on
+Windows so VACUUM and auto-vacuum silently fail to shrink it there (sqlite.org/mmap.html).
+STILL OPEN AND RE-HANDED to 32/33: sqlite_stat4-as-a-table (handed to 30 by both 27 and 29,
+deliberately not taken there, and not taken here either), and loadStatTbl's allocation cost
+(handed here by lesson 28 and NOT done -- no measurement of it this run).
+
+NOT read this run, still unexamined: src/build.c's sqlite3DefaultRowEst (carried from lessons 27,
+28, 29 and 30 -- STILL NOT READ, now four lessons running), sqlite3Stat4ProbeSetValue,
+whereRangeSkipScanEst, the WAL savepoint path (PagerSavepoint.aWalData, sqlite3WalSavepoint,
+sqlite3WalSavepointUndo), sqlite3PagerMovepage's subjournal call site, and -- new this run --
+memsys3 and memsys5's own internals (only their external cost was measured), the
+SQLITE_CONFIG_PAGECACHE fixed-slot arm of pcache1Alloc and pcache1.bUnderPressure, the Win32
+mmap implementation at 53541-53660 (read only to confirm it mirrors the unix one), and
+sqlite3MemdebugSetType / the MEMTYPE_LOOKASIDE tagging, which only exists under SQLITE_MEMDEBUG.
+NOT ATTRIBUTED: the 2 MISS_SIZE events per prepare measured above -- wherePathSolver's
+sqlite3StackAllocRawNN (174748) is the obvious candidate but was not confirmed. Lesson 31 Next
+Steps item 4.
 -->
 
 ## Completed Subjects
