@@ -37,6 +37,7 @@ commit you reach them through.
 | 25 | SQLite Internals | commit `5429a52018a46573b419ac99bf80d8fb3b0777b9` (2026-10-13, the last commit before the second trim) | `29cf5381c8b006917033a062727d9e6ce68b2cfb` |
 | 26 | SQLite Internals | commit `ad3839f8be496cef3cf2db47fd4866cc7733b04d` (2026-10-14, the last commit before the third trim) | `68c8bcb936ccc25efac2076b649494b22a755cc2` |
 | 27 | SQLite Internals | commit `8d6880a7dace31a374afc865d1556b9e3593caa4` (2026-10-15, the last commit before the fourth trim) | `e5e40ca598fb43fd2f26d090bc2bb10f576f4d5b` |
+| 28 | SQLite Internals | commit `815ea964987e5764d01f917e944ca8a7eb5e2851` (2026-10-16, the last commit before the fifth trim) | `b11a76fdd03a5ee9ede69de38ec2585b029d0efd` |
 
 Notes on the rows:
 
@@ -53,9 +54,15 @@ Notes on the rows:
   column the query never mentions. It also carries the standing reminder that `WHERETRACE` needs
   **both** `SQLITE_DEBUG` and `SQLITE_ENABLE_WHERETRACE`, and that `sqlite3WhereTrace` is
   `SQLITE_PRIVATE`, so a harness must `#include "sqlite3.c"` to set it.
+- The **28** blob contains the notes for lessons 28, 29 and 30, and is the most convenient place to
+  read lesson 28's note — the one on the VDBE sorter: the PMA on-disk format decoded by hexdump, the
+  `mxPmaSize` memory threshold and the spill boundary predicted to the single row, the 16-PMA cliff
+  reachable by one page of `cache_size`, the `typeMask` fast-path gates, and `LIMIT -1` measuring
+  2.74× slower than no `LIMIT` at all. Its unresolved sorter-mmap item was **closed by lesson 31**,
+  whose note records the answer.
 - Lessons 01–12 predate the note block; those lessons have no handover notes, only their documents.
 
-After the 2026-10-15 trim, `TRACK.md` holds the notes for lessons **28, 29 and 30**.
+After the 2026-10-16 trim, `TRACK.md` holds the notes for lessons **29, 30 and 31**.
 
 ## Procedure for the next trim
 
