@@ -3,7 +3,7 @@ track-state
 subject: SQLite
 started: 2026-09-16
 lessons-total: 33
-lessons-done: 31
+lessons-done: 32
 -->
 
 # Current Track: SQLite Internals
@@ -59,7 +59,7 @@ The order follows SQLite's actual layering (see sqlite.org/arch.html and filefor
 - [x] 29 — Transactions at the SQL level: autocommit, savepoints, and statement journals
 - [x] 30 — Virtual tables: the xBestIndex protocol, plus sqlite_dbpage and dbstat introspection
 - [x] 31 — Memory-mapped I/O and memory allocation (mmap_size, memsys, lookaside)
-- [ ] 32 — Verifying a database: how PRAGMA integrity_check walks the file, and SQLite's test strategy
+- [x] 32 — Verifying a database: how PRAGMA integrity_check walks the file, and SQLite's test strategy
 - [ ] 33 — VACUUM and VACUUM INTO: the temp-database rewrite in vacuum.c, the backup API it shares, and why it is the only way to change auto_vacuum mode
 
 <!--
@@ -69,164 +69,6 @@ this file's own git history, and TRACK-ARCHIVE.md records exactly which commit a
 for which lessons. When this block grows past three lessons, move the oldest out and update
 TRACK-ARCHIVE.md. The lesson documents themselves are the real record; these notes exist only so
 that a fresh session knows what a previous run deliberately left alone.
-
-scope note 2026-10-14 (lesson 29): no lesson added, removed, reordered or split;
-lessons-total stays 33. The ordering held exactly. Lesson 29 needed lesson 16's rollback-journal
-record format as a contrast, lesson 15's pager states as the frame, lesson 03's page-type byte to
-read a captured page, and lesson 28's VFS-shim technique; nothing else. Also trimmed per the policy
-above: lesson 26's note moved out and indexed in TRACK-ARCHIVE.md (commit
-ad3839f8be496cef3cf2db47fd4866cc7733b04d, TRACK.md blob 68c8bcb936ccc25efac2076b649494b22a755cc2).
-Notes for 27, 28, 29 retained. Build: SQLite 3.53.4 from better-sqlite3@13.0.3's
-deps/sqlite3/sqlite3.c, gcc 13.3.0 -O2, 2-core container, page_size 4096 unless stated.
-
-BOTH of lessons 25/26's named handoffs are CLOSED, and the answer inverts lesson 26's premise.
-WHERE_ONEPASS_DESIRED / WHERE_ONEPASS_MULTIROW / WHERE_DUPLICATES_OK and sqlite3MultiWrite() are
-IRRELEVANT to statement journalling. The gate is
-  p->usesStmtJournal = (u8)(pParse->isMultiWrite && pParse->mayAbort);   sqlite3.c:90569
-and for a DELETE, mayAbort is never set (nothing in a DELETE can raise a constraint), so
-where.c's "if( eOnePass!=ONEPASS_SINGLE ) sqlite3MultiWrite(pParse)" sets a flag that the && then
-discards. MEASURED: "DELETE FROM t WHERE a>5" on a table with a UNIQUE index -> usesStmtJournal=0.
-A later lesson must not repeat lesson 26's expectation that ONEPASS controls this.
-
-THE OBSERVABLE, for any future lesson that needs it. sqlite3FinishCoding (sqlite3.c:126684) attaches
-VdbeComment((v, "usesStmtJournal=%d", pParse->mayAbort && pParse->isMultiWrite)) to the very
-OP_Transaction that consults the flag (sqlite3.c:126761). So on a -DSQLITE_DEBUG build (which turns
-on SQLITE_ENABLE_EXPLAIN_COMMENTS) the flag is readable off the "comment" column of EXPLAIN's
-Transaction row -- no patched build needed. The amalgamation in that npm package ships NO shell.c,
-so this needs a 20-line harness that looks the column up by name.
-
-Measured usesStmtJournal table (all on 3.53.4, schema-only decision -- data is never consulted):
-  INSERT..SELECT into a table with UNIQUE                      1
-  same with OR IGNORE / OR REPLACE / OR FAIL / OR ROLLBACK     0  (all four)
-  INSERT..SELECT into a bare "a INTEGER PRIMARY KEY" table     1  (rowid can collide)
-  INSERT..SELECT into a table with no PK and no constraints    0
-  INSERT..SELECT where target has NOT NULL, or CHECK           1
-  UPDATE of an indexed/UNIQUE column                           1
-  UPDATE of a non-indexed column, no constraint                0
-  DELETE, one row or many, with or without indexes             0
-  CREATE INDEX and CREATE UNIQUE INDEX                         1
-  single-row INSERT..VALUES                                    0
-  ... with an AFTER INSERT trigger whose body is RAISE(ABORT)  1
-  ... with an AFTER INSERT trigger that only writes            0
-  INSERT..SELECT into an FK child: foreign_keys=OFF 0, ON      1
-  single-row DELETE by rowid on the FK PARENT, foreign_keys=ON 1
-PRAGMA foreign_keys therefore changes the I/O profile of statements that never mention an FK.
-
-RUN-TIME gate, on top of the prepare-time flag (OP_Transaction, sqlite3.c:100747):
-  p->usesStmtJournal && pOp->p2 && (db->autoCommit==0 || db->nVdbeRead>1)
-and then p->iStatement = db->nSavepoint + db->nStatement (100750) -- a statement transaction IS a
-savepoint, numbered above every named one. MEASURED both ways with an identical abortable UPDATE
-(NOT NULL violation engineered onto the LAST row of 100,000 so the statement does real work first):
-inside BEGIN after an earlier UPDATE -> 307 sub-journal records, statement undone, earlier UPDATE
-survived, autocommit still 0; in autocommit -> 0 records, everything undone, autocommit 1.
-NOT ESTABLISHED: the db->nVdbeRead>1 arm. In autocommit with one writer the external outcome is
-identical either way because sqlite3VdbeHalt commits right after, so this harness could not
-distinguish it. Needs a build printing p->iStatement. Lesson 29's Next Steps item 1. Do not state
-it as measured.
-
-WHY FOUR HARNESSES FOUND NOTHING, and the trap for any future lesson. openSubJournal
-(sqlite3.c:64202) calls sqlite3JournalOpen with nSpill = sqlite3Config.nStmtSpill, so the
-sub-journal is a MEMJOURNAL first and the real VFS xOpen happens only on spill. Below the
-threshold a statement journal has ZERO filesystem footprint -- no xOpen, no name, nothing for a
-VFS shim or strace. Count records with PAGERTRACE instead: the "#if 0" above
-"int sqlite3PagerTrace=1;" (sqlite3.c:59751) flipped to "#if 1" makes subjournalPage print
-"STMT-JOURNAL %d page %d". sqlite3PagerTrace has PLAIN external linkage (not SQLITE_PRIVATE), so a
-separate TU can set it -- unlike sqlite3WhereTrace in lesson 27.
-
-THE SPILL BOUNDARY, predicted in closed form then measured to the single input row.
-SQLITE_STMTJRNL_SPILL defaults to 64*1024 (sqlite3.c:24052). memjrnlWrite spills on
-"(iAmt+iOfst) > p->nSpill". A sub-journal record is 4+page_size, so at 4096: 4100*16 = 65,600 >
-65,536 and 4100*15 = 61,500, i.e. the 16th record's PAGE write (not its 4-byte pgno write, which
-ends at 61,504) creates the file. Re-dirtying a prefix of a 581-page / 200,000-row table inside an
-open SAVEPOINT: K=6146 -> 15 records, xOpen 0. K=6147 -> 16 records, xOpen 1, exactly 2 xWrites
-(n=61504 off=0 from memjrnlCreateFile, then n=4096 off=61504), 65,600 bytes = 16*4100. The same
-arithmetic predicted the 307-record case to the write: 2 + (307-15-1)*2 = 584 writes and
-307*4100 = 1,258,700 bytes. MEASURED 584 and 1,258,700.
-PRAGMA journal_mode=memory forces nStmtSpill=-1: 657 records / 2,693,700 bytes became zero bytes.
-
-SUB-JOURNAL RECORD FORMAT, decoded off the shim at page_size 4096: 4-byte BIG-ENDIAN pgno then the
-raw page, 4100 per record, records at 0 / 4100 / 8200 with pgno 3 / 4 / 5 and first page byte 0x0d
-(lesson 03's table-leaf code). NO header, NO checksum, NO padding -- against the main journal's
-512-byte header and 4104 per record (pgno 4 / page 4096 / checksum 4), both visible in the same
-run. It can drop them because it is SQLITE_OPEN_SUBJOURNAL|DELETEONCLOSE with zName=NULL
-(measured flags 0x201e) and is never read after a crash.
-
-WHY THE SUB-JOURNAL IS USUALLY EMPTY (the thing that cost this run four harnesses). A savepoint
-stores a POSITION, not a snapshot: pagerOpenSavepoint (66601) records nOrig = dbSize,
-iOffset = journalOff, iSubRec = nSubRec and an EMPTY bitvec. pagerPlaybackSavepoint (63088) replays
-the MAIN journal from iOffset to journalOff into a pDone bitvec FIRST, then the sub-journal records
-iSubRec..nSubRec skipping anything in pDone. So a page first dirtied AFTER the savepoint opened is
-covered by the main journal and needs no sub-journal record at all. subjRequiresPage (60702) fires
-only for nOrig>=pgno with the bit clear -- i.e. a page dirtied EARLIER in the transaction and
-written again inside the savepoint. ONE record per page per savepoint. Its inner loop also clears
-bTruncateOnRelease on every LATER savepoint. To produce records at all the recipe is:
-BEGIN; <write pages>; SAVEPOINT (or an abortable multi-write statement); <write the same pages>.
-
-Record counts are explained by page layout, not row counts: 100,000-row p(a INTEGER PRIMARY KEY,
-b INTEGER UNIQUE, c INTEGER NOT NULL) has page_count 628 = ~307 table leaves + ~321 index pages,
-and an UPDATE of only the non-indexed c produced exactly 307 records.
-
-bTruncateOnRelease ONLY TRUNCATES IN MEMORY (sqlite3PagerSavepoint, 66689): nSubRec is rewound
-either way, but the sqlite3OsTruncate is gated on sqlite3JournalIsInMemory(sjfd). Once spilled, a
-sub-journal file never shrinks on RELEASE.
-
-sqlite3VdbeHalt (91190) decides RELEASE vs ROLLBACK: rc==OK or errorAction==OE_Fail -> RELEASE;
-OE_Abort -> ROLLBACK; anything else -> full sqlite3RollbackAll + CloseSavepoints + autoCommit=1.
-Of the four "special" errors only NOMEM and FULL are eligible for statement rollback, and only
-when usesStmtJournal; IOERR and INTERRUPT ALWAYS take the whole transaction down. vdbeCloseStatement
-(91094) runs ROLLBACK then RELEASE on the rollback path (the anonymous savepoint must vanish either
-way), and the commit branch sets db->nStatement = 0 wholesale rather than decrementing.
-
-SQL-LEVEL SEMANTICS, all measured:
-- SAVEPOINT outside BEGIN sets autoCommit=0 and isTransactionSavepoint=1 and is NOT counted in
-  nSavepoint; RELEASE of it sets autoCommit=1 and calls sqlite3VdbeHalt -- it IS the commit.
-  Observable oddity: right after "SAVEPOINT outer", sqlite3_get_autocommit()==0 while
-  sqlite3_txn_state()==SQLITE_TXN_NONE. Two APIs, two answers, same instant (deferred).
-- BEGIN with a non-empty stack -> SQLITE_ERROR "cannot start a transaction within a transaction".
-- ROLLBACK TO is idempotent and repeatable (3x ok), does NOT pop the named savepoint; only RELEASE
-  does, after which ROLLBACK TO gives "no such savepoint: k".
-- Duplicate names are a stack, not a dict: with two savepoints named s, RELEASE s pops the inner
-  one and a following ROLLBACK TO s finds the OUTER one and undoes pre-inner work (row count went
-  to 0, not 1).
-- A plain ROLLBACK empties the whole stack.
-- OP_Savepoint refuses SAVEPOINT and RELEASE while db->nVdbeWrite>0 ("SQL statements in progress",
-  SQLITE_BUSY); ROLLBACK TO is NOT on that list.
-- ROLLBACK TO restores nDeferredCons/nDeferredImmCons from the savepoint; RELEASE does not.
-- ROLLBACK TO across a schema change calls sqlite3ExpirePreparedStatements +
-  sqlite3ResetAllSchemasOfConnection and then re-sets DBFLAG_SchemaChange.
-
-COST OF AN OPEN SAVEPOINT, measured (300,000 rows, second full UPDATE pass over the same pages,
-best of 5): no savepoint 48.3 ms / 0 extra bytes; one savepoint open 53.3 ms / 657 records /
-2,693,700 bytes. Do NOT quote the ~10% wall-clock as the cost -- the temp file stayed in the host
-page cache. The reproducible number is the 2.69 MB of writes that did not exist before, on
-unchanged SQL. Also note subjRequiresPage is a LINEAR SCAN of aSavepoint[] on every write to an
-already-writeable page, so depth costs CPU as well as records.
-
-Handed forward: lesson 30 gets the whole xBestIndex protocol (whereLoopAddVirtual 4685,
-whereLoopAddVirtualOne 4361, allocateIndexInfo 1408, vtabBestIndex 1669, the
-sqlite3_vtab_collation/in/rhs_value/distinct accessors 4557-4646), sqlite_stat4-as-a-table, and now
-ALSO sqlite3VtabSavepoint: EVERY branch of OP_Savepoint and of vdbeCloseStatement calls it with the
-same index, so xSavepoint/xRelease/xRollbackTo is the savepoint stack re-exported to extensions --
-including the "db->autoCommit==0 || db->nVTrans==0" assert at sqlite3.c:100466. Lesson 31 gets
-sqlite3StackAllocRawNN, the loadStatTbl allocation cost, the unresolved sorter-mmap question from
-lesson 28, vdbesort.c's bulk-allocation mode, and now ALSO memjournal's FileChunk chain as a third
-allocator consumer (nChunkSize == nSpill == 64 KB for a sub-journal, so chunks are large) plus
-sqlite3_config(SQLITE_CONFIG_STMTJRNL_SPILL) as a tunable it should price. Lesson 32 gets
-OptimizationEnabled(), the SQLITE_TESTCTRL_OPTIMIZATION bit table, SQLITE_Stat4,
-SQLITE_TESTCTRL_SORTER_MMAP, and now the observation that PRAGMA integrity_check is read-only and
-so never reaches any of this -- but that sqlite3BtreeTripAllCursors(SQLITE_ABORT_ROLLBACK,
-isSchemaChange==0) on the ROLLBACK TO path is the mechanism behind SQLITE_ABORT_ROLLBACK, which a
-test-strategy lesson should cover. Lesson 33 (VACUUM) should note that VACUUM does not recompute
-statistics, that it reruns the CREATE INDEX sorter path once per index, and that CREATE INDEX
-itself has usesStmtJournal=1 (measured above), so a VACUUM inside a transaction is a statement-
-journal workload.
-
-NOT read this run, still unexamined: src/build.c's sqlite3DefaultRowEst (effect measured in lesson
-28, function still not read -- carried over from lessons 27 and 28), sqlite3Stat4ProbeSetValue and
-the stat4 probe-record machinery in vdbemem.c, whereRangeSkipScanEst, the vdbeSorterCompareReal
-arm of the sorter comparators, and -- new this run -- the WAL savepoint path
-(PagerSavepoint.aWalData, sqlite3WalSavepoint, sqlite3WalSavepointUndo) and sqlite3PagerMovepage's
-subjournal call site, neither of which any measurement here exercised.
 
 scope note 2026-10-15 (lesson 30): no lesson added, removed, reordered or split;
 lessons-total stays 33. Per the NOTE BLOCK POLICY above, lesson 27's note was moved out this run
@@ -473,6 +315,158 @@ sqlite3MemdebugSetType / the MEMTYPE_LOOKASIDE tagging, which only exists under 
 NOT ATTRIBUTED: the 2 MISS_SIZE events per prepare measured above -- wherePathSolver's
 sqlite3StackAllocRawNN (174748) is the obvious candidate but was not confirmed. Lesson 31 Next
 Steps item 4.
+
+scope note 2026-10-17 (lesson 32): no lesson added, removed, reordered or split;
+lessons-total stays 33. The ordering held exactly. Per the NOTE BLOCK POLICY above, lesson 29's
+note was moved out this run and TRACK-ARCHIVE.md gained its row (commit
+aea7ae911690ab140bb7036d5588d06369ac10f7, TRACK.md blob
+1cb2703f12208654808b5bebde2299d80fddb95a). This block now holds lessons 30, 31 and 32.
+
+Build used: SQLite 3.53.4 amalgamation from better-sqlite3@13.0.3 (deps/sqlite3/sqlite3.c,
+269,668 lines -- ALL line numbers in the lesson are into that file), gcc 13.3.0 -O2,
+-DSQLITE_THREADSAFE=0 -DSQLITE_ENABLE_DBSTAT_VTAB -DSQLITE_ENABLE_DBPAGE_VTAB, 2-core container.
+NEW TEST DATABASE, DIFFERENT FROM LESSONS 28-31: t(a INTEGER PRIMARY KEY, b TEXT, c INTEGER) with
+200,000 rows + index tc ON t(c), page_size 4096, rollback-journal mode -- 2,254 pages /
+9,232,384 bytes (lessons 28-31 used a wider-row db at 3,836 pages / 15,712,256 bytes). Every
+figure here was re-measured on the narrow db; do NOT mix the two page counts. Also built
+s25000/s50000/s100000/s200000/s400000.db (275 / 557 / 1,122 / 2,254 / 4,524 pages) for scaling.
+Harness: a pass-through VFS (iVersion 1) counting xRead, plus a 60-line sqlite3_module named
+ckvtab with iVersion 4 and a logging xIntegrity. No patched SQLite build was needed this run.
+
+LESSON 31'S NAMED HANDOFF IS CLOSED. xIntegrity IS NOW EXERCISED AND MEASURED: mFlags IS EXACTLY
+isQuick -- 0 under integrity_check, 1 under quick_check, confirmed by a module that prints its
+arguments. OP_VCheck (codegen 146984, impl 105016) is emitted in a SECOND pass over the table
+hash (146965-146991) gated on five conditions, the binding one being
+pVTab->pModule->iVersion>=4 && xIntegrity!=0. A non-NULL *pzErr with SQLITE_OK is a FINDING, not
+an error: it becomes a result row and the check continues. MEASURED AND IMPORTANT: AN EPONYMOUS
+VIRTUAL TABLE IS NEVER CHECKED -- the pass walks db->aDb[i].pSchema->tblHash and eponymous tables
+are not in it, so dbstat, sqlite_dbpage, pragma_* and generate_series are structurally out of
+reach. integrity_check returned plain "ok" with xIntegrity never called. Second trap, mirror of
+lesson 30's: a module with xConnect but NO xCreate cannot be used with CREATE VIRTUAL TABLE and
+the failure is SILENT -- the statement prepares, steps with no error, and the table does not
+exist afterwards. Use designated initialisers for sqlite3_module; positional ones put the
+function pointer in xShadowName and only -Wincompatible-pointer-types catches it.
+
+THE CENTRAL STRUCTURAL FACTS OF THIS LESSON (later lessons and any re-read should start here):
+- integrity_check is TWO checkers, not one. (a) OP_IntegrityCk (103870) -> C walk
+  sqlite3BtreeIntegrityCheck (84370). (b) a GENERATED VDBE PROGRAM (146494 onward) that scans
+  every table with every index cursor open. They catch DISJOINT fault sets.
+- EXACTLY TWO heap allocations for the whole C walk: aPgRef = sqlite3MallocZero((nCkPage/8)+1)
+  (84417) = 282 BYTES on the 2,254-page db, and heap = sqlite3PageMalloc(pageSize) (84423) =
+  4,096 bytes = 1,024 u32 slots, mxHeap = pageSize/4-1 = 1023 under SQLITE_DEBUG. The safety
+  invariant: a cell costs >=4 content bytes + 2 pointer bytes, so a 4,096-byte page holds at most
+  floor(4096/6) = 682 heap entries. Message buffer is STACK: char zErr[100] (84409).
+- aRoot FOR main ON THIS SCHEMA IS [2,3,1], THREE ROOTS NOT TWO. Page 1 is checked as an ordinary
+  table b-tree because sqlite_schema is an entry in the schema's table hash. temp contributes [1].
+  Registers are fixed: reg1 = errors remaining, reg3 = the string OP_ResultRow emits, reg7 = row
+  counter, reg8+i = entry count for the i-th root/index. SQLITE_INTEGRITY_CHECK_ERROR_MAX = 100
+  (146466).
+- checkTreePage ZEROES pPage->isInit (84133) before btreeInitPage so an already-validated cached
+  page is RE-validated. That is the whole difference between a checker and a cache tour, and it is
+  lesson 31's handed-forward btreeInitPage error path: page 4 type byte 0x0d -> 0x07 gives exactly
+  "Tree 2 page 4: btreeInitPage() returns error code 11" (11 = SQLITE_CORRUPT).
+- THE MIN-HEAP COVERAGE PROOF: entries are (start<<16)|end (84249), prev starts at
+  contentOffset-1 as an IMPLIED entry covering header + cell pointer array + gap (84313), pulls in
+  order, overlap -> "Multiple uses for byte %u of page %u", gaps accumulate into nFrag, and
+  nFrag is compared with data[hdr+7] ONLY IF heap[0]==0 (84333) so one fault yields one message.
+- INDEX KEY ORDER IS NOT CHECKED BY THE C WALK. The ordering test at 84210 is guarded by
+  if( pPage->intKey ). Table b-trees get "Rowid %lld out of order"; index b-trees get NOTHING.
+- THE ERROR CAP TRUNCATES THE WALK, NOT JUST THE OUTPUT. integrity_check(1) read 1,619 pages,
+  integrity_check(20) read 2,258 on the same file. integrityCheckResultRow (145184) is three
+  opcodes: OP_ResultRow, OP_IfPos on reg1, OP_Halt. The b-tree layer's messages arrive as ONE
+  newline-joined result row, so row count != message count.
+- "database disk image is malformed" IS A RESULT ROW, NOT AN ERROR. The pragma writes
+  aOp[5].p4.z = sqlite3ErrStr(SQLITE_CORRUPT) (147015) and stores that address in P3 OF
+  INSTRUCTION 0; op_column_corrupt (99867) reads aOp[0].p3 and jumps there instead of aborting.
+  Only two sites goto op_column_corrupt (99680, 99757), BOTH inside OP_Column -- so a malformed
+  RECORD is survivable (final rc 101, DONE) while SQLITE_CORRUPT from any other opcode still
+  aborts and sets SQLITE_CorruptRdOnly if a transaction is open.
+
+QUICK_CHECK: THE FOLK SUMMARY IS WRONG AND THE DOCS ARE EASY TO OVER-READ. There is exactly ONE
+consequential if( !isQuick ) block (146857) plus the WITHOUT ROWID PK-order test (146822).
+quick_check STILL DOES, measured and confirmed in source: the right-most-column fetch that forces
+the whole record header to be parsed (146800); "wrong # of entries in index <name>" via OP_Eq on
+reg 8+cnt vs 8+iTab, PARTIAL INDEXES EXCLUDED by pIdx->pPartIdxWhere==0 (146591-146618); "NULL
+value in <tab>.<col>" with an OP_Column reload because OP_IsType cannot see NaN (146753-146771);
+"non-<TYPE> value in" for STRICT via aStdTypeMask[] (146785); the NUMERIC/TEXT affinity checks
+(146803-146820); "CHECK constraint failed in <tab>" (146832); and xIntegrity with mFlags=1.
+quick_check SKIPS ONLY: the per-row OP_Found index probe, OP_IFindKey, "rowid not at
+end-of-record", the non-BINARY collation exact-text re-compare, "non-unique entry in index", and
+the WITHOUT ROWID PK-order test.
+
+MEASURED CORRUPTION MATRIX (base.db copied, one targeted byte/field edit, cap 20, both pragmas).
+THE TWO ROWS THAT MATTER: (a) ONE PAYLOAD BYTE flipped inside index leaf page 7's cell[0]
+(0x9d->0x9e at file offset 28671) -> quick_check "ok", integrity_check "row 96157 missing from
+index tc". (b) cell[0] and cell[1] POINTERS SWAPPED on index leaf page 7 (keys now out of order,
+coverage and counts untouched) -> quick_check "ok", integrity_check "row 192314 missing from index
+tc" -- ONE row reported, not two, because the binary search over the mis-ordered page still finds
+one of the swapped pair. Other rows: appended page + header pagecount 2254->2255 -> "Page 2255:
+never used" (BOTH pragmas); header freelist count 0->5 -> "Freelist: size is 0 but should be 5"
+(BOTH); page 4 type byte -> btreeInitPage 11 + "wrong # of entries in index tc" (BOTH MESSAGES
+under quick_check too); page 4 cell[0] ptr -> 0 -> "Offset 0 out of range 297..4092" + "row 1
+missing from index tc" (quick_check gets only the first); page 4 cell[0] ptr -> 320 -> "Rowid 111
+out of order" + "Multiple uses for byte 320 of page 4" + malformed row (BOTH); frag byte 0->9 ->
+"Fragmentation of 0 bytes reported as 9 on page 4" (BOTH); nCell 131->130 -> "Fragmentation of 30
+bytes reported as 0" + wrong # of entries (BOTH); page 3 right-child 1870->4 -> "2nd reference to
+page 4" + "Child page depth differs" + 18 x "Page N: never used" before the cap.
+
+COST, MEASURED TWO WAYS -- THE HEADLINE IS THAT THE EXTRA I/O IS CACHE PRESSURE, NOT EXTRA PASSES:
+- cache_size=-1000000 (whole file fits): quick_check 19.8 ms / 2,254 xRead; integrity_check
+  94.1 ms / 2,254 xRead. SAME READ COUNT = the page count. 4.8x CPU, 1.0x I/O.
+- default cache (-2000 KiB ~ 488 pages): quick_check 23.0 ms / 3,874 xRead; integrity_check
+  121.6 ms / 35,380 xRead = 15.7 READS PER PAGE OF THE FILE, 9.1 extra per page, all from the
+  per-row index probes thrashing against the table scan's working set.
+- SCALING, second run of each, cache holding the file: quick_check 2.5 / 4.8 / 9.5 / 19.8 / 40.3 ms
+  at 25k/50k/100k/200k/400k rows (factors 1.92, 1.98, 2.08, 2.03 -- FLATLY LINEAR);
+  integrity_check 9.3 / 24.7 / 45.5 / 96.6 / 213.7 ms (factors 2.66, 1.84, 2.12, 2.21, avg ~2.1).
+  Consistent with the documented O(N log N) BUT the log term is only ~5-10% per doubling over a
+  16x range and the 2.66 is cache-warmth noise. DO NOT quote the asymptotics as the reason
+  integrity_check is slow; the 4.8x constant factor is.
+- PROGRESS HANDLER: nOps=1000 -> integrity_check 2,202 callbacks, quick_check 1,002, because
+  checkProgress (83817) ticks its own nStep on top of the VDBE instruction counter. nOps=1 ->
+  1,002,322 callbacks for 200k rows (~5 VDBE ops/row). A handler returning 1 after 50 calls gave
+  rc=9 SQLITE_INTERRUPT at 17.8 ms into a 123 ms check -- the abort lands MID-WALK.
+- PARTIAL CHECKS, MEASURED: integrity_check(t) on a db with an orphan page said "ok" (never-used
+  sweep skipped) and on a db with a lying freelist count said "ok" (freelist skipped), while
+  integrity_check(sqlite_schema) caught the freelist lie. integrity_check(t) took 125.8 ms /
+  35,363 reads against the full check's 121.1 ms / 35,380 -- A PARTIAL CHECK IS WEAKER WITHOUT
+  BEING FASTER on a single-table schema. integrity_check(sqlite_schema) is 0.1 ms / 1 read and is
+  the one genuinely cheap variant. Implementation is bPartial/bCkFreelist at 84390.
+
+TEST-STRATEGY FIGURES TAKEN FROM sqlite.org/testing.html THIS RUN (fetched): TCL 1,390 files /
+23.2 MB / 51,445 cases; TH3 50,362 cases / ~2.4 M instances per coverage run / ~248.5 M in a
+pre-release soak / 76.9 MB / 1,055.4 KSLOC; SLT 7.2 M queries over 1.12 GB compared against
+PostgreSQL, MySQL, SQL Server, Oracle 10g; dbsqlfuzz mutates BOTH the SQL and the database file,
+336 seeds, ~1 B mutations/day (~500 M cases/day on 16 cores); library ~155.8 KSLOC vs ~92,053
+KSLOC of tests = ~590:1; 100% branch and claimed 100% MC/DC under TH3; 1,184 testcase() and 6,754
+assert(). integrity_check is the ORACLE in three places: after I/O-error simulation, in the TCL
+crash tests, and in TH3's snapshot-damage tests.
+
+Handed forward to lesson 33 (VACUUM/VACUUM INTO): the never-used-page sweep is exactly the
+condition VACUUM exists to eliminate, so a VACUUMed file is the obvious thing to re-check; the
+backup API; that VACUUM does NOT recompute statistics; that it reruns the CREATE INDEX sorter
+path once per index; that CREATE INDEX has usesStmtJournal=1; that sqlite_dbpage's xSync calls
+sqlite3PagerTruncateImage which is NOT how VACUUM shrinks; that a memory-mapped file cannot be
+truncated on Windows so VACUUM and auto-vacuum silently fail to shrink it there; and NOW ALSO
+that integrity_check reads every page exactly once when the cache fits, which makes it a usable
+before/after instrument for a rewrite.
+STILL OPEN AND RE-HANDED to 33: sqlite_stat4-as-a-table (handed to 30 by both 27 and 29, then to
+31, then here -- NOT taken four times running; it may simply not belong in this track), and
+loadStatTbl's allocation cost (handed by 28, not done by 31, not done here).
+
+NOT read this run, still unexamined: src/build.c's sqlite3DefaultRowEst (carried from lessons 27,
+28, 29, 30 and 31 -- STILL NOT READ, now FIVE lessons running; stop handing it forward unless a
+lesson actually needs it), sqlite3Stat4ProbeSetValue, whereRangeSkipScanEst, the WAL savepoint
+path (PagerSavepoint.aWalData, sqlite3WalSavepoint, sqlite3WalSavepointUndo),
+sqlite3PagerMovepage's subjournal call site, and -- new this run -- sqlite3VdbeFindIndexKey (the
+body of OP_IFindKey; only its opcode comment and call site were read, and NO measurement
+triggered it, so the 2-ULP tolerance is UNVERIFIED and is lesson 32 Next Steps item 1), every
+checkPtrmap call path (compiled in but never exercised -- the test db is not auto-vacuum, so the
+"Bad ptr map entry" message was never produced: Next Steps item 3), the WITHOUT ROWID arm of the
+generated program (pPk, r2, 146822 -- never run), and sqlite3_recover / the recovery extension,
+which was not looked at at all.
+NOTE FOR ANY FUTURE RUN: the lesson's 2,254-page figures CANNOT be compared against lessons 28-31's
+3,836-page figures. Different schema, different row width, same page_size.
 -->
 
 ## Completed Subjects
