@@ -38,6 +38,7 @@ commit you reach them through.
 | 26 | SQLite Internals | commit `ad3839f8be496cef3cf2db47fd4866cc7733b04d` (2026-10-14, the last commit before the third trim) | `68c8bcb936ccc25efac2076b649494b22a755cc2` |
 | 27 | SQLite Internals | commit `8d6880a7dace31a374afc865d1556b9e3593caa4` (2026-10-15, the last commit before the fourth trim) | `e5e40ca598fb43fd2f26d090bc2bb10f576f4d5b` |
 | 28 | SQLite Internals | commit `815ea964987e5764d01f917e944ca8a7eb5e2851` (2026-10-16, the last commit before the fifth trim) | `b11a76fdd03a5ee9ede69de38ec2585b029d0efd` |
+| 29 | SQLite Internals | commit `aea7ae911690ab140bb7036d5588d06369ac10f7` (2026-10-17, the last commit before the sixth trim) | `1cb2703f12208654808b5bebde2299d80fddb95a` |
 
 Notes on the rows:
 
@@ -60,9 +61,15 @@ Notes on the rows:
   reachable by one page of `cache_size`, the `typeMask` fast-path gates, and `LIMIT -1` measuring
   2.74× slower than no `LIMIT` at all. Its unresolved sorter-mmap item was **closed by lesson 31**,
   whose note records the answer.
+- The **29** blob contains the notes for lessons 29, 30 and 31, and is the most convenient place to
+  read lesson 29's note — the one on savepoints and statement journals: a statement transaction
+  *is* a savepoint at `db->nSavepoint + db->nStatement`; `WHERE_ONEPASS` shown to have **no
+  effect** on statement journalling because `mayAbort` is never set for a `DELETE`; and the 64 KB
+  spill threshold predicted in closed form and then hit to the single input row, 65,600 bytes in
+  exactly two `xWrite` calls.
 - Lessons 01–12 predate the note block; those lessons have no handover notes, only their documents.
 
-After the 2026-10-16 trim, `TRACK.md` holds the notes for lessons **29, 30 and 31**.
+After the 2026-10-17 trim, `TRACK.md` holds the notes for lessons **30, 31 and 32**.
 
 ## Procedure for the next trim
 
