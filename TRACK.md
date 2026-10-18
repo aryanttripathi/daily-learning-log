@@ -76,7 +76,7 @@ scope note 2026-10-16 (lesson 31): no lesson added, removed, reordered or split;
 lessons-total stays 33. The ordering held exactly. Per the NOTE BLOCK POLICY above, lesson 28's
 note was moved out this run and TRACK-ARCHIVE.md gained its row (commit
 815ea964987e5764d01f917e944ca8a7eb5e2851, TRACK.md blob
-b11a76fdd03a5ee9ede69de38ec2585b029d0efd). This block now holds lessons 31, 32 and 33.
+b11a76fdd03a5ee9ede69de38ec2585b029d0efd). This block now holds lessons 29, 30 and 31.
 
 Build used: the same SQLite 3.53.4 amalgamation from better-sqlite3@13.0.3
 (deps/sqlite3/sqlite3.c), gcc 13.3.0 -O2, -DSQLITE_THREADSAFE=0, 2-core container, system page
@@ -221,7 +221,7 @@ scope note 2026-10-17 (lesson 32): no lesson added, removed, reordered or split;
 lessons-total stays 33. The ordering held exactly. Per the NOTE BLOCK POLICY above, lesson 29's
 note was moved out this run and TRACK-ARCHIVE.md gained its row (commit
 aea7ae911690ab140bb7036d5588d06369ac10f7, TRACK.md blob
-1cb2703f12208654808b5bebde2299d80fddb95a). This block now holds lessons 31, 32 and 33.
+1cb2703f12208654808b5bebde2299d80fddb95a). This block now holds lessons 30, 31 and 32.
 
 Build used: SQLite 3.53.4 amalgamation from better-sqlite3@13.0.3 (deps/sqlite3/sqlite3.c,
 269,668 lines -- ALL line numbers in the lesson are into that file), gcc 13.3.0 -O2,
