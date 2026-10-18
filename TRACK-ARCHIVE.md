@@ -39,6 +39,7 @@ commit you reach them through.
 | 27 | SQLite Internals | commit `8d6880a7dace31a374afc865d1556b9e3593caa4` (2026-10-15, the last commit before the fourth trim) | `e5e40ca598fb43fd2f26d090bc2bb10f576f4d5b` |
 | 28 | SQLite Internals | commit `815ea964987e5764d01f917e944ca8a7eb5e2851` (2026-10-16, the last commit before the fifth trim) | `b11a76fdd03a5ee9ede69de38ec2585b029d0efd` |
 | 29 | SQLite Internals | commit `aea7ae911690ab140bb7036d5588d06369ac10f7` (2026-10-17, the last commit before the sixth trim) | `1cb2703f12208654808b5bebde2299d80fddb95a` |
+| 30 | SQLite Internals | commit `99aeb34381108985d51952987e71f9be978f235f` (2026-10-18, the last commit before the seventh trim) | `6c348998957d33c83ab6a3bc80755743eeec223a` |
 
 Notes on the rows:
 
@@ -67,9 +68,18 @@ Notes on the rows:
   effect** on statement journalling because `mayAbort` is never set for a `DELETE`; and the 64 KB
   spill threshold predicted in closed form and then hit to the single input row, 65,600 bytes in
   exactly two `xWrite` calls.
+- The **30** blob contains the notes for lessons 30, 31 and 32, and is the most convenient place to
+  read lesson 30's note — the one on virtual tables and `xBestIndex`: every output field's entry
+  value read from inside the callback (`estimatedCost = 5e+98`, `estimatedRows = 25`, both reset on
+  every call), the cost channel's `10·log₂` quantisation and the point above 2×10⁹ where
+  `sqlite3LogEstFromDouble` stops computing a logarithm and reads the IEEE-754 exponent instead, the
+  K+4 call-schedule bound, the `xDestroy == 0` trap that yields a misleading `no such module`, and
+  the `sqlite_dbpage` truncation finding that **contradicts the documented** "any `ROLLBACK TO` will
+  cancel the null-INSERT" rule, with the two differing statement sequences measured by file size.
 - Lessons 01–12 predate the note block; those lessons have no handover notes, only their documents.
 
-After the 2026-10-17 trim, `TRACK.md` holds the notes for lessons **30, 31 and 32**.
+After the 2026-10-18 trim, `TRACK.md` holds the notes for lessons **31, 32 and 33** — the last
+three lessons of the SQLite track, which completed on 2026-10-18.
 
 ## Procedure for the next trim
 
@@ -80,6 +90,11 @@ When `TRACK.md`'s note block holds more than three lessons' notes:
 3. Add a row here with the lesson range, that commit, and that blob SHA.
 
 Never delete a note without adding its row here first.
+
+**When a track ends and a new one begins**, the outgoing track's last three notes are the ones most
+worth keeping readable: they carry the handoffs that the capstone has to close. Archive them as a
+single range row (lessons 31–33 for SQLite) on the run that replaces the syllabus, rather than
+trimming them one at a time into a syllabus they no longer describe.
 
 ## What this file is not
 
