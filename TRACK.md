@@ -3,12 +3,14 @@ track-state
 subject: SQLite
 started: 2026-09-16
 lessons-total: 33
-lessons-done: 32
+lessons-done: 33
 -->
 
 # Current Track: SQLite Internals
 
 Sequential deep dive. One lesson per day, each building on the last.
+
+**STATUS: COMPLETE — 33 of 33 lessons, 2026-09-16 to 2026-10-18.** The next run is in Case C: it writes the SQLite capstone, moves this subject into `## Completed Subjects` below, and starts a new track on a different subject. See the handover note at the bottom of this file.
 
 The order follows SQLite's actual layering (see sqlite.org/arch.html and fileformat2.html): the on-disk format and b-tree structures first, then the pager, journals, and VFS, then concurrency and WAL, then the SQL compiler and bytecode engine, then operational and advanced topics.
 
@@ -60,7 +62,7 @@ The order follows SQLite's actual layering (see sqlite.org/arch.html and filefor
 - [x] 30 — Virtual tables: the xBestIndex protocol, plus sqlite_dbpage and dbstat introspection
 - [x] 31 — Memory-mapped I/O and memory allocation (mmap_size, memsys, lookaside)
 - [x] 32 — Verifying a database: how PRAGMA integrity_check walks the file, and SQLite's test strategy
-- [ ] 33 — VACUUM and VACUUM INTO: the temp-database rewrite in vacuum.c, the backup API it shares, and why it is the only way to change auto_vacuum mode
+- [x] 33 — VACUUM and VACUUM INTO: the temp-database rewrite in vacuum.c, the backup API it shares, and why it is the only way to change auto_vacuum mode
 
 <!--
 NOTE BLOCK POLICY (set 2026-10-12, lesson 27). This block holds the scope and handover notes for
@@ -70,112 +72,11 @@ for which lessons. When this block grows past three lessons, move the oldest out
 TRACK-ARCHIVE.md. The lesson documents themselves are the real record; these notes exist only so
 that a fresh session knows what a previous run deliberately left alone.
 
-scope note 2026-10-15 (lesson 30): no lesson added, removed, reordered or split;
-lessons-total stays 33. Per the NOTE BLOCK POLICY above, lesson 27's note was moved out this run
-and TRACK-ARCHIVE.md gained its row (commit 8d6880a7dace31a374afc865d1556b9e3593caa4, TRACK.md
-blob e5e40ca598fb43fd2f26d090bc2bb10f576f4d5b). This block now holds lessons 28, 29 and 30.
-
-Build used: the same SQLite 3.53.4 amalgamation from better-sqlite3@13.0.3
-(deps/sqlite3/sqlite3.c). NO SQLITE_DEBUG build was needed this run -- everything measured came
-out of ordinary builds plus EXPLAIN QUERY PLAN and stat(1). Three harnesses, all small and all
-rebuildable from the lesson's Hands-On section: an instrumented vtab printing the whole
-xBestIndex conversation; a cost-sweep variant; a malfunction-mode variant. Also
--DSQLITE_ENABLE_DBSTAT_VTAB -DSQLITE_ENABLE_DBPAGE_VTAB for a small exec-and-print tool, since
-the amalgamation ships both modules compiled out by default and no shell.c is vendored.
-
-TRAP THAT COST TIME, FOR FUTURE RUNS. sqlite3_create_module returns SQLITE_OK even when the
-module is unusable: createModule (sqlite3.c:162533) does (void)sqlite3VtabCreateModule(...) and
-returns the rc it was passed. Worse, sqlite3VtabCallCreate (sqlite3.c:162681) reports
-"no such module: X" when pMod==0 OR xCreate==0 OR xDestroy==0. A module with a good xCreate and
-a NULL xDestroy is registered, works eponymously, and still fails CREATE VIRTUAL TABLE with
-"no such module". Fill in xDestroy.
-
-MEASUREMENTS THIS LESSON OWNS, all original:
-- Entry values of every xBestIndex output field, read from inside the callback:
-  estimatedCost = 5e+98 (SQLITE_BIG_DBL/2, SQLITE_BIG_DBL = 1e99 at sqlite3.c:15708),
-  estimatedRows = 25, idxNum = 0, idxFlags = 0, orderByConsumed = 0, aConstraintUsage zeroed.
-  Reset per call, not once (whereLoopAddVirtualOne, sqlite3.c:173212).
-- THE COST CLIFF. EXPLAIN QUERY PLAN's third column IS the loop's rRun. Swept one module's
-  estimatedCost: 1->0, 2->10, 10->33, 100->66, 1e6->199 (all = 10*log2), then 1e12->400 where
-  10*log2 = 399, and 5e98->3280 where 10*log2 = 3279. Above 2e9 sqlite3LogEstFromDouble
-  (sqlite3.c:38519) stops computing a log and reads the IEEE exponent field:
-  e = (a>>52)-1022; return e*10. So cost is quantised to one value per power of two above 2e9,
-  and both big values are a full unit off. rSetup is hard-wired to 0 for every vtab loop.
-- CALL SCHEDULE: 1 (all usable, +1 if bRetryLimit) + 1 (no IN) + K (distinct prereq masks)
-  + 1 (all disabled) + 1 (all disabled, no IN) = K+4 upper bound. Measured: WHERE a=5 -> 1 call
-  (the mBest==0 && !bIn short circuit); FROM vt,t1 WHERE a=t1.x -> 2; WHERE a IN (1,2,3) -> 2
-  calls and THREE xFilter calls.
-- WO_IN is folded to SQLITE_INDEX_CONSTRAINT_EQ in allocateIndexInfo; there is no
-  SQLITE_INDEX_CONSTRAINT_IN. LIMIT(73)/OFFSET(74) arrive with iColumn=0 and OFFSET before LIMIT.
-- colUsed verified as a used-columns mask: 0x1 / 0x7 / 0x5 / 0x3 for four different select lists.
-- MALFUNCTION: gap in argvIndex -> "vt.xBestIndex malfunction"; duplicate argvIndex -> same.
-  NOT TRIGGERED: the pIdxCons->usable==0 arm (the winning plan came from an all-usable call).
-  That is lesson 30's Next Steps item 2, left open deliberately.
-- DIRECTONLY is enforced at USE, not definition: CREATE VIEW v AS SELECT * FROM dbstat succeeds,
-  SELECT * FROM v then fails with 'unsafe use of virtual table "dbstat"'.
-- statBestIndex's idxNum bitmask confirmed through EQP text: WHERE name=? -> 0x2,
-  + ORDER BY name,path -> 0xa, bare -> 0x0, all in HEX because of SQLITE_INDEX_SCAN_HEX;
-  sqlite_dbpage prints decimal because it does not set that bit.
-- dbstat/dbpage CROSS-CHECK on a 120-page, 4096-byte-page file with users(3000 rows) +
-  users_name: root page 2 interior, ncell 103 = header bytes 3-4 0x0067, rightmost child
-  0x00000078 = 120 = count(*) FROM sqlite_dbpage. Leaf page 4: 0x0D, ncell 0x1E=30, content
-  start 0x0055=85; 8 + 2*30 + (4096-85) = 4079, so unused = 17, which is exactly dbstat's
-  unused for that page. Aggregate mode: users 105 pages 97.06% packed, users_name 14 pages
-  81.84%.
-- THE REAL FIND, and it closes lesson 29's sqlite3VtabSavepoint handoff. sqlite_dbpage's whole
-  truncation mechanism is DbpageTable.pgnoTrunc (one Pgno) + iDbTrunc, which explains three of
-  the four documented limitations mechanically (dbpageUpdate sqlite3.c:233046, dbpageSync,
-  dbpageRollbackTo). The FOURTH documented rule -- "any ROLLBACK TO will cancel the null-INSERT"
-  -- IS WRONG as stated. Measured on fresh 120-page copies, by file size:
-    BEGIN; INSERT(100,NULL); COMMIT;                                      -> 99 pages
-    BEGIN; INSERT(100,NULL); UPDATE ... pgno=3; COMMIT;                   -> 120 (no-op, as doc'd)
-    BEGIN; SAVEPOINT s1; INSERT(100,NULL); ROLLBACK TO s1; COMMIT;        -> 99  (NOT cancelled)
-    BEGIN; UPDATE ... pgno=3; SAVEPOINT s1; INSERT(100,NULL); ROLLBACK TO s1; COMMIT; -> 120
-    BEGIN; UPDATE ... pgno=3; SAVEPOINT s1; INSERT(100,NULL); RELEASE s1; COMMIT;     -> 99
-    BEGIN; INSERT(100,NULL); ROLLBACK;                                    -> 120
-  Cause: sqlite3VtabSavepoint (sqlite3.c:162995) only calls xRollbackTo
-  "if( xMethod && pVTab->iSavepoint>iSavepoint )", and pVTab->iSavepoint is set ONLY at
-  SAVEPOINT_BEGIN, and only for vtabs already in db->aVTrans[]. A vtab that joins the
-  transaction after the savepoint was taken has iSavepoint==0 and never hears about it.
-  NOT DONE: bisecting which version this changed in, and not reported upstream. Lesson 30's
-  Next Steps item 4. Do not re-derive this; extend it.
-  Also noted: sqlite3VtabSavepoint temporarily CLEARS SQLITE_Defensive around the callback.
-- Other exact error strings, each measured on a clean copy: DELETE FROM sqlite_dbpage ->
-  "cannot delete" (argc==1 arm); INSERT(1,NULL) -> "bad page value" (no page-1-specific
-  message); with SQLITE_DBCONFIG_DEFENSIVE set, UPDATE -> rc=11 and the "read-only" arm;
-  null-INSERT at pgno=121 on a 120-page header -> no-op (the
-  pgnoTrunc < sqlite3BtreeLastPage guard in dbpageSync, visible from outside).
-- Zeroing a live page then PRAGMA integrity_check -> "Tree 2 page 99: btreeInitPage() returns
-  error code 11" + "wrong # of entries in index users_name". Hand that to lesson 32.
-
-DELIBERATELY NOT TAKEN: sqlite_stat4-as-a-table, which lessons 27 and 29 both handed to lesson 30.
-The vtab/xBestIndex material filled the day on its own and the stat4-table angle belongs with
-whichever later lesson revisits the planner's inputs. It is NOT closed -- re-hand it forward.
-
-Handed forward: lesson 31 still gets sqlite3StackAllocRawNN, the loadStatTbl allocation cost,
-the unresolved sorter-mmap question from lesson 28, vdbesort.c's bulk-allocation mode,
-memjournal's FileChunk chain, and now ALSO allocateIndexInfo's one-malloc-for-four-arrays plus
-SZ_HIDDENINDEXINFO as a flexible-array-member sibling of the lookaside question. Lesson 32 gets
-xIntegrity (the iVersion 4 method, never exercised here), the corrupted databases this run
-produced, and btreeInitPage's error path. Lesson 33 (VACUUM) gets the backup API and should note
-that sqlite_dbpage's xSync calls sqlite3PagerTruncateImage, which is NOT how VACUUM shrinks.
-sqlite_stat4-as-a-table goes to whichever of 31-33 revisits the planner's inputs.
-
-NOT read this run, still unexamined: src/build.c's sqlite3DefaultRowEst (carried over from
-lessons 27, 28 and 29 -- still not read), sqlite3Stat4ProbeSetValue, whereRangeSkipScanEst, the
-WAL savepoint path (PagerSavepoint.aWalData, sqlite3WalSavepoint, sqlite3WalSavepointUndo) and
-sqlite3PagerMovepage's subjournal call site (both carried from lesson 29), and -- new this run --
-sqlite3_vtab_in/distinct/rhs_value's implementations beyond the struct fields they read,
-xShadowName and SQLITE_VTAB_INNOCUOUS/CONSTRAINT_SUPPORT, xFindFunction and
-sqlite3VtabOverloadFunction, and dbstat's cursor walk (statNext/statDecodePage), whose output I
-verified against raw bytes without reading its code.
-
-
 scope note 2026-10-16 (lesson 31): no lesson added, removed, reordered or split;
 lessons-total stays 33. The ordering held exactly. Per the NOTE BLOCK POLICY above, lesson 28's
 note was moved out this run and TRACK-ARCHIVE.md gained its row (commit
 815ea964987e5764d01f917e944ca8a7eb5e2851, TRACK.md blob
-b11a76fdd03a5ee9ede69de38ec2585b029d0efd). This block now holds lessons 29, 30 and 31.
+b11a76fdd03a5ee9ede69de38ec2585b029d0efd). This block now holds lessons 31, 32 and 33.
 
 Build used: the same SQLite 3.53.4 amalgamation from better-sqlite3@13.0.3
 (deps/sqlite3/sqlite3.c), gcc 13.3.0 -O2, -DSQLITE_THREADSAFE=0, 2-core container, system page
@@ -320,7 +221,7 @@ scope note 2026-10-17 (lesson 32): no lesson added, removed, reordered or split;
 lessons-total stays 33. The ordering held exactly. Per the NOTE BLOCK POLICY above, lesson 29's
 note was moved out this run and TRACK-ARCHIVE.md gained its row (commit
 aea7ae911690ab140bb7036d5588d06369ac10f7, TRACK.md blob
-1cb2703f12208654808b5bebde2299d80fddb95a). This block now holds lessons 30, 31 and 32.
+1cb2703f12208654808b5bebde2299d80fddb95a). This block now holds lessons 31, 32 and 33.
 
 Build used: SQLite 3.53.4 amalgamation from better-sqlite3@13.0.3 (deps/sqlite3/sqlite3.c,
 269,668 lines -- ALL line numbers in the lesson are into that file), gcc 13.3.0 -O2,
@@ -467,6 +368,197 @@ generated program (pPk, r2, 146822 -- never run), and sqlite3_recover / the reco
 which was not looked at at all.
 NOTE FOR ANY FUTURE RUN: the lesson's 2,254-page figures CANNOT be compared against lessons 28-31's
 3,836-page figures. Different schema, different row width, same page_size.
+
+scope note 2026-10-18 (lesson 33): no lesson added, removed, reordered or split; lessons-total
+stays 33. THE TRACK IS NOW COMPLETE: 33 of 33. Per the NOTE BLOCK POLICY above, lesson 30's note
+was moved out this run and TRACK-ARCHIVE.md gained its row (commit
+99aeb34381108985d51952987e71f9be978f235f, TRACK.md blob
+6c348998957d33c83ab6a3bc80755743eeec223a). This block now holds lessons 31, 32 and 33.
+
+READ THIS FIRST IF YOU ARE THE NEXT RUN. All 33 lessons are checked, so you are in Case C: write
+the SQLite capstone for your date (folder YYYY-MM-DD-sqlite-capstone), move "SQLite Internals,
+2026-09-16 to 2026-10-18, 33 lessons" into ## Completed Subjects below, and replace the syllabus
+with a new subject per Case A. Do NOT pick SQLite again. The capstone should assemble the layering
+this syllabus followed -- file format and b-tree (01-13), pager/journal/VFS (14-18), WAL (19-20),
+compiler and VDBE (21-28), operational and advanced (29-33) -- and the single best cross-cutting
+thread to hang it on is the one that keeps recurring in the last six notes: SQLITE PERFORMANCE IS
+A CACHE-RESIDENCY QUESTION AT EVERY LAYER. Lesson 28's sorter, lesson 31's mmap, lesson 32's
+integrity_check (1.0x I/O when the cache holds the file, 15.7 reads per page when it does not) and
+lesson 33's VACUUM (one read per page with a big cache, two with the default) are four
+measurements of the same thing. Suggested capstone exercise: take one database through
+insert -> delete -> VACUUM -> ANALYZE -> integrity_check with a counting VFS and a page-cache
+sweep, and predict every read count before measuring it.
+
+Build used: SQLite 3.53.4 amalgamation from better-sqlite3@13.0.3 (deps/sqlite3/sqlite3.c,
+269,668 lines -- ALL line numbers in the lesson are into that file, and they were re-verified
+against the file this run), gcc 13.3.0 -O2, -DSQLITE_THREADSAFE=0 -DSQLITE_ENABLE_DBSTAT_VTAB
+-DSQLITE_ENABLE_DBPAGE_VTAB -DSQLITE_USE_URI=1, 2-core container.
+
+NEW TEST DATABASES, DIFFERENT FROM EVERY EARLIER LESSON. Same schema as lesson 32
+(t(a INTEGER PRIMARY KEY, b TEXT, c INTEGER) + index tc, 200,000 rows, page_size 4096, rollback
+journal) but b is printf('%024d',(i*7919)%1000000) instead of random, so the file is fully
+reproducible: base.db = 2,391 pages / 9,793,536 bytes, 0 free. frag.db = base.db after
+DELETE FROM t WHERE (a%5)<>0 = 2,391 pages, 1,669 FREE, 40,000 rows. Lesson 32's db was 2,254
+pages (narrower b). DO NOT MIX ANY OF THE THREE PAGE COUNTS.
+
+Harnesses this run, all small and all rebuildable from the lesson's Hands-On: (1) a pass-through
+VFS with per-file counters AND a global sequence log over xOpen/xSync/xTruncate/xDelete/
+xFileControl plus a per-file write high-water mark; (2) an authorizer + sqlite3_trace_v2 harness;
+(3) a two-connection locking harness; (4) a timing harness for VACUUM / VACUUM INTO /
+sqlite3_backup_step(-1) / PRAGMA integrity_check; (5) a 100-byte header differ; (6) ONE PATCHED
+BUILD adding four ints -- sqlite3TransferRowCount (incremented at the top of
+sqlite3BtreeTransferRow, 82953), sqlite3XferOptCount (142141), sqlite3XferIdxFastCount (142261),
+sqlite3XferIdxSlowCount (142268). Those four symbols are NOT in stock SQLite; do not look for them.
+
+LESSON 32'S NAMED HANDOFF IS CLOSED, AND ONE OF ITS CLAIMS WAS WRONG.
+- WRONG: "VACUUM reruns the CREATE INDEX sorter path once per index." It does not. The CREATE
+  INDEX statements of step 2 run against EMPTY tables (the authorizer shows CREATE_INDEX then
+  REINDEX over zero rows), and the index is then filled by raw cell append. Negative proof:
+  a VACUUM of base.db with cache_size=-40000 opens ZERO temporary files, and a sorter PMA cannot
+  exist without one. Do not re-assert the sorter claim.
+- CORRECT AND NOW EXPLAINED: sqlite3PagerTruncateImage is NOT how VACUUM shrinks. TruncateImage
+  (63699) only sets pPager->dbSize in memory. VACUUM's shrink is an xTruncate from
+  pager_end_transaction (61799) AFTER the journal is deleted. Two different mechanisms.
+- VACUUM does not recompute statistics: CONFIRMED by measurement (see below).
+
+THE CENTRAL STRUCTURAL FACTS (start here on any re-read):
+- VACUUM = ATTACH %Q AS vacuum_%016llx (16 hex digits of sqlite3_randomness; zDbVacuum[42];
+  measured vacuum_37d13d0c530fd8ab then vacuum_d98ad946caf5091b on consecutive runs -- the name is
+  NOT vacuum_db) + 4 execSqlF statements + sqlite3BtreeCopyFile. The detach is done in C
+  (BtreeClose + autoCommit=1 + ResetAllSchemasOfConnection at 161883), NOT by SQL -- there is no
+  SQLITE_DETACH authorization.
+- db->mTrace = 0 (161662) MAKES VACUUM INVISIBLE TO sqlite3_trace_v2: measured, exactly one trace
+  line ("VACUUM") for the whole operation. THE AUTHORIZER IS NOT DISABLED: ~19 xAuth callbacks,
+  which is the only window into the internal SQL and is how the random schema name was read. An
+  authorizer that denies SQLITE_ATTACH or INSERT on sqlite_master therefore denies VACUUM.
+- THE ROW COPY IS xferOptimization (141916), NOT an INSERT loop. SeekEnd/RowCell/Insert with
+  P5=APPEND|USESEEKRESULT|PREFORMAT. sqlite3BtreeTransferRow memcpy's the serialised cell into
+  BtShared.pTmpSpace; lesson 02's decoder, lesson 23's Mem cells and lesson 24's affinity are all
+  bypassed. MEASURED: frag.db -> TransferRow calls = 80,000 = exactly 2 x 40,000 rows (one per
+  table row, one per index entry).
+- ONE NON-BINARY COLLATION DISABLES THE FAST PATH FOR THAT INDEX. Measured on 1,000 rows with two
+  indexes on the same column: TransferRow=2000 (table + BINARY index), idx fast=1, idx slow=1 --
+  the NOCASE index contributes ZERO transfers and takes OP_RowData + a real seek per entry. The
+  reason in the source is correctness, not pessimism: a user may redefine a collation between
+  CREATE INDEX and VACUUM. WITHOUT ROWID table: TransferRow=1000, not 2000 (HasRowid false, the
+  table-copy loop is skipped and the PK index IS the table) -- this partly closes lesson 32's
+  open item 2.
+- THE TRUNCATE HAPPENS AFTER THE COMMIT. Sequence-numbered from the VFS:
+  [1] xFileControl SQLITE_FCNTL_OVERWRITE arg=1961984 (the FIRST op, carrying the final size),
+  [2] xOpen journal, [1306..1492] 4x xSync journal, [1927] xSync db, [1928] xDelete journal,
+  [1929] xTruncate db 1961984, [1930] xFileControl COMMIT_PHASETWO. There are exactly three
+  pager_truncate call sites: 66349 (grow only, in CommitPhaseOne), 62588 (playback), and 61799
+  (the shrink, in pager_end_transaction, whose comment says the journal has already been
+  finalized). Consequence: the journal holds only 479 records, not 2,391, and a crash either
+  restores the original whole or leaves a valid db with harmless trailing bytes (BtreeLastPage
+  reads the header page_count, so nothing looks past it).
+- aCopy (161817) carries only 4 of the 9 BTREE_* meta values and increments ONE. Verified by
+  diffing the 100-byte header: schema_cookie 2->3 under BOTH forms; default_cache_size 9000,
+  text_encoding 1, user_version 77, application_id 1234567 all preserved; change counter 6->7 for
+  VACUUM but 6->1 for VACUUM INTO (brand-new file -- a vacuumed copy is indistinguishable from a
+  fresh one by change counter). journal_mode is NOT preserved.
+
+COST, MEASURED THREE WAYS ON base.db (9,793,536 bytes, nothing to reclaim -- pure overhead):
+- Default cache (-2000): db 2,391 writes / 9,793,536 B, anonymous temp 2,392 / 9,797,632 B,
+  journal 7,185 / 9,815,808 B. TOTAL 29,406,976 B = 3.003x. The source comment's "approximately
+  3 times" is right to three significant figures. PEAK EXTRA DISK = temp 9,793,536 + journal
+  9,816,328 = 19,609,864 = 2.002x, matching the doc's "twice the size" to 0.2%.
+  MAIN FILE IS READ TWICE PER PAGE (4,782 = 2 x 2,391): the copy-back must journal each page's
+  original, and a 488-page cache has evicted it.
+- cache_size=-40000: NO TEMP FILE AT ALL. 19,606,724 B = 2.002x, one read per page, journal syncs
+  12 -> 2. Whether VACUUM uses scratch disk is decided by cache_size vs the OUTPUT page count,
+  not the input: VACUUM of frag.db (output 479 pages < 488) also opens no temp file at default
+  cache size.
+- temp_store=MEMORY: no temp file, identical main/journal traffic, on-disk peak extra 1.0x
+  (journal only). Does NOT fix the double read; only a bigger cache does.
+- Temp file open flags 0x21e = TEMP_DB|EXCLUSIVE|DELETEONCLOSE|CREATE|READWRITE, zName NULL
+  (anonymous, hence no xDelete for it).
+
+TIMINGS, best of 3, 2-core container -- THE CROSSOVER IS THE USEFUL RESULT:
+  frag.db (70% free): VACUUM 25.0 ms, VACUUM INTO 16.6 ms, backup_step(-1) 30.4 ms.
+                      Output: 1,961,984 / 1,961,984 / 9,793,536 bytes.
+  base.db (0% free):  VACUUM 78.1 ms, VACUUM INTO 45.2 ms, backup_step(-1) 30.3 ms. All 9,793,536.
+  sqlite3_backup_pagecount returned 2,391 for BOTH files -- the backup API counts FILE pages,
+  free ones included, which is the whole explanation. integrity_check: frag.db 16.7 ms, vacuumed
+  14.8 ms, both "ok".
+
+VACUUM INTO, seven measured differences (pOut!=0 changes nine lines):
+- Output must not exist: 0-byte file OK (test is sz>0); valid 8,192-byte db -> rc=1 "output file
+  already exists"; 2 bytes of text -> rc=26 "file is not a database" (the ATTACH fails BEFORE the
+  friendly check at 161699); the source file itself -> "output file already exists";
+  VACUUM INTO 42 -> rc=1 "non-text filename".
+- Locks: BeginTrans(pMain, pOut==0 ? 2 : 0, 0). MATRIX: unfinalized stmt on the same connection ->
+  rc=1 "cannot VACUUM - SQL statements in progress" for BOTH forms; open txn -> rc=1 "cannot
+  VACUUM from within a transaction" for BOTH; ANOTHER CONNECTION HOLDING A READ TXN OR
+  BEGIN IMMEDIATE -> VACUUM rc=5 "database is locked", VACUUM INTO SUCCEEDS. Source written 0
+  bytes (nRead=723, nWrite=0, size unchanged).
+- ROWIDS -- THE DOC IS WIDER THAN THE CODE. The branch is three-way (142182-142196). Measured on
+  rowids 10/20/30: renumbered to 1/2/3 ONLY for a rowid table with no INTEGER PRIMARY KEY AND NO
+  INDEXES AT ALL, under plain VACUUM. Add any index -> preserved. VACUUM INTO -> never renumbers
+  (DBFLAG_VacuumInto in the else-if). The doc says only "tables that do not have an explicit
+  INTEGER PRIMARY KEY".
+- auto_vacuum: PRAGMA auto_vacuum=FULL reads back 0 until a VACUUM consumes db->nextAutovac.
+  VACUUM -> header becomes 1. INCREMENTAL (2) survives a VACUUM even though BTREE_INCR_VACUUM is
+  not in aCopy (it travels via BtreeGet/SetAutoVacuum). VACUUM INTO APPLIES IT TO THE OUTPUT AND
+  LEAVES THE SOURCE AT 0 (the SetAutoVacuum(pMain,...) at 161845 is inside if(pOut==0)).
+- page_size in WAL: db->nextPagesize=0 is gated on "&& pOut==0" (161737), so plain VACUUM cannot
+  change page_size of a WAL db (measured: stays 4096) but VACUUM INTO CAN (measured: output 8192),
+  and the output also comes out in journal_mode=delete. VACUUM INTO is the supported route to
+  re-page-size a WAL database.
+- reserve=N URI parameter (161712-161716): VACUUM INTO 'file:rs.db?reserve=32' -> output header
+  byte 20 = 32 while the source is 0. Needs -DSQLITE_USE_URI=1. Not on the lang_vacuum page.
+- Output journal is 2 writes / 524 BYTES for a 1,961,984-byte output -- the source comment's
+  "Only the journal header is written" measured exactly.
+
+LAYOUT AND CONTENT, from dbstat:
+  BEFORE (frag.db): t 456 pages, range 2-1812, 450 DISCONTINUOUS RUNS, 66.04% payload;
+                    tc 265 pages, 1817-2388, 245 runs, 31.95% payload.
+  AFTER  (479 pages): t 363 pages, 2-365, 2 runs, 82.96% payload, 0.71% unused;
+                      tc 115 pages, 3-479, 2 runs, 73.63% payload, 0.60% unused.
+  PHYSICAL MAP: page 1 schema, page 2 = t root (internal), page 3 = tc root (internal),
+  4-365 t leaves, 366-479 tc leaves. The two roots are allocated by the CREATE statements before
+  any row exists; every leaf after that is appended. That is why each object is 2 runs, not 1.
+  CONTENT PURGE verified at the byte level: a needle in a deleted row is present before VACUUM and
+  absent after, WITH THE FILE SIZE UNCHANGED (8,192 both times) -- the scrub comes from rebuilding
+  every page, not from truncation.
+  STALE STATS CONFIRMED: ANALYZE -> stat1 "200000 1"; delete 199,000 rows; VACUUM; stat1 STILL
+  "200000 1" for a 1,000-row table. ANALYZE AFTER VACUUM, never instead of it.
+  sqlite_sequence survives (seq=3 before and after, next rowid 4) even though its CREATE TABLE is
+  excluded from the schema copy by name<>'sqlite_sequence' -- its ROWS are in statement 3's set.
+
+execSql's "CRE"/"INS" PREFIX GUARD (161499-161512), three measurements, one of them a live hole:
+- A trailing statement is ignored: sql='CREATE TABLE t(x); DELETE FROM victim' -> VACUUM succeeds,
+  victim intact (prepare_v2 compiles only the first statement).
+- COULD NOT MAKE THE REJECT ARM FIRE. sql='DELETE FROM victim' on a table OR an index makes the
+  schema itself unloadable -- rc=11 "malformed database schema (tx)" from the loader, before
+  execSql runs. The guard is now defence in depth. NEGATIVE RESULT, stated as such in the lesson.
+- THE "INS" ALLOWANCE IS A REAL HOLE AND IT IS STRUCTURALLY NECESSARY (statement 3 generates
+  strings starting with INSERT). Under PRAGMA writable_schema=ON -- which lets the malformed
+  schema load -- an index row whose sql is INSERT INTO t VALUES('INJECTED') IS EXECUTED BY VACUUM:
+  measured, the row persists and the index entry is dropped. Needs writable_schema on the
+  connection running the VACUUM, which is documented as dangerous and which DEFENSIVE blocks, so
+  it is a curiosity and not a vulnerability in any normal configuration. NOT REPORTED UPSTREAM AND
+  NOT BISECTED -- that is lesson 33 Next Steps item 1. Do not re-derive it; extend it.
+
+NOT DONE / NOT READ THIS RUN, for whoever picks these up:
+- backupUpdate / sqlite3BackupRestart / sqlite3_backup_remaining were READ but NEVER EXERCISED --
+  sqlite3BtreeCopyFile sets b.pDestDb=0 and never calls attachBackupObject, so the mid-backup
+  update path should be structurally unreachable from VACUUM. Unproven. Next Steps item 4.
+- The sqlite3BtreeTransferRow OVERFLOW ARM: all 80,000 transfers took the single-memcpy fast path
+  (nIn==nRem && nIn<maxLocal). The overflow-chain rebuild was read but never run. Next Steps 6.
+- auto_vacuum databases were never VACUUMed with the counting VFS, so the ptrmap cost is unknown
+  and lesson 32's checkPtrmap item is still open. Next Steps 3.
+- The Windows mmap-truncation caveat (carried from lesson 32) is UNVERIFIED -- Linux container only.
+- setDestPgsz, the pgszSrc<pgszDest arm of backup_step (the one that writes extra pages past
+  PENDING_BYTE and calls backupTruncateFile), and sqlite3BtreeNewDb were read but not exercised:
+  every measurement here had equal source and destination page sizes.
+- STILL OPEN AFTER SIX HANDOFFS AND NOW FORMALLY DROPPED: sqlite_stat4-as-a-table (handed to 30 by
+  both 27 and 29, then 31, 32, and here) and loadStatTbl's allocation cost (handed by 28). Neither
+  belongs in this track; do not hand them forward again. Likewise src/build.c's
+  sqlite3DefaultRowEst, unread since lesson 27 -- stop carrying it.
+- Also never read: sqlite3VdbeFindIndexKey (carried from 32), the WAL savepoint path
+  (PagerSavepoint.aWalData, sqlite3WalSavepoint, sqlite3WalSavepointUndo),
+  sqlite3PagerMovepage's subjournal call site, and sqlite3_recover / the recovery extension.
 -->
 
 ## Completed Subjects
