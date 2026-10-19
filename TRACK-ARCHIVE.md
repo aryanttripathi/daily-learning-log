@@ -40,6 +40,7 @@ commit you reach them through.
 | 28 | SQLite Internals | commit `815ea964987e5764d01f917e944ca8a7eb5e2851` (2026-10-16, the last commit before the fifth trim) | `b11a76fdd03a5ee9ede69de38ec2585b029d0efd` |
 | 29 | SQLite Internals | commit `aea7ae911690ab140bb7036d5588d06369ac10f7` (2026-10-17, the last commit before the sixth trim) | `1cb2703f12208654808b5bebde2299d80fddb95a` |
 | 30 | SQLite Internals | commit `99aeb34381108985d51952987e71f9be978f235f` (2026-10-18, the last commit before the seventh trim) | `6c348998957d33c83ab6a3bc80755743eeec223a` |
+| 31 – 33 | SQLite Internals | commit `5c5c0d88e5f5caf0c4b43c579dd76edeb64be644` (2026-10-19, the last commit before the syllabus was replaced by the PostgreSQL track) | `a21eb5940c9fd0dd7a3d47bce2e141b2628cd550` |
 
 Notes on the rows:
 
@@ -76,10 +77,20 @@ Notes on the rows:
   K+4 call-schedule bound, the `xDestroy == 0` trap that yields a misleading `no such module`, and
   the `sqlite_dbpage` truncation finding that **contradicts the documented** "any `ROLLBACK TO` will
   cancel the null-INSERT" rule, with the two differing statement sequences measured by file size.
+- The **31 – 33** blob is the **final state of the SQLite `TRACK.md`**: it carries the notes for
+  lessons 31, 32 and 33 *and* the complete 33-item syllabus with every lesson title as taught,
+  all 33 boxes checked. It is therefore the right place to read lesson 31's mmap/allocator note
+  (the 256-byte `unixFetch` end-of-file gate, the 4,368-byte cost of a cached 4,096-byte page, and
+  `setupLookaside`'s three-branch arithmetic matched at nine configurations), lesson 32's verifier
+  note (the two checkers, the min-heap byte-accounting proof, and the `quick_check` gap), and
+  lesson 33's `VACUUM` note (the randomly-named `ATTACH`, the transfer optimisation, and the
+  post-commit `xTruncate`). Read it before writing anything that refers back to the SQLite track.
 - Lessons 01–12 predate the note block; those lessons have no handover notes, only their documents.
 
-After the 2026-10-18 trim, `TRACK.md` holds the notes for lessons **31, 32 and 33** — the last
-three lessons of the SQLite track, which completed on 2026-10-18.
+After the 2026-10-19 run, `TRACK.md` describes a **new track — PostgreSQL Internals, 35 lessons,
+none done** — and its note block holds only the handover to PostgreSQL lesson 01 plus a short
+record of which SQLite items were deliberately left unread and must not be handed forward. Every
+SQLite note now lives in git history, indexed by the table above.
 
 ## Procedure for the next trim
 
@@ -93,8 +104,10 @@ Never delete a note without adding its row here first.
 
 **When a track ends and a new one begins**, the outgoing track's last three notes are the ones most
 worth keeping readable: they carry the handoffs that the capstone has to close. Archive them as a
-single range row (lessons 31–33 for SQLite) on the run that replaces the syllabus, rather than
-trimming them one at a time into a syllabus they no longer describe.
+single range row — done for SQLite lessons 31–33 on 2026-10-19 — on the run that replaces the
+syllabus, rather than trimming them one at a time into a syllabus they no longer describe. Note
+that this row is also the only pointer to the outgoing track's full syllabus text, so the
+**Completed Subjects** entry in `TRACK.md` must name it.
 
 ## What this file is not
 
