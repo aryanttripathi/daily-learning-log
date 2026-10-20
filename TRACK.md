@@ -3,15 +3,15 @@ track-state
 subject: PostgreSQL
 started: 2026-10-19
 lessons-total: 35
-lessons-done: 0
+lessons-done: 1
 -->
 
 # Current Track: PostgreSQL Internals
 
 Sequential deep dive. One lesson per day, each building on the last.
 
-**STATUS: starting.** The syllabus was written on 2026-10-19, the day the SQLite track's capstone
-shipped. The first run after this one takes **lesson 01**.
+**STATUS: in progress — lesson 01 shipped 2026-10-20.** The syllabus was written on 2026-10-19, the
+day the SQLite track's capstone shipped. The next run takes **lesson 02**.
 
 The order follows PostgreSQL's actual source layout rather than a textbook outline. It was built
 from two pieces of primary evidence read on 2026-10-19: the chapter list of
@@ -46,7 +46,7 @@ readable as the other answer to a question SQLite already answered.
 
 ### Part I — Physical storage and the heap (`access/heap`, `storage/page`, `storage/smgr`)
 
-- [ ] 01 — The cluster on disk: `base/<dboid>/<relfilenode>`, the three forks, and 1 GB segment files
+- [x] 01 — The cluster on disk: `base/<dboid>/<relfilenode>`, the three forks, and 1 GB segment files
 - [ ] 02 — The page: `PageHeaderData`'s 24 bytes, `pd_lower`/`pd_upper`, the line pointer array, and special space
 - [ ] 03 — `HeapTupleHeaderData`: `t_xmin`, `t_xmax`, `t_ctid`, `t_infomask`/`t_infomask2`, and `t_hoff`
 - [ ] 04 — Attribute storage: MAXALIGN padding, the null bitmap, 1-byte vs 4-byte varlena headers, and TOAST
@@ -108,38 +108,88 @@ records exactly which commit and blob to read for each archived range. Never dro
 adding its archive row first.
 
 -- SQLITE TRACK CLOSED 2026-10-19 (capstone). --------------------------------------------------
-The SQLite track's lessons 31-33 notes were archived on this run; see TRACK-ARCHIVE.md, row
+The SQLite track's lessons 31-33 notes were archived on that run; see TRACK-ARCHIVE.md, row
 "31 - 33". The capstone document (2026/10/2026-10-19-sqlite-capstone/README.md) closes the track
-and records which items were deliberately left unread: FTS5, R-Tree, session/changesets,
-sqlite3_recover, the WAL savepoint path (PagerSavepoint.aWalData, sqlite3WalSavepoint,
-sqlite3WalSavepointUndo), sqlite3PagerMovepage's subjournal call site, sqlite3VdbeFindIndexKey,
-sqlite_stat4-as-a-table, loadStatTbl's allocation cost, and sqlite3DefaultRowEst. None of these
-carry forward into the PostgreSQL track. Do not hand them to a PostgreSQL lesson.
+and records which items were deliberately left unread. None of these carry forward into the
+PostgreSQL track. Do not hand them to a PostgreSQL lesson.
 
--- POSTGRESQL TRACK: HANDOVER TO LESSON 01 -----------------------------------------------------
-Scope for lesson 01 (the cluster on disk). Take: the PGDATA directory layout, base/<dboid>/,
-relfilenode versus OID and when they diverge (rewrites: VACUUM FULL, CLUSTER, TRUNCATE), the
-three forks (main, _fsm, _vm) and the init fork, 1 GB segmentation and the .1/.2 suffixes,
-pg_relation_filepath()/pg_relation_size()/pg_table_size(), and the fact that a 32-bit block
-number times 8 KB caps a single relation fork at 32 TB. Measure: create a table, read its path
-from pg_relation_filepath, verify the file size against pg_relation_size, force a rewrite and
-show relfilenode changing while the OID does not, and push one relation past one segment to see
-the .1 file appear. Primary sources: docs chapter 66.1 Database File Layout
-(https://www.postgresql.org/docs/current/storage-file-layout.html) and
-src/backend/storage/smgr/README.
-Leave for later: TOAST tables and their indexes (lesson 04), the FSM and VM file *contents*
-(lessons 05, 06), smgr's fsync queue and relation extension locking (lesson 08), and anything
-about tablespaces beyond the symlink in pg_tblspc.
-Do NOT re-teach from the SQLite track: what a page is, what a b-tree is, why a cost model
-quantises, or how a journal works. Reference them by contrast instead -- the capstone's four
-tradeoffs are the intended comparison axes.
+-- LESSON 01 (2026-10-20) AS TAUGHT ------------------------------------------------------------
+Document: 2026/10/2026-10-20-postgres-cluster-on-disk-forks-segments/README.md (single README,
+not split). Source commit read: postgres/postgres@ddd468ca (note: the syllabus was built against
+@45fc51fc; the tree moved between those two runs, so later lessons should state their own commit
+rather than assume either).
+
+TOOK, and must not be re-taught:
+- RelFileLocator {spcOid, dbOid, relNumber}; RelFileNumber is a *typedef of Oid*, so the compiler
+  cannot catch an OID/filenode mix-up. relfilenode != OID; rewrites that change it: VACUUM FULL,
+  CLUSTER, TRUNCATE, REINDEX, some ALTER TABLE. pg_class.relfilenode is 0 for pg_class itself;
+  pg_relation_filenode() is the escape hatch. This was framed as the price of moving the catalog
+  into real tables -- comparison axis 1 from the SQLite capstone. Do not re-argue it.
+- GetRelationPath() in src/common/relpath.c: three tablespace shapes (global/, base/<dbOid>/,
+  pg_tblspc/<spcOid>/<TABLESPACE_VERSION_DIRECTORY>/<dbOid>/) x temp/permanent x main/non-main =
+  nine sprintf branches. GetDatabasePath() duplicates the three-way branch with an
+  "XXX this must agree with GetRelationPath()!" comment. Returns RelPathStr BY VALUE, deliberately,
+  so the pointer cannot decay and the string is safe in a critical section.
+- forkNames[] = {"main","fsm","vm","init"} -- NO underscores in the array; the underscore comes
+  from the "%u_%s" format string. That is why pg_relation_size(rel,'fsm') takes 'fsm' not '_fsm'.
+  forkname_to_number()'s errhint enumerates the four. forkname_chars() loops from forkNum=1 and
+  therefore cannot recognise "main", and documents the assumption that no fork name is a prefix of
+  another. MAX_FORKNUM = INIT_FORKNUM = 3, FORKNAMECHARS = 4 with zero slack, StaticAssertDecl ties
+  array length to the enum.
+- Temp relations: "t%d_%u" where %d is procNumber (a backend SLOT, not getpid()); PROCNUMBER_CHARS
+  is 6 because relpath.h states MAX_BACKENDS = 2^18-1. Shared catalogs assert dbOid == 0 and
+  procNumber == INVALID_PROC_NUMBER, so a shared catalog can never be temporary.
+- The init fork, at the level of docs 66.5 only: it is an empty relation of the right type, and
+  crash recovery resets an unlogged relation by COPYING it over the main fork and erasing the rest.
+- Segments, from md.c's header comment: the on-disk invariant (zero or more segments of exactly
+  RELSEG_SIZE, exactly one partial, then optionally any number of ZERO-LENGTH inactive segments),
+  blocknum / RELSEG_SIZE and blocknum % RELSEG_SIZE, md_seg_fds[forknum]/md_num_open_segs,
+  mdmaxcombine() returning RELSEG_SIZE - segoff, the "read/write crosses segment boundary" elogs,
+  mdtruncate() keeping a 0-length K+1st segment when nblocks is an exact multiple (and WHY: other
+  backends' open descriptors), _mdfd_getseg()'s zero-padding of skipped segments with the
+  "can happen in hash indexes" comment, _mdnblocks()'s walk and its elog(FATAL,"segment too big"),
+  and the StaticAssertDecl on RELSEG_SIZE <= INT_MAX with the --with-segsize rationale.
+- Numbers established and reusable: BLCKSZ 8192 (max 32768); RELSEG_SIZE 131072 blocks;
+  MaxBlockNumber 0xFFFFFFFE = 4,294,967,294; max segments per fork = 32,767; max bytes per fork =
+  35,184,372,072,448 = 32 TiB MINUS 16 KiB (two BlockNumber values are reserved, not one).
+
+MEASUREMENTS: the hands-on was written and reasoned from source, NOT executed -- this run had no
+PostgreSQL cluster. The document does not claim any figure as observed. If a later lesson needs a
+measured number from Part I, it must run it. The install step (pageinspect, pg_freespacemap,
+pg_visibility) is stated in lesson 01's hands-on; lessons 05-07 should not repeat it.
+
+LEFT FOR LATER, deliberately: PageHeaderData and the 15-bit lp_off/lp_len that caps BLCKSZ at
+2^15 (lesson 02 -- lesson 01 mentions the cap in one line and explicitly defers); TOAST naming and
+reltoastrelid (04); FSM/VM *contents* (05, 06); smgr's fsync request queue, register_dirty_segment,
+relation extension locking and mdzeroextend/FileFallocate (08); fd.c's virtual FD mechanism beyond
+naming it (08); ItemPointerData's on-disk width (03).
+
+-- HANDOVER TO LESSON 02 -----------------------------------------------------------------------
+Scope for lesson 02 (the page). Take: PageHeaderData field by field -- pd_lsn, pd_checksum,
+pd_flags, pd_lower, pd_upper, pd_special, pd_pagesize_version, pd_prune_xid -- the 24-byte figure
+and whether this build agrees; ItemIdData (lp_off:15, lp_flags:2, lp_len:15) and the four
+lp_flags states; the line pointer array growing up from pd_lower while tuples grow down from
+pd_upper; special space at pd_special and what index AMs put there; PageIsEmpty/PageGetFreeSpace;
+page checksums (data_checksums, pd_checksum, and the fact that it is verified on read into the
+buffer pool, not on every access -- the CMU mmap paper in this run's digest is the reason that
+distinction matters). Primary sources: docs 66.6 Database Page Layout
+(https://www.postgresql.org/docs/current/storage-page-layout.html),
+src/include/storage/bufpage.h, src/include/storage/itemid.h,
+src/backend/storage/page/README and bufpage.c.
+Entry point from lesson 01: lesson 01 ends by telling the reader to hexdump the first 64 bytes of
+block 0 WITHOUT interpreting them. Lesson 02 should open by interpreting exactly those bytes.
+Do NOT re-explain: what a fork is, how a path is built, what a segment is, or that relfilenode
+differs from OID. Reference lesson 01 by relative path instead.
+Do NOT re-teach from the SQLite track: what a page is in the abstract, slotted-page layout as a
+concept, or cell pointer arrays. The contrast worth drawing is specific: SQLite's page header is
+8 or 12 bytes and carries a cell count; PostgreSQL's is 24 and carries an LSN. Say why.
 
 Known environment facts for a fresh session (verify, do not assume):
-- Default block size is 8 KB (compile-time BLCKSZ); segment size 1 GB (compile-time
-  RELSEG_SIZE). Both are build options, so state the build you measured.
-- pageinspect is the extension that makes Part I observable (page_header, heap_page_items,
-  bt_page_items, bt_metap, fsm_page_contents). pg_freespacemap and pg_visibility cover lessons
-  05 and 06. Install them in lesson 01 and say so, so later lessons do not repeat it.
+- Block size 8 KB and segment size 1 GB are compile-time (BLCKSZ, RELSEG_SIZE) and exposed as the
+  read-only GUCs block_size and segment_size. State the build you measured.
+- pageinspect is what makes Part I observable (page_header, heap_page_items, bt_page_items,
+  bt_metap, fsm_page_contents). pg_freespacemap and pg_visibility cover lessons 05 and 06.
+  Lesson 01's hands-on installs all three.
 - pg_buffercache is needed from lesson 09; pgstattuple for lessons 07 and 19; amcheck for
   lessons 28-29 (it is the closest thing PostgreSQL has to SQLite's integrity_check, and the
   comparison is worth making explicitly when lesson 28 arrives).
