@@ -41,6 +41,7 @@ commit you reach them through.
 | 29 | SQLite Internals | commit `aea7ae911690ab140bb7036d5588d06369ac10f7` (2026-10-17, the last commit before the sixth trim) | `1cb2703f12208654808b5bebde2299d80fddb95a` |
 | 30 | SQLite Internals | commit `99aeb34381108985d51952987e71f9be978f235f` (2026-10-18, the last commit before the seventh trim) | `6c348998957d33c83ab6a3bc80755743eeec223a` |
 | 31 – 33 | SQLite Internals | commit `5c5c0d88e5f5caf0c4b43c579dd76edeb64be644` (2026-10-19, the last commit before the syllabus was replaced by the PostgreSQL track) | `a21eb5940c9fd0dd7a3d47bce2e141b2628cd550` |
+| **PG 01** | **PostgreSQL Internals** | commit `2fd269184b17e59f9091b82cb8934672fd32c8f7` (2026-10-23, the last commit before the eighth trim — the first of the PostgreSQL track) | `1feb2d21947ee646bf23f350c8ac84424fe87251` |
 
 Notes on the rows:
 
@@ -85,12 +86,26 @@ Notes on the rows:
   note (the two checkers, the min-heap byte-accounting proof, and the `quick_check` gap), and
   lesson 33's `VACUUM` note (the randomly-named `ATTACH`, the transfer optimisation, and the
   post-commit `xTruncate`). Read it before writing anything that refers back to the SQLite track.
-- Lessons 01–12 predate the note block; those lessons have no handover notes, only their documents.
+- The **PG 01** blob is the first PostgreSQL-track trim, and it carries the notes for PostgreSQL
+  lessons **01, 02 and 03** together with the handover that was written *to* lesson 04. It is
+  therefore the right place to read lesson 01's note — the one on `RelFileLocator` and
+  `RelFileNumber` being a typedef of `Oid` (so the compiler cannot catch an OID/filenode mix-up),
+  `GetRelationPath()`'s nine `sprintf` branches and its deliberate return-by-value, the
+  `forkNames[]` array with **no underscores in it** (the underscore comes from the `"%u_%s"`
+  format string, which is why `pg_relation_size(rel,'fsm')` takes `'fsm'` and not `'_fsm'`),
+  `md.c`'s on-disk segment invariant and the zero-length K+1st segment that `mdtruncate()` keeps
+  on purpose, and the reusable ceilings: `BLCKSZ` 8192, `RELSEG_SIZE` 131072 blocks, 32,767
+  segments per fork, and 32 TiB **minus 16 KiB** per fork because *two* `BlockNumber` values are
+  reserved rather than one. Note that lessons 01 and 02 were written **without a cluster** and
+  claim no observed figures; lesson 04 later measured and confirmed lesson 02's two outstanding
+  predictions.
+- Lessons 01–12 of the SQLite track predate the note block; those lessons have no handover notes,
+  only their documents.
 
-After the 2026-10-19 run, `TRACK.md` describes a **new track — PostgreSQL Internals, 35 lessons,
-none done** — and its note block holds only the handover to PostgreSQL lesson 01 plus a short
-record of which SQLite items were deliberately left unread and must not be handed forward. Every
-SQLite note now lives in git history, indexed by the table above.
+After the 2026-10-19 run, `TRACK.md` describes a **new track — PostgreSQL Internals, 35 lessons** —
+and after the 2026-10-23 run its note block holds the notes for PostgreSQL lessons **02, 03 and
+04** plus the handover to lesson 05. Every SQLite note, and now PostgreSQL lesson 01's, lives in
+git history, indexed by the table above.
 
 ## Procedure for the next trim
 
@@ -108,6 +123,10 @@ single range row — done for SQLite lessons 31–33 on 2026-10-19 — on the ru
 syllabus, rather than trimming them one at a time into a syllabus they no longer describe. Note
 that this row is also the only pointer to the outgoing track's full syllabus text, so the
 **Completed Subjects** entry in `TRACK.md` must name it.
+
+**Label rows by track once more than one track has been archived.** SQLite rows are bare numbers
+for historical reasons; every PostgreSQL row is prefixed `PG`, because "lesson 01" is now ambiguous
+on its own. A future third track should do the same.
 
 ## What this file is not
 
