@@ -3,15 +3,15 @@ track-state
 subject: PostgreSQL
 started: 2026-10-19
 lessons-total: 35
-lessons-done: 3
+lessons-done: 4
 -->
 
 # Current Track: PostgreSQL Internals
 
 Sequential deep dive. One lesson per day, each building on the last.
 
-**STATUS: in progress — lesson 03 shipped 2026-10-22.** The syllabus was written on 2026-10-19, the
-day the SQLite track's capstone shipped. The next run takes **lesson 04**.
+**STATUS: in progress — lesson 04 shipped 2026-10-23.** The syllabus was written on 2026-10-19, the
+day the SQLite track's capstone shipped. The next run takes **lesson 05**.
 
 The order follows PostgreSQL's actual source layout rather than a textbook outline. It was built
 from two pieces of primary evidence read on 2026-10-19: the chapter list of
@@ -49,7 +49,7 @@ readable as the other answer to a question SQLite already answered.
 - [x] 01 — The cluster on disk: `base/<dboid>/<relfilenode>`, the three forks, and 1 GB segment files
 - [x] 02 — The page: `PageHeaderData`'s 24 bytes, `pd_lower`/`pd_upper`, the line pointer array, and special space
 - [x] 03 — `HeapTupleHeaderData`: `t_xmin`, `t_xmax`, `t_ctid`, `t_infomask`/`t_infomask2`, and `t_hoff`
-- [ ] 04 — Attribute storage: MAXALIGN padding between attributes, 1-byte vs 4-byte varlena headers, `atthasmissing`, and TOAST
+- [x] 04 — Attribute storage: MAXALIGN padding between attributes, 1-byte vs 4-byte varlena headers, `atthasmissing`, and TOAST
 - [ ] 05 — The Free Space Map: the FSM tree pages and how a page with room is found
 - [ ] 06 — The Visibility Map: `PD_ALL_VISIBLE`, all-frozen, and the index-only scan it enables
 - [ ] 07 — HOT updates and page pruning: redirect line pointers, `heap_page_prune()`, and the HOT chain
@@ -112,57 +112,6 @@ The SQLite track's lessons 31-33 notes were archived on that run; see TRACK-ARCH
 "31 - 33". The capstone document (2026/10/2026-10-19-sqlite-capstone/README.md) closes the track
 and records which items were deliberately left unread. None of these carry forward into the
 PostgreSQL track. Do not hand them to a PostgreSQL lesson.
-
--- LESSON 01 (2026-10-20) AS TAUGHT ------------------------------------------------------------
-Document: 2026/10/2026-10-20-postgres-cluster-on-disk-forks-segments/README.md (single README,
-not split). Source commit read: postgres/postgres@ddd468ca (note: the syllabus was built against
-@45fc51fc; the tree moved between those two runs, so later lessons should state their own commit
-rather than assume either).
-
-TOOK, and must not be re-taught:
-- RelFileLocator {spcOid, dbOid, relNumber}; RelFileNumber is a *typedef of Oid*, so the compiler
-  cannot catch an OID/filenode mix-up. relfilenode != OID; rewrites that change it: VACUUM FULL,
-  CLUSTER, TRUNCATE, REINDEX, some ALTER TABLE. pg_class.relfilenode is 0 for pg_class itself;
-  pg_relation_filenode() is the escape hatch. This was framed as the price of moving the catalog
-  into real tables -- comparison axis 1 from the SQLite capstone. Do not re-argue it.
-- GetRelationPath() in src/common/relpath.c: three tablespace shapes (global/, base/<dbOid>/,
-  pg_tblspc/<spcOid>/<TABLESPACE_VERSION_DIRECTORY>/<dbOid>/) x temp/permanent x main/non-main =
-  nine sprintf branches. GetDatabasePath() duplicates the three-way branch with an
-  "XXX this must agree with GetRelationPath()!" comment. Returns RelPathStr BY VALUE, deliberately,
-  so the pointer cannot decay and the string is safe in a critical section.
-- forkNames[] = {"main","fsm","vm","init"} -- NO underscores in the array; the underscore comes
-  from the "%u_%s" format string. That is why pg_relation_size(rel,'fsm') takes 'fsm' not '_fsm'.
-  forkname_to_number()'s errhint enumerates the four. forkname_chars() loops from forkNum=1 and
-  therefore cannot recognise "main", and documents the assumption that no fork name is a prefix of
-  another. MAX_FORKNUM = INIT_FORKNUM = 3, FORKNAMECHARS = 4 with zero slack, StaticAssertDecl ties
-  array length to the enum.
-- Temp relations: "t%d_%u" where %d is procNumber (a backend SLOT, not getpid()); PROCNUMBER_CHARS
-  is 6 because relpath.h states MAX_BACKENDS = 2^18-1. Shared catalogs assert dbOid == 0 and
-  procNumber == INVALID_PROC_NUMBER, so a shared catalog can never be temporary.
-- The init fork, at the level of docs 66.5 only: it is an empty relation of the right type, and
-  crash recovery resets an unlogged relation by COPYING it over the main fork and erasing the rest.
-- Segments, from md.c's header comment: the on-disk invariant (zero or more segments of exactly
-  RELSEG_SIZE, exactly one partial, then optionally any number of ZERO-LENGTH inactive segments),
-  blocknum / RELSEG_SIZE and blocknum % RELSEG_SIZE, md_seg_fds[forknum]/md_num_open_segs,
-  mdmaxcombine() returning RELSEG_SIZE - segoff, the "read/write crosses segment boundary" elogs,
-  mdtruncate() keeping a 0-length K+1st segment when nblocks is an exact multiple (and WHY: other
-  backends' open descriptors), _mdfd_getseg()'s zero-padding of skipped segments with the
-  "can happen in hash indexes" comment, _mdnblocks()'s walk and its elog(FATAL,"segment too big"),
-  and the StaticAssertDecl on RELSEG_SIZE <= INT_MAX with the --with-segsize rationale.
-- Numbers established and reusable: BLCKSZ 8192 (max 32768); RELSEG_SIZE 131072 blocks;
-  MaxBlockNumber 0xFFFFFFFE = 4,294,967,294; max segments per fork = 32,767; max bytes per fork =
-  35,184,372,072,448 = 32 TiB MINUS 16 KiB (two BlockNumber values are reserved, not one).
-
-MEASUREMENTS: the hands-on was written and reasoned from source, NOT executed -- this run had no
-PostgreSQL cluster. The document does not claim any figure as observed. If a later lesson needs a
-measured number from Part I, it must run it. The install step (pageinspect, pg_freespacemap,
-pg_visibility) is stated in lesson 01's hands-on; lessons 05-07 should not repeat it.
-
-LEFT FOR LATER, deliberately: TOAST naming and reltoastrelid (04); FSM/VM *contents* (05, 06);
-smgr's fsync request queue, register_dirty_segment, relation extension locking and
-mdzeroextend/FileFallocate (08); fd.c's virtual FD mechanism beyond naming it (08);
-ItemPointerData's on-disk width (03). (PageHeaderData and the 15-bit lp_off/lp_len cap, also on
-this list, were taken by lesson 02 and are now closed.)
 
 -- LESSON 02 (2026-10-21) AS TAUGHT ------------------------------------------------------------
 Document: 2026/10/2026-10-21-postgres-page-header-line-pointers/README.md (single README, not
@@ -396,54 +345,262 @@ function), so the title now reads "Attribute storage: MAXALIGN padding between a
 vs 4-byte varlena headers, `atthasmissing`, and TOAST". atthasmissing was added because lesson 03
 surfaced it as the third NULL encoding and deferred it. No reordering; no other change.
 
--- HANDOVER TO LESSON 04 -----------------------------------------------------------------------
-Scope for lesson 04 (attribute storage). Take: how the bytes AFTER t_hoff are laid out and walked
--- att_align_nominal / att_nominal_alignby / att_pointer_alignby / att_datum_alignby and why there
-are four, the TYPEALIGN macros and typalign_to_alignby's four cases (TYPALIGN_CHAR/SHORT/INT/
-DOUBLE -> 1/ALIGNOF_SHORT/ALIGNOF_INT/ALIGNOF_DOUBLE); att_addlength_pointer's three cases
-(attlen>0, -1 varlena, -2 cstring); the 1-byte vs 4-byte varlena headers and VARATT_IS_SHORT /
-VARATT_CAN_MAKE_SHORT / SET_VARSIZE_SHORT / attispackable, including the PAD-BYTE PEEKING TRICK in
-att_align_pointer's comment ("A zero byte must be either a pad byte, or the first byte of a
-correctly aligned 4-byte length word") -- that comment is the single best thing in tupmacs.h and
-lesson 04 owns it; why short varlenas are NOT aligned at all; attlen -2 cstrings never needing
-alignment; heap_compute_data_size and the fact that it runs AFTER t_hoff is fixed, so attribute
-padding is measured from an already-MAXALIGNed base (lesson 03's Next Step 5 points the reader at
-this); column-order effects on row width as a measured experiment; atthasmissing / ADD COLUMN with
-DEFAULT as the third NULL encoding (lesson 03 named and deferred it); then TOAST -- the four
-storage strategies, the toast threshold and MaxHeapTupleSize/4, reltoastrelid and the
-pg_toast.pg_toast_<oid> naming (lesson 01 deferred the naming and reltoastrelid explicitly and
-lesson 04 owns them), varatt_external's fields, HEAP_HASEXTERNAL, and SET STORAGE PLAIN/EXTERNAL/
-EXTENDED/MAIN.
-Primary sources: src/include/access/tupmacs.h (READ THIS RUN for att_isnull only -- the align/
-addlength macro family and typalign_to_alignby were read but NOT taught and must be),
-src/include/varatt.h (NOT read yet), src/backend/access/common/heaptuple.c
-(heap_compute_data_size and fill_val's per-attribute branches were read this run; heap_deform_tuple
-and nocachegetattr were NOT), src/backend/access/common/detoast.c and
-src/backend/access/heap/heaptoast.c (NOT read), docs 66.6 and the TOAST section of 66.2,
-src/include/access/tupdesc.h for CompactAttribute (attbyval, attlen, attalignby, attispackable,
-atthasmissing) -- note master uses CompactAttribute where older trees use Form_pg_attribute, which
-is a real version difference worth stating.
-Entry point from lesson 03: lesson 03's Next Step 1 tells the reader to re-run the hexdump
-exercise on a table whose first column is text and try to find the attribute boundaries in the
-data bytes -- and says they will fail, because a varlena header is 1 or 4 bytes depending on
-length. Lesson 04 should answer exactly that, and the pad-byte peeking comment is the answer.
-Do NOT re-explain: the page header, line pointers, lp_off/lp_len packing, the 15-bit cap,
-free-space arithmetic, checksums (lesson 02); the heap tuple header's fields, the two unions,
-ItemPointerData's width or byte order, t_ctid's four meanings, the infomask/infomask2 bit
-catalogues, natts being per-tuple, BITMAPLEN, t_hoff's MAXALIGN arithmetic or its measured step
-function, the null bitmap's bit order or polarity (lesson 03). Cite lesson 03's numbers
-(23, 24, the 24/32/40 steps, 8160, 8164, 291) -- do not re-derive them. Reference both lessons by
-relative path.
-Do NOT take: FSM/VM contents (05, 06); HOT, t_ctid-as-chain, pruning, LP_REDIRECT (07); smgr's
-fsync queue and relation extension (08); visibility rules (14); hint bits (15); combo CIDs (16);
-MultiXacts (17); freezing (18).
-Lesson 04 SHOULD measure, as the first thing it does: the heap fingerprint bytes at page offsets
-16-19 and the 8160 insert ceiling, both still unverified from lesson 02. Setup recipe is in the
-LESSON 03 block above.
+-- LESSON 04 (2026-10-23) AS TAUGHT ------------------------------------------------------------
+Document: 2026/10/2026-10-23-postgres-attribute-storage-varlena-toast/README.md (single README,
+not split -- the two halves were held together by one thread, see below). Source commits read:
+master @f52d4051 AND REL_16_STABLE (varatt.h, heaptoast.h) because master has DIVERGED HARD.
+Trees so far: 01 @ddd468ca, 02 @3cde90ec, 03 @f2edf5dd, 04 @f52d4051. Keep stating the commit.
 
-NOTE-BLOCK ROTATION DUE NEXT RUN: this block now holds 01, 02 and 03 -- exactly the three the
-policy allows. When lesson 04 ships it MUST drop the LESSON 01 block, and before dropping it MUST
-add a TRACK-ARCHIVE.md row recording the commit and blob that still carry lesson 01's note.
+*** THIS RUN HAD A CLUSTER. Same recipe as lesson 03, reproduced without trouble. ***
+PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1), x86_64, gcc 13.3.0, block_size 8192,
+data_checksums OFF, default_toast_compression = pglz, pageinspect 1.12. initdb as user 'pg' into
+/var/tmp/pgdata --no-sync, pg_ctl -o '-p 5455 -k /var/tmp -c listen_addresses='. The two traps
+from lesson 03 are real and still apply (not root; not under the scratchpad path).
+
+THE UNIFYING THESIS, worth reusing: heap_compute_data_size() is BOTH the layout oracle and the
+TOAST loop's measuring stick. It decides where each attribute lands, and every one of the four
+TOAST passes is a `while (heap_compute_data_size(...) > maxDataLen)`. Layout and TOAST are one
+mechanism consulted from two directions. Later lessons may cite this framing.
+
+LESSON 02'S TWO DEBTS ARE CLOSED, both MEASURED:
+- Heap page bytes 12-19 = "1c00 e01f 0020 0420" => pd_lower 28, pd_upper 8160, pd_special 8192,
+  pd_pagesize_version 0x2004. BYTES 16-19 = "00 20 04 20" EXACTLY as lesson 02 predicted. nbtree
+  leaf = "f0 1f 04 20". Both fingerprints are now observations, not arithmetic. Use freely.
+- MaxHeapTupleSize 8160: one `text STORAGE PLAIN` column, repeat('x',n). n<=8132 OK (lp_len 8156
+  at n=8128 = 24+4+8128); n=8133..8140 ALL fail with the SAME text "row is too big: size 8168,
+  maximum size 8160", because the reported size is MAXALIGN(28+n) and is constant across those
+  eight values. 8160 and the MAXALIGN-8 granularity are now measured.
+
+TOOK, and must not be re-taught:
+- The data area starts at MAXALIGN(t_hoff), and fill_val() aligns the RAW POINTER not an offset
+  ("XXX we use the att_nominal_alignby macro on the pointer value itself ... This is a bit of a
+  hack"). That hack is sound ONLY because t_hoff is MAXALIGNed. Consequence taught: the null
+  bitmap can never disturb attribute alignment, it only moves the base by a multiple of 8.
+- THE FOUR (really six) ALIGNMENT MACROS AND WHY: two axes -- nominal vs conditional, datum vs
+  pointer. att_align_nominal / att_nominal_alignby (unconditional), att_align_datum /
+  att_datum_alignby (building, skip align if attlen==-1 && VARATT_IS_SHORT),
+  att_align_pointer / att_pointer_alignby (walking, skip align if attlen==-1 &&
+  VARATT_NOT_PAD_BYTE). The *_alignby variants are master's CompactAttribute fast path.
+  att_align_nominal's third use case carries "XXX this should be revisited, probably" about
+  unconditionally aligning varlenas inside arrays and multiranges.
+- typalign_to_alignby()'s four cases (TYPALIGN_CHAR->1, SHORT->ALIGNOF_SHORT, INT->ALIGNOF_INT,
+  DOUBLE->ALIGNOF_DOUBLE) WITH the rationale quoted: codes not real values are stored "mainly so
+  that initial catalog contents can be machine-independent".
+- att_addlength_pointer's three cases: attlen>0 -> attlen; -1 -> VARSIZE_ANY; -2 -> strlen+1, with
+  AssertMacro((attlen) == -2) proving there is no fourth.
+- COLUMN ORDER, MEASURED: (int2,int8,int2,int8,int2,int8) lp_len 72 vs (int8,int8,int8,int2,int2,
+  int2) lp_len 54 -- 18 pad bytes in a 54-byte payload. Full offset reconstruction is in the
+  document. ESTABLISHED AND REUSABLE; do not re-derive.
+- THE VARLENA BIT LAYOUT COMMENT from varatt.h, quoted whole (both endian tables). Three things
+  extracted and reusable: (1) the flag bits are in the PHYSICALLY FIRST byte in both endiannesses,
+  which is why a one-byte peek is portable; (2) a 1-byte length word can never be zero because the
+  length includes itself, hence 0x00 is unambiguously pad -- "(We now *require* pad bytes to be
+  filled with zero!)"; (3) the length ALWAYS includes the length word.
+- Header sizes, all offsetof not literals: VARHDRSZ 4 (in c.h, NOT varatt.h), VARHDRSZ_SHORT 1,
+  VARHDRSZ_EXTERNAL 2, VARHDRSZ_COMPRESSED 8, VARATT_SHORT_MAX 0x7F = 127.
+- Every VARATT_IS_* reads through `varattrib_1b` (first member a uint8) deliberately, so the
+  compiler cannot assume alignment. VARATT_NOT_PAD_BYTE is BYTE-IDENTICAL in both endian arms.
+- THE 126-BYTE BOUNDARY, derived and MEASURED. VARATT_CAN_MAKE_SHORT requires VARATT_IS_4B_U (so
+  already-short and compressed datums are excluded) and VARSIZE-4+1 <= 127 => data <= 126.
+  pg_column_size: 124->125, 125->126, 126->127, 127->131, 128->132.
+  Row-width cost of crossing it DEPENDS ON THE OFFSET: on (int,text) lp_len 155->159 (+4); on
+  (int2,text) 153->159 (+6 -- 3 for the header plus 2 pad bytes that did not exist).
+  CENTRAL FRAMING TAUGHT: a varlena's alignment is a property of its VALUE, not its column.
+- THE PAD-BYTE PEEK, fully taught (lesson 03's handover named this lesson's owner of it) with
+  att_align_pointer's comment quoted whole, plus the two-line proof: zero => cannot be a 1-byte
+  header => pad or already-aligned 4B word => aligning is safe; non-zero => cannot be pad =>
+  1-byte header or already-aligned 4B word => not aligning is safe. One comparison resolves four
+  possibilities into two safe actions. heaptuple.c's file-header comment quoted for the
+  "always zeroed / now required" history.
+- THE MEASURED PEEK PAIR, the best measurement of the lesson. pg4_peek3(a int2, b text, c text),
+  both rows a=1 b='AB' so byte-identical through offset 28:
+    row1 c='CD'           -> t_data \x0100074142074344, lp_len 32. Byte at 29 = 0x07 -> NO align.
+    row2 c=repeat('Q',127)-> t_data \x01000741420000000c020000..., lp_len 163. Byte at 29 = 0x00
+                             -> align to 32, THREE pad bytes, then 0x0000020c>>2 = 131 = 4+127.
+    lp_len 163 = 24+2+3+3+131 exactly.
+  A later lesson may cite this pair; it does not need re-deriving.
+- STORAGE PLAIN DOES NOT STOP HEADER PACKING -- MEASURED, and it is the ATT_IS_PACKABLE comment's
+  own example ("This can be verified with pageinspect"). text column, 'AB', attstorage='p':
+  lp_len 27 and t_data \x074142 (1-byte header) for BOTH create-time `STORAGE PLAIN` and
+  alter-time `SET STORAGE PLAIN`. A 4-byte header would be lp_len 30. Cause: the relation's
+  TupleDesc comes through TupleDescInitEntry(), which copies the TYPE's typstorage
+  (TYPSTORAGE_EXTENDED), not the COLUMN's attstorage. The three predicates were quoted:
+  ATT_IS_PACKABLE, VARLENA_ATT_IS_PACKABLE, COMPACT_ATTR_IS_PACKABLE.
+- attcacheoff AND THE CLIFF, from TupleDescFinalize() (master: computed ONCE there, NOT lazily in
+  nocachegetattr as in older trees). Three break conditions = three cache killers: attlen <= 0
+  (any varlena or cstring -- EVERYTHING AFTER THE FIRST VARLENA IS UNCACHED, not just that
+  column), attgenerated == ATTRIBUTE_GENERATED_VIRTUAL, off > PG_INT16_MAX. Inside the cached
+  prefix it uses att_nominal_alignby, correct precisely because the prefix has no varlenas.
+  CompactAttribute taught as the companion: 8 bytes, with "Any code changes which enlarge this
+  struct should be considered very carefully", holding attcacheoff/attlen/attbyval/attalignby
+  (a BYTE COUNT, not the attalign char code) plus four :1 flags incl. attispackable and
+  atthasmissing. Also named: firstNonCachedOffsetAttr, firstNonGuaranteedAttr.
+- atthasmissing, THE THIRD NULL ENCODING (lesson 03 named and deferred it). heap_attisnull()'s
+  first branch quoted: attnum > natts AND atthasmissing => return FALSE, i.e. a column with no
+  bytes at all reports NOT NULL. getmissingattr() taught: AttrMissing {am_present, am_value} off
+  tupleDesc->constr->missing + (attnum-1); by-value returned directly ("/* no  need to cache
+  by-value attributes */" -- double space is in the source); by-reference interned in a
+  BACKEND-LIFETIME hash table keyed {len,value} and hashed over the BYTES, so the returned pointer
+  is the only value heap_deform_tuple can produce that does not point into a tuple.
+  THE asymmetry FLAGGED, not resolved: heap_attisnull gates on atthasmissing, getmissingattr on
+  am_present. Lesson 04's Next Step 5 asks whether they can ever disagree.
+- MEASURED, atthasmissing: `add column b text default 'hello'` -> filenode UNCHANGED, natts 1,
+  lp_len 28, t_data \x01000000 (four bytes, the int, nothing else), t_infomask 2048 =
+  HEAP_XMAX_INVALID only with HEAP_HASNULL CLEAR, atthasmissing t, attmissingval {hello}, and
+  SELECT returns 'hello'. Contrast cases also measured: a VOLATILE default
+  (clock_timestamp()::text) CHANGED the filenode and reset atthasmissing to FALSE FOR EVERY
+  COLUMN (the rewrite undoes the optimisation); `add column b text` with no default leaves
+  atthasmissing false, attmissingval null, natts 1 -- i.e. lesson 03's encoding #2 unchanged.
+- ALL FOUR TOAST CONSTANTS DERIVED IN CLOSED FORM FROM MaximumBytesPerTuple(n) =
+  MAXALIGN_DOWN((BLCKSZ - MAXALIGN(SizeOfPageHeaderData + n*sizeof(ItemIdData))) / n), using only
+  lesson 01-03 constants, AND THEN MEASURED:
+    TOAST_TUPLES_PER_PAGE 4;  TOAST_TUPLE_THRESHOLD = TOAST_TUPLE_TARGET = 2032
+    TOAST_TUPLES_PER_PAGE_MAIN 1; TOAST_TUPLE_TARGET_MAIN = 8160 == MaxHeapTupleSize (NOT a
+      coincidence: "the largest tuple that will fit on a heap page" describes both)
+    EXTERN_TUPLES_PER_PAGE 4; EXTERN_TUPLE_MAX_SIZE 2032
+    TOAST_MAX_CHUNK_SIZE = 2032 - MAXALIGN(23) - sizeof(Oid) - sizeof(int32) - VARHDRSZ
+                         = 2032 - 24 - 4 - 4 - 4 = 1996
+  MEASURED: the threshold boundary is t_len > 2032 STRICTLY -- datalen 2004 (t_len 2032) stays
+  inline with 0 chunks, datalen 2005 (t_len 2033) produces 2 chunks. Chunk lengths for
+  repeat('y',10000): 1996 x5 + 20 = 10000. Chunk TUPLES: lp_len 2032 each, t_hoff 24, exactly
+  FOUR on page 0 -- i.e. EXTERN_TUPLE_MAX_SIZE and EXTERN_TUPLES_PER_PAGE both observed.
+  Chunk tuple reconstruction: 24 + 4 (chunk_id Oid) + 4 (chunk_seq int4) + 4 (varlena hdr) + 1996.
+  The header's two warnings quoted: the needs_toast_table()/LOBLKSIZE XXX, and "NB: Changing
+  TOAST_MAX_CHUNK_SIZE requires an initdb."
+- THE FOUR-PASS ALGORITHM, with heap_toast_insert_or_update()'s own enumeration comment quoted
+  verbatim, plus the hoff/maxDataLen computation ("this should match heap_form_tuple()") and
+  RelationGetToastTupleTarget(rel, TOAST_TUPLE_TARGET) - hoff. Taught: each pass is a while loop
+  re-calling heap_compute_data_size; selection is STRICTLY GREEDY biggest-first, one per
+  iteration; per-pass filters are EXTENDED (compress, pass 1), EXTENDED|EXTERNAL (externalise,
+  pass 2), MAIN (compress, pass 3), MAIN (externalise, pass 4); pass 1's "one long field and
+  several short ones" shortcut quoted; and PASS 4 REASSIGNS maxDataLen = TOAST_TUPLE_TARGET_MAIN -
+  hoff, i.e. 2008 bytes of budget for passes 1-3 and 8136 for pass 4. That single reassignment IS
+  what MAIN means.
+- toast_tuple_find_biggest_attribute()'s FLOOR: biggest_size STARTS at MAXALIGN(pointer size) =
+  MAXALIGN(18) = 24, not zero. An attribute under 24 bytes is NEVER a candidate, because a
+  pointer would not shrink the tuple.
+- varatt_external FULLY DECODED (REL_16_STABLE spelling; see divergence). 16 bytes no padding
+  "because we sometimes compare these pointers using memcmp", stored UNALIGNED so callers must
+  memcpy into a local first. Datum = VARHDRSZ_EXTERNAL(2) + 16 = 18. VARTAG_ONDISK = 18 AND THE
+  TAG EQUALLING THE SIZE IS ARCHAEOLOGY, not arithmetic -- the enum comment says the "peculiar
+  value" comes from "a previous notion that the tag field was the pointer datum's length".
+  VARLENA_EXTSIZE_BITS 30 / MASK 0x3FFFFFFF is where the documented 1 GB limit comes from, with
+  2 bits left for ToastCompressionId (PGLZ 0, LZ4 1, INVALID 2) and the header's blunt "we can
+  never have more than 4 values in this enum".
+  "IS IT COMPRESSED" IS NOT A FLAG -- VARATT_EXTERNAL_IS_COMPRESSED is a SIZE COMPARISON,
+  extsize < rawsize - VARHDRSZ, with the comment quoted. So the method bits are meaningless when
+  the sizes are equal.
+- MEASURED, the 18-byte pointer byte by byte. repeat('y',10000) in a STORAGE EXTERNAL column:
+  lp_len 42 = 24 + 18 (no alignment, 1-byte header class); t_infomask 2054 = 0x0806 =
+  XMAX_INVALID|HASEXTERNAL|HASVARWIDTH -- lesson 03 catalogued HEAP_HASEXTERNAL 0x0004 and
+  deferred it, now OBSERVED. t_data \x01121427000010270000814000007f400000 =>
+  01 (va_header, the LE "00000001" TOAST-pointer pattern) | 12 (va_tag = 18 = VARTAG_ONDISK) |
+  14270000 (va_rawsize 10004 = 10000+4) | 10270000 (va_extinfo 10000; NOT compressed because
+  10000 == 10004-4) | 81400000 (va_valueid 16513) | 7f400000 (va_toastrelid 16511).
+  BOTH OIDS CROSS-CHECKED against pg_class.reltoastrelid and the toast table's chunk_id this run.
+  TRAP MEASURED: pg_column_size() on that column returns 10000, NOT 18 -- it reports the external
+  datum's size, not the in-tuple footprint. For footprint, read lp_len.
+- THE FOUR STORAGE STRATEGIES, MEASURED SIDE BY SIDE on one table, one value repeat('ab',2500):
+  ext (e) pg_column_size 5000, externalised uncompressed, 3 chunks 1996/1996/1008;
+  extd (x) 66, COMPRESSED THEN EXTERNALISED, 1 chunk of 66;
+  main (m) 70, compressed INLINE;
+  plainc (p) 5004, untouched inline with a 4-byte header.
+  THE 66-vs-70 EXPLANATION, established and reusable: the pglz payload is 62 bytes in both.
+  Inline a compressed datum carries VARHDRSZ_COMPRESSED = 8 (length word + va_tcinfo): 8+62 = 70.
+  Externally the length word is redundant (the pointer's va_rawsize/va_extinfo carry it), so the
+  chunk stores va_tcinfo + payload: 4+62 = 66.
+  THE WHOLE TUPLE RECONSTRUCTED BYTE-EXACTLY: measured lp_len 5136 = 24 + 18 (ext ptr @24) +
+  18 (extd ptr @42) + 70 (main compressed @60) + 2 PAD (@130-131) + 5004 (plainc @132).
+  The 2 pad bytes were verified by substring: tuple offsets 126-137 = "ff 0f 02 42 00 00 30 4e
+  00 00 61 62", so 130-131 = 00 00 and the word at 132 is 0x00004e30>>2 = 5004 with low bits 00.
+  main's word at 60 is 0x0000011a, low bits 10 => compressed, >>2 = 70; its va_tcinfo = 0x1388 =
+  5000 = decompressed size, method 0; then the pglz stream "fc 61 62 61 0f 02 ff ...".
+- PASS 4 MEASURED, and it is the best MAIN demonstration available: two MAIN columns of 5120
+  INCOMPRESSIBLE bytes each (concatenated distinct md5s) -> lp_len 5168, HASEXTERNAL set, 3 chunks
+  totalling 5120, pg_column_size 5120 / 5124 -> EXACTLY ONE of the two was externalised, because
+  after that the data size 18+2+5124 = 5144 <= 8136 and pass 4 stopped. 5168 = 24+18+2+5124.
+  THE SAME DATA with default EXTENDED: lp_len 60 = 24+18+18, 6 chunks, 10240 bytes.
+  So: same bytes, one attstorage apart => a 5168-byte row with 3 chunks, or a 60-byte row with 6.
+- toast_tuple_target IS A TARGET, NOT A THRESHOLD -- MEASURED, and the single best operational
+  trap in the lesson. WITH (toast_tuple_target = 512): datalen 2004 stays at lp_len 2032, FOUR
+  TIMES the configured target, because the gate into the toaster is `t_len >
+  TOAST_TUPLE_THRESHOLD` (a compile-time 2032) and the reloption only reaches maxDataLen INSIDE
+  the function. datalen 2005 drops to lp_len 42. Lowering the target below 2032 does NOTHING;
+  raising it above 2032 works as expected.
+
+HONEST NON-RESULT, recorded deliberately: the attcacheoff cliff was NOT reproduced as a
+measurable cost. Two 400k-row tables, ten int columns and one text, text first vs text last,
+warm cache, `select sum(c10)`: late 23.9/18.0/18.3 ms, early 22.6/21.4/19.4 ms -- overlapping
+distributions. At ten columns the uncached walk is nine macro steps per row and is lost in
+per-row executor overhead. The lesson says so explicitly and tells the reader NOT to cite the
+cliff as a measured cost. Lesson 04's Next Step 2 specifies the 200-column redo with
+EXPLAIN (ANALYZE, TIMING OFF). A later lesson that wants this number must earn it.
+
+VERSION DIVERGENCE, the largest this track has hit -- a full table is in the lesson. Summary:
+master @f52d4051 renamed varatt_external -> varatt_external_oid and added varatt_external_oid8
+(20 bytes, va_valueid_lo/_hi) for 64-bit TOAST value IDs; VARTAG_ONDISK -> VARTAG_ONDISK_OID (18)
+with a new VARTAG_ONDISK_OID8 (4); VARATT_EXTERNAL_GET_EXTSIZE/GET_COMPRESS_METHOD/IS_COMPRESSED
+-> VARATT_EXTINFO_* taking a bare uint32; TOAST_MAX_CHUNK_SIZE is no longer a scalar but is
+parameterised by the TOAST table's chunk-id type (TOAST_OID_MAX_CHUNK_SIZE /
+TOAST_OID8_MAX_CHUNK_SIZE); every externally visible accessor became a static inline function
+("All of these were originally macros, accounting for the upper-case naming"); the `slow` flag in
+heap_deform_tuple/nocachegetattr is GONE, replaced by firstNonCachedOffsetAttr and
+first_null_attr(); attcacheoff moved from lazy fill-in to TupleDescFinalize(); TOAST_INDEX_HACK
+lives in access/common/indextuple.c, not heaptoast.*. IDENTICAL in both trees: the bit layouts,
+VARHDRSZ_*, VARATT_SHORT_MAX, VARLENA_EXTSIZE_BITS, the endian internals, the four-pass algorithm
+and the MaximumBytesPerTuple derivation. EVERY MEASURED NUMBER IS PG 16.
+
+NO SYLLABUS REVISION THIS RUN. Lesson 03 had already retitled 04 to drop the null bitmap and add
+atthasmissing; that title was taught as written, in full, and nothing was left over.
+
+Throwaway tables left by this run (cluster does not persist; names listed only to avoid collisions
+within a future run): pg4_fp, pg4_ceil, pg4_bad, pg4_good, pg4_var, pg4_var2, pg4_peek, pg4_peek2,
+pg4_peek3, pg4_plain, pg4_plain2, pg4_miss, pg4_miss2, pg4_toast, pg4_t2, pg4_strat, pg4_main,
+pg4_main2, pg4_ext2, pg4_ttt, pg4_late, pg4_early. Keep the pgNN_ prefix convention.
+
+-- HANDOVER TO LESSON 05 -----------------------------------------------------------------------
+Scope for lesson 05, "The Free Space Map: the FSM tree pages and how a page with room is found".
+Lesson 04 answered "how big is this tuple"; lesson 05 answers "which page does a tuple of that
+size go to". That is the handoff, and it is clean.
+Take: src/backend/storage/freespace/README (THE primary source, not yet read in this track);
+freespace.c and fsm_internals.h; the FSM's THREE-LEVEL tree of pages and the binary max-heap
+INSIDE each page (SlotsPerFSMPage, FSM_TREE_DEPTH, FSM_ROOT_LEVEL, FSM_BOTTOM_LEVEL,
+FSM_CATEGORIES and the 32-byte granularity -- a category is one byte, so free space is tracked to
+BLCKSZ/256 = 32 bytes, NOT exactly); fsm_space_avail_to_cat / fsm_space_cat_to_avail and the
+deliberate ROUNDING DOWN; GetPageWithFreeSpace / RecordAndGetPageWithFreeSpace /
+RecordPageWithFreeSpace; the FSM_LOCAL_MAP / local in-memory map for relations too small to have
+an FSM fork at all (HEAP_FSM_CREATION_THRESHOLD = 4 pages, and WHY -- an FSM fork for a 1-page
+table costs 3 pages); the fact that THE FSM IS NOT WAL-LOGGED and is therefore allowed to be
+wrong, with the "it's just a hint" rationale and how VACUUM repairs it; fsm_page_contents() from
+pageinspect as the observation tool; and the connection to lesson 02's FOUR free-space functions,
+especially PageGetHeapFreeSpace returning 0 at the 291-tuple ceiling -- that is the number the FSM
+is NOT aware of, which is a real trap worth measuring.
+MEASURE IT. The cluster recipe works and is in this block. Good candidates: hexdump an FSM page
+and decode the max-heap by hand; show the 32-byte category granularity by inserting tuples whose
+sizes differ by less than 32 bytes and watching the FSM not notice; demonstrate the
+HEAP_FSM_CREATION_THRESHOLD by checking pg_relation_size(rel,'fsm') as a table grows past 4 pages;
+and find a case where the FSM hands back a page that PageGetHeapFreeSpace says is full.
+Lesson 04's Next Step 4 tells the reader to read toast_fetch_datum() before lesson 05 -- lesson 05
+does NOT own the TOAST read path and should not take it, but may reference it.
+Do NOT re-explain: the page header, line pointers, lp_off/lp_len, the 15-bit cap, the four
+free-space functions, checksums (02); the tuple header's fields, t_ctid, the infomask catalogues,
+natts-per-tuple, BITMAPLEN, t_hoff arithmetic, the null bitmap's order or polarity (03); the
+alignment macro family, typalign_to_alignby, the varlena bit layouts, the 126-byte boundary, the
+pad-byte peek, attcacheoff/CompactAttribute, atthasmissing, or ANY of TOAST -- thresholds, chunk
+size, the four passes, varatt_external, the four storage strategies (04).
+Cite without re-deriving: 8192, 131072, 8160, 8164, 291, 24, 23, 2032, 1996, 8136, 126, 18, and
+the heap page fingerprint "00 20 04 20" at page offsets 16-19 (now MEASURED, lesson 04).
+Do NOT take: the Visibility Map and PD_ALL_VISIBLE (06, which still owns them entirely); HOT,
+pruning, LP_REDIRECT, pd_prune_xid (07); smgr's fsync queue, relation extension locking,
+mdzeroextend/FileFallocate, fd.c's virtual FDs (08); the buffer manager (09); visibility rules
+(14); hint bits (15); combo CIDs (16); MultiXacts (17); freezing (18); VACUUM's two heap passes
+and the dead-TID store (19).
+
+NOTE-BLOCK ROTATION DONE THIS RUN: lesson 01's note was dropped and TRACK-ARCHIVE.md gained the
+row "PG 01" pointing at commit 2fd269184b17e59f9091b82cb8934672fd32c8f7 / blob
+1feb2d21947ee646bf23f350c8ac84424fe87251, which is the last state of TRACK.md carrying it. This
+block now holds 02, 03 and 04 -- exactly the three the policy allows. WHEN LESSON 05 SHIPS IT MUST
+DROP THE LESSON 02 BLOCK, and before dropping it MUST add its TRACK-ARCHIVE.md row first.
 
 Known environment facts for a fresh session (verify, do not assume):
 - Block size 8 KB and segment size 1 GB are compile-time (BLCKSZ, RELSEG_SIZE) and exposed as the
@@ -452,17 +609,17 @@ Known environment facts for a fresh session (verify, do not assume):
   heap_tuple_infomask_flags, tuple_data_split, bt_page_items, bt_metap, fsm_page_contents). All
   of it is SUPERUSER-ONLY. pg_freespacemap and pg_visibility cover lessons 05 and 06.
   Lesson 01's hands-on installs all three; lesson 02's hands-on needs only pageinspect.
-- CONFIRMED 2026-10-22: the cloud sandbox CAN run a cluster. psql, pg_config and
-  /usr/lib/postgresql/16/bin/{initdb,postgres,pg_ctl,...} are in the image (PostgreSQL 16.15 on
-  Ubuntu 24.04), and pageinspect, pg_freespacemap, pg_visibility, pgstattuple and amcheck are all
-  present in /usr/share/postgresql/16/extension/. Recipe that worked: create a non-root user,
+- CONFIRMED 2026-10-22 AND AGAIN 2026-10-23: the cloud sandbox CAN run a cluster. psql, pg_config
+  and /usr/lib/postgresql/16/bin/{initdb,postgres,pg_ctl,...} are in the image (PostgreSQL 16.15
+  on Ubuntu 24.04), and pageinspect, pg_freespacemap, pg_visibility, pgstattuple and amcheck are
+  all present in /usr/share/postgresql/16/extension/. Recipe that worked: create a non-root user,
   initdb -D /var/tmp/pgdata --no-sync as that user, pg_ctl with -o '-p 5455 -k /var/tmp'. TWO
   TRAPS: initdb refuses to run as root, and it refuses a data directory under the scratchpad path
   (permission denied) -- /var/tmp works. Every lesson from here on SHOULD measure; say so when it
   cannot. The cluster is per-run and does not persist, so table names from earlier runs are gone.
 - Table names used so far, for avoiding collisions within a run: seg_demo (01), pg2_fill /
-  pg2_big (02), pg3_fixed / pg3_null / pg3_upd / pg3_alter / pg3_cid / pg3_empty / pg3_blk /
-  w8 / w9 / w16 / w72 / w73 (03). Keep the pgNN_ prefix convention.
+  pg2_big (02), pg3_* and w8 / w9 / w16 / w72 / w73 (03), pg4_* (04 — the full list is in the
+  lesson 04 note above). Keep the pgNN_ prefix convention.
 - pg_buffercache is needed from lesson 09; pgstattuple for lessons 07 and 19; amcheck for
   lessons 28-29 (it is the closest thing PostgreSQL has to SQLite's integrity_check, and the
   comparison is worth making explicitly when lesson 28 arrives).
