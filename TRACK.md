@@ -3,15 +3,15 @@ track-state
 subject: PostgreSQL
 started: 2026-10-19
 lessons-total: 35
-lessons-done: 4
+lessons-done: 5
 -->
 
 # Current Track: PostgreSQL Internals
 
 Sequential deep dive. One lesson per day, each building on the last.
 
-**STATUS: in progress — lesson 04 shipped 2026-10-23.** The syllabus was written on 2026-10-19, the
-day the SQLite track's capstone shipped. The next run takes **lesson 05**.
+**STATUS: in progress — lesson 05 shipped 2026-10-24.** The syllabus was written on 2026-10-19, the
+day the SQLite track's capstone shipped. The next run takes **lesson 06**.
 
 The order follows PostgreSQL's actual source layout rather than a textbook outline. It was built
 from two pieces of primary evidence read on 2026-10-19: the chapter list of
@@ -50,7 +50,7 @@ readable as the other answer to a question SQLite already answered.
 - [x] 02 — The page: `PageHeaderData`'s 24 bytes, `pd_lower`/`pd_upper`, the line pointer array, and special space
 - [x] 03 — `HeapTupleHeaderData`: `t_xmin`, `t_xmax`, `t_ctid`, `t_infomask`/`t_infomask2`, and `t_hoff`
 - [x] 04 — Attribute storage: MAXALIGN padding between attributes, 1-byte vs 4-byte varlena headers, `atthasmissing`, and TOAST
-- [ ] 05 — The Free Space Map: the FSM tree pages and how a page with room is found
+- [x] 05 — The Free Space Map: the FSM tree pages and how a page with room is found
 - [ ] 06 — The Visibility Map: `PD_ALL_VISIBLE`, all-frozen, and the index-only scan it enables
 - [ ] 07 — HOT updates and page pruning: redirect line pointers, `heap_page_prune()`, and the HOT chain
 - [ ] 08 — `smgr` and `md.c`: relation extension, the segment map, and the fsync request queue
@@ -112,118 +112,6 @@ The SQLite track's lessons 31-33 notes were archived on that run; see TRACK-ARCH
 "31 - 33". The capstone document (2026/10/2026-10-19-sqlite-capstone/README.md) closes the track
 and records which items were deliberately left unread. None of these carry forward into the
 PostgreSQL track. Do not hand them to a PostgreSQL lesson.
-
--- LESSON 02 (2026-10-21) AS TAUGHT ------------------------------------------------------------
-Document: 2026/10/2026-10-21-postgres-page-header-line-pointers/README.md (single README, not
-split). Source commit read: postgres/postgres@3cde90ec. Lesson 01 read @ddd468ca; the tree moved
-again between the two runs, which lesson 02 states explicitly in its preamble. Keep doing that.
-
-TOOK, and must not be re-taught:
-- PageHeaderData BY BYTE OFFSET: 0 pd_lsn (8), 8 pd_checksum (2), 10 pd_flags (2), 12 pd_lower (2),
-  14 pd_upper (2), 16 pd_special (2), 18 pd_pagesize_version (2), 20 pd_prune_xid (4), 24 pd_linp[].
-  SizeOfPageHeaderData = offsetof(PageHeaderData, pd_linp) = 24 and NOT sizeof, with the
-  "line pointer(s) do not count as part of header" comment. MAXALIGN(24) = 24 so no padding
-  precedes pd_linp; PageGetContents() still MAXALIGNs and carries the pre-8.3 warning.
-- THE FINGERPRINT, established and reusable: bytes 16-19 little-endian identify the access method
-  and build. Heap (and sequences, TOAST) = "00 20 04 20" (pd_special 8192, pd_pagesize_version
-  0x2004). nbtree = "f0 1f 04 20" (pd_special 8176). A freshly PageInit'ed 8 KB heap page reads
-  "18 00 00 20 00 20 04 20" at offsets 12-19. Later lessons may use this without re-deriving it.
-- pd_pagesize_version packs size in the high 8 bits and version in the low 8; works only because
-  page sizes are constrained to multiples of 256; PG_PAGE_LAYOUT_VERSION = 4 since 8.3;
-  PageSetPageSizeAndVersion ASSERTS rather than masks; the size is only a cross-check, docs say
-  "no support for having more than one page size in an installation".
-- pd_lsn: PageXLogRecPtr is now one uint64 but the accessors swap 32-bit halves on little-endian
-  "for historical reasons". CONSEQUENCE TAUGHT: on LE machines bytes 0-3 are the HIGH half and
-  bytes 4-7 the LOW half, each LE, so a hexdump reads in the same order as the printed X/Y form.
-- pd_flags: PD_HAS_FREE_LINES 0x0001, PD_PAGE_FULL 0x0002, PD_ALL_VISIBLE 0x0004,
-  PD_VALID_FLAG_BITS 0x0007. First two are hints and PD_HAS_FREE_LINES is NOT WAL-logged.
-  PageIsVerified rejects any undefined bit, so a fourth flag is a compatibility boundary.
-  PD_ALL_VISIBLE was NAMED AND DEFERRED to lesson 06 -- lesson 06 still owns it entirely.
-- pd_prune_xid: PageSetPrunable only ever lowers it (TransactionIdPrecedes); it is a minimum;
-  "currently unused in index pages". Named and DEFERRED to lesson 07.
-- ItemIdData {lp_off:15, lp_flags:2, lp_len:15} = 4 bytes. THIS IS WHY BLCKSZ CAPS AT 32768 --
-  stated twice in bufpage.h (the LocationIndex comment and "we can only support pages up to 32KB").
-  Lesson 01 deferred this; it is now closed. Hand-decode on LE gcc/clang:
-  lp_off = u & 0x7FFF, lp_flags = (u>>15)&3, lp_len = (u>>17)&0x7FFF -- taught WITH the caveat
-  that C bitfield order is implementation-defined and that this is why heap_page_items() exists.
-- The four lp_flags states and the itemid.h convention "lp_len == 0 in every line pointer that
-  does not have storage, independently of its lp_flags state". LP_UNUSED 0 / LP_NORMAL 1 /
-  LP_REDIRECT 2 / LP_DEAD 3. LP_REDIRECT reuses lp_off as an OFFSET NUMBER (ItemIdGetRedirect is
-  an alias of ItemIdGetOffset) -- named and DEFERRED to lesson 07, which owns HOT chains.
-  ItemIdHasStorage (lp_len != 0) vs ItemIdIsUsed (lp_flags != LP_UNUSED) are different questions.
-  ItemIdSetDead clears storage, ItemIdMarkDead keeps it and carries the "used as if it were a
-  hint-bit mechanism ... multiple processors in parallel" comment.
-- Offset numbers are 1-based; PageGetItemId subtracts one. The item count is NOT STORED:
-  PageGetMaxOffsetNumber = (pd_lower - SizeOfPageHeaderData) / sizeof(ItemIdData). Framed as the
-  deliberate removal of SQLite's redundant cell count, and therefore of a cross-check.
-- PageInit: MemSets the WHOLE page, sets pd_lower = 24, pd_upper = pd_special = pageSize -
-  MAXALIGN(specialSize), sets size|version, and deliberately does NOT compute a checksum.
-  PageIsNew is pd_upper == 0; PageIsEmpty is pd_lower <= 24. Different questions.
-- PageAddItemExtended: the four-way pointer sanity check as ereport(PANIC); the
-  "!!! EREPORT(ERROR) IS DISALLOWED HERE !!!" banner (critical section); first-fit scan from
-  FirstOffsetNumber *in order to help PageTruncateLinePointerArray*, which can only reclaim a
-  contiguous unused run at the array tail; the hint-is-wrong-so-clear-it path; three WARNING
-  refusals ("will not overwrite a used ItemId", "specified item offset is too large", "can't put
-  more than MaxHeapTuplesPerPage items in a heap page"); and the SILENT InvalidOffsetNumber when
-  lower > upper, because no-room is an expected outcome. Signed-int arithmetic everywhere, with
-  the stated reason.
-- THE 8160 vs 8164 DERIVATION, established and reusable: MaxHeapTupleSize = BLCKSZ -
-  MAXALIGN(SizeOfPageHeaderData + sizeof(ItemIdData)) = 8192 - 32 = 8160. PageGetFreeSpace on a
-  fresh heap page = 8192 - 24 - 4 = 8164. Insert needs MAXALIGN(size) <= 8164, and the largest
-  multiple of 8 that satisfies that is 8160 -- so the two numbers differ by 4 purely because of
-  MAXALIGN. MaxHeapTuplesPerPage = (8192 - 24) / (MAXALIGN(23) + 4) = 8168/28 = 291, where
-  SizeofHeapTupleHeader = offsetof(HeapTupleHeaderData, t_bits) = 23 (lesson 03 owns the struct).
-- The four free-space functions and why there are four: PageGetExactFreeSpace (raw hole),
-  PageGetFreeSpace (minus one ItemIdData, for INDEX pages), PageGetFreeSpaceForMultipleTuples,
-  PageGetHeapFreeSpace (returns 0 at the 291 ceiling, because LP_REDIRECT/LP_DEAD slots cost 4
-  bytes and zero item space; it exists to protect MaxHeapTuplesPerPage-sized stack arrays such as
-  PageRepairFragmentation's itemidbase[]).
-- compactify_tuples' two modes: presorted => plain memmove toward the page end, with a skip of the
-  already-correct suffix; not presorted => temp buffer, because moving in place could overwrite an
-  unmoved tuple, and the copy-back RESTORES the presorted property for next time.
-  PageRepairFragmentation detects presortedness while building itemidbase and uses ereport(ERROR)
-  (not PANIC) with the "clobber adjacent disk buffers, spreading the data loss further" rationale.
-- CHECKSUMS, fully taught: modified FNV-1a, hash = (hash^value)*FNV_PRIME ^ ((hash^value)>>17),
-  FNV_PRIME 16777619, shift 17 chosen for no common denominator with FNV_PRIME's set bits;
-  N_SUMS = 32 columns of 32-bit words each with its own random base offset from
-  checksumBaseOffsets[], 32 chosen as the largest state fitting x86 SSE registers and FIXED
-  because changing it changes the result; two extra rounds with value 0; xor-fold to 32 bits;
-  then checksum ^= blkno (transposed-page detection) and (checksum % 65535) + 1 so it is never 0.
-  pg_checksum_page transiently zeroes pd_checksum and restores it.
-- CHECKSUM VALIDITY WINDOW, the central operational fact: valid ONLY on disk. Set by
-  PageSetChecksum immediately before flush, verified by PageIsVerified immediately after read.
-  "many or even most pages in shared buffers have invalid page checksums". No flag bit says
-  whether it is valid -- a deliberate choice to avoid trusting page contents to decide whether to
-  verify them. WAL CRC (32-bit) and page checksum (16-bit) are SEPARATE domains; full-page images
-  may carry invalid checksums and replay must not test them. The checksum COVERS THE ZERO HOLE,
-  which is what PageInit's full-page MemSet buys; FPIs skip the hole and re-zero it on reapply.
-- Hint bits + checksums + full_page_writes => MarkBufferDirtyHint must emit a full page image, so
-  one bit can cost 8 KB of WAL; during recovery no new WAL can be written, so a standby cannot
-  dirty a clean page to set a hint bit. NAMED AND DEFERRED to lesson 15, which owns hint bits.
-- PageIsVerified's five header conditions (pd_flags has no undefined bits, lower <= upper <=
-  special <= BLCKSZ, pd_special == MAXALIGN(pd_special)) with the honest comment that they
-  "don't prove the header is correct"; the all-zero page passes BY DESIGN (extend-then-crash,
-  tied back to lesson 01); the all-zeroes test runs AFTER the checksum test so no WARNING fires
-  for a legitimately new page; ignore_checksum_failure works only when header_sane; the exact
-  log line "page verification failed, calculated checksum %u but expected %u".
-- BTPageOpaqueData's five fields (btpo_prev, btpo_next, btpo_level, btpo_flags, btpo_cycleid),
-  BTCycleId = uint16, total 16 bytes already MAXALIGNed, reached via BTPageGetOpaque ->
-  PageGetSpecialPointer. Taught ONLY as evidence that pd_special points where it says.
-  Lessons 28-29 still own nbtree entirely; do not treat the struct as introduced.
-
-VERSION DIVERGENCE, flagged in the lesson and worth carrying: at @3cde90ec (master) bufpage.c
-calls DataChecksumsNeedVerify()/DataChecksumsNeedWrite() -- predicates, not a bool -- and wraps
-verification in HOLD_INTERRUPTS() because the checksum state can change at runtime; and
-storage/page/README names pg_enable_data_checksums()/pg_disable_data_checksums(). The PG 18 docs
-describe enable/disable as OFFLINE via pg_checksums with data_checksums read-only, and note that
-PG 18 turns checksums ON BY DEFAULT at initdb. The lesson claims the runtime functions exist only
-in the tree read, not in any released version. Later lessons touching checksums should re-check.
-
-MEASUREMENTS: again NOT executed -- this run had no PostgreSQL cluster either. Every figure in
-lesson 02 (the byte signatures, 8160, 8164, 291, 8176, 24) is arithmetic over constants read this
-run, and the document says so in a "Not measured" note above its Takeaways. Part I is now TWO
-lessons deep with zero observed numbers. The first lesson that can run a cluster should verify
-the fingerprint bytes and the 8160 ceiling first, because everything later in Part I leans on them.
 
 -- LESSON 03 (2026-10-22) AS TAUGHT ------------------------------------------------------------
 Document: 2026/10/2026-10-22-postgres-heap-tuple-header/README.md (single README, not split).
@@ -558,71 +446,256 @@ within a future run): pg4_fp, pg4_ceil, pg4_bad, pg4_good, pg4_var, pg4_var2, pg
 pg4_peek3, pg4_plain, pg4_plain2, pg4_miss, pg4_miss2, pg4_toast, pg4_t2, pg4_strat, pg4_main,
 pg4_main2, pg4_ext2, pg4_ttt, pg4_late, pg4_early. Keep the pgNN_ prefix convention.
 
--- HANDOVER TO LESSON 05 -----------------------------------------------------------------------
-Scope for lesson 05, "The Free Space Map: the FSM tree pages and how a page with room is found".
-Lesson 04 answered "how big is this tuple"; lesson 05 answers "which page does a tuple of that
-size go to". That is the handoff, and it is clean.
-Take: src/backend/storage/freespace/README (THE primary source, not yet read in this track);
-freespace.c and fsm_internals.h; the FSM's THREE-LEVEL tree of pages and the binary max-heap
-INSIDE each page (SlotsPerFSMPage, FSM_TREE_DEPTH, FSM_ROOT_LEVEL, FSM_BOTTOM_LEVEL,
-FSM_CATEGORIES and the 32-byte granularity -- a category is one byte, so free space is tracked to
-BLCKSZ/256 = 32 bytes, NOT exactly); fsm_space_avail_to_cat / fsm_space_cat_to_avail and the
-deliberate ROUNDING DOWN; GetPageWithFreeSpace / RecordAndGetPageWithFreeSpace /
-RecordPageWithFreeSpace; the FSM_LOCAL_MAP / local in-memory map for relations too small to have
-an FSM fork at all (HEAP_FSM_CREATION_THRESHOLD = 4 pages, and WHY -- an FSM fork for a 1-page
-table costs 3 pages); the fact that THE FSM IS NOT WAL-LOGGED and is therefore allowed to be
-wrong, with the "it's just a hint" rationale and how VACUUM repairs it; fsm_page_contents() from
-pageinspect as the observation tool; and the connection to lesson 02's FOUR free-space functions,
-especially PageGetHeapFreeSpace returning 0 at the 291-tuple ceiling -- that is the number the FSM
-is NOT aware of, which is a real trap worth measuring.
-MEASURE IT. The cluster recipe works and is in this block. Good candidates: hexdump an FSM page
-and decode the max-heap by hand; show the 32-byte category granularity by inserting tuples whose
-sizes differ by less than 32 bytes and watching the FSM not notice; demonstrate the
-HEAP_FSM_CREATION_THRESHOLD by checking pg_relation_size(rel,'fsm') as a table grows past 4 pages;
-and find a case where the FSM hands back a page that PageGetHeapFreeSpace says is full.
-Lesson 04's Next Step 4 tells the reader to read toast_fetch_datum() before lesson 05 -- lesson 05
-does NOT own the TOAST read path and should not take it, but may reference it.
-Do NOT re-explain: the page header, line pointers, lp_off/lp_len, the 15-bit cap, the four
-free-space functions, checksums (02); the tuple header's fields, t_ctid, the infomask catalogues,
-natts-per-tuple, BITMAPLEN, t_hoff arithmetic, the null bitmap's order or polarity (03); the
-alignment macro family, typalign_to_alignby, the varlena bit layouts, the 126-byte boundary, the
-pad-byte peek, attcacheoff/CompactAttribute, atthasmissing, or ANY of TOAST -- thresholds, chunk
-size, the four passes, varatt_external, the four storage strategies (04).
-Cite without re-deriving: 8192, 131072, 8160, 8164, 291, 24, 23, 2032, 1996, 8136, 126, 18, and
-the heap page fingerprint "00 20 04 20" at page offsets 16-19 (now MEASURED, lesson 04).
-Do NOT take: the Visibility Map and PD_ALL_VISIBLE (06, which still owns them entirely); HOT,
-pruning, LP_REDIRECT, pd_prune_xid (07); smgr's fsync queue, relation extension locking,
-mdzeroextend/FileFallocate, fd.c's virtual FDs (08); the buffer manager (09); visibility rules
-(14); hint bits (15); combo CIDs (16); MultiXacts (17); freezing (18); VACUUM's two heap passes
-and the dead-TID store (19).
+-- LESSON 05 (2026-10-24) AS TAUGHT ------------------------------------------------------------
+Document: 2026/10/2026-10-24-postgres-free-space-map/README.md (single README, not split -- one
+mechanism, no sub-topic deserved its own file). Source commit read: postgres/postgres@126976a8
+(master) PLUS REL_16_STABLE for src/include/storage/freespace.h. Trees so far: 01 @ddd468ca,
+02 @3cde90ec, 03 @f2edf5dd, 04 @f52d4051, 05 @126976a8. Keep stating the commit.
+Files read IN FULL: storage/freespace/README, fsmpage.c, freespace.c, storage/fsm_internals.h,
+storage/freespace.h.
 
-NOTE-BLOCK ROTATION DONE THIS RUN: lesson 01's note was dropped and TRACK-ARCHIVE.md gained the
-row "PG 01" pointing at commit 2fd269184b17e59f9091b82cb8934672fd32c8f7 / blob
-1feb2d21947ee646bf23f350c8ac84424fe87251, which is the last state of TRACK.md carrying it. This
-block now holds 02, 03 and 04 -- exactly the three the policy allows. WHEN LESSON 05 SHIPS IT MUST
-DROP THE LESSON 02 BLOCK, and before dropping it MUST add its TRACK-ARCHIVE.md row first.
+*** THIS RUN HAD A CLUSTER, and EVERY number in the lesson is measured. Same recipe as 03/04. ***
+PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1), x86_64, gcc 13.3.0, block_size 8192,
+data_checksums off, pageinspect 1.12, pg_freespacemap 1.2, pgstattuple 1.5. The two traps still
+apply (initdb not as root; data dir not under the scratchpad path -- /var/tmp works).
+
+*** CORRECTION TO LESSON 04'S HANDOVER, important: HEAP_FSM_CREATION_THRESHOLD AND FSM_LOCAL_MAP
+DO NOT EXIST. *** Not in master @126976a8, not in REL_16_STABLE (freespace.h is byte-identical
+between the two branches), and a repo-wide code search returns zero hits. The feature was
+b0eaa4c51b "Avoid creation of the free space map for small heap relations" and it was REVERTED
+WHOLESALE by 7db0cde6b58eef2ba0c70437324cbc7622230320 on 2019-05-07 along with six follow-ups
+(06c8a5090e, 13e8643bfc, 6f918159a9, 9c32e4c350, 29d108cdec, 08ecdfe7e5). The revert message says
+the process-local map "was reset whenever a block with enough free space was found" and that a
+per-relation relcache map would be better; that redesign was never landed. SO NO RELEASED
+POSTGRESQL HAS A SMALL-TABLE FSM EXEMPTION. Measured confirmation: the FSM fork appears at TWO
+heap pages, not five. Do not propagate the 4-page threshold claim.
+
+TOOK, and must not be re-taught:
+- THE CATEGORY. FSM_CATEGORIES 256, FSM_CAT_STEP = BLCKSZ/256 = 32, MaxFSMRequestSize =
+  MaxHeapTupleSize = 8160. fsm_space_avail_to_cat FLOORS (and clamps to 254 below 8160, returning
+  255 only at >= 8160); fsm_space_needed_to_cat CEILS ((needed+31)/32) and returns 1 for needed==0;
+  fsm_space_cat_to_avail(255) = 8160 exactly, else cat*32. The reason 255 is reserved is quoted
+  from the header: otherwise a page with exactly MaxFSMRequestSize free would not satisfy a
+  request for MaxFSMRequestSize. needed > 8160 is an elog(ERROR) "invalid FSM request size", and
+  it is UNREACHABLE from SQL because lesson 04's "row is too big" fires first.
+- A STALE COMMENT, flagged and resolved by measurement: freespace.c's worked example says
+  "MaxFSMRequestSize is 8164 bytes" and tabulates 8164-8192 as category 255. The code says 8160.
+  MEASURED: pg_freespace on the emptiest possible heap page returns 8160. The comment's example is
+  4 bytes wrong (8164 is lesson 02's PageGetFreeSpace on a fresh page). Lesson 05's Next Step 6
+  asks whether it was ever true -- a git log question, not yet answered.
+- THE ON-PAGE STRUCTURE, derived and then MEASURED. FSMPageData { int fp_next_slot; uint8
+  fp_nodes[] }, offsetof(fp_nodes) = 4. NodesPerPage = 8192 - MAXALIGN(24) - 4 = 8164.
+  NonLeafNodesPerPage = BLCKSZ/2 - 1 = 4095 = 2^12 - 1. LeafNodesPerPage = SlotsPerFSMPage =
+  8164 - 4095 = 4069. The non-leaf count is a round power of two minus one and the leaf count is
+  the RAGGED REMAINDER -- which is why SlotsPerFSMPage is not a power of two, why 4096-4069 = 27
+  leaf positions do not exist on the page, and why the README says "a few right-most leaf nodes
+  are missing". One bottom FSM page covers 4069 heap blocks = 31.79 MiB of heap.
+- BYTE OFFSETS, ESTABLISHED AND MEASURED, reusable without re-deriving: PageGetContents = page+24,
+  so fp_next_slot is at page offset 24 (int32 LE), fp_nodes[0] (the page root) at offset 28, and
+  LEAF SLOT k AT OFFSET 4123 + k. Node 8163 lands on byte 8191 -- the array exactly fills the page.
+  MEASURED: get_byte(...,28) = get_byte(...,4123) = 12 on a page whose pg_freespace avail was 384
+  = 12*32; bytes 24..31 = "00000000 0c 0c 00 0c" decoded field by field against fsm_page_contents.
+- THE TREE OF PAGES. FSM_TREE_DEPTH = ((SlotsPerFSMPage >= 1626) ? 3 : 4) = 3; FSM_ROOT_LEVEL 2,
+  FSM_BOTTOM_LEVEL 0; constant height by design. 4069^3 = 67,369,460,509 >> 2^32-1. Logical
+  addressing {level, logpageno} + slot; fsm_get_location = heapblk/4069, heapblk%4069;
+  fsm_get_parent/fsm_get_child divide and multiply by SlotsPerFSMPage.
+- fsm_logical_to_physical FULLY EVALUATED AND MEASURED. root {2,0} -> block 0; {1,0} -> 1;
+  {0,0} -> 2; {0,1} -> 3; {0,4068} -> 4070; {1,1} -> 4071; {0,4069} -> 4072. THE FORK IS NOT
+  LEVEL-MAJOR: upper-level pages are interleaved into the stream where they become necessary.
+  CONSEQUENCE, MEASURED: the minimum FSM fork is THREE BLOCKS = 24576 bytes, because the bottom
+  page cannot be block 0. Observed: 1 heap page -> fsm 0 bytes; 2..4069 heap pages -> 24576;
+  4071 heap pages -> 32768, and the level-1 page (block 1) gains its second populated leaf
+  (node 4096). SlotsPerFSMPage = 4069 is now an OBSERVATION.
+- fsm_set_avail: bubble up via parentof, stop as soon as a parent's recomputed max is unchanged;
+  the no-op fast path has TWO conditions (oldvalue == value AND value <= fp_nodes[0]) because an
+  equal leaf under a too-low root must still proceed so the trailing sanity check fires; and that
+  check (value > fp_nodes[0] -> fsm_rebuild_page) is self-correcting measure #1.
+- fsm_search_avail: the EXPANDING SEARCH TRIANGLE. Root byte < minvalue -> return -1 (one unlocked
+  byte answers "nothing anywhere"). Start at fp_next_slot, ALWAYS clamped. Loop
+  parentof(rightneighbor(nodeno)); rightneighbor detects stepping onto a level's leftmost node
+  (2^level - 1) with ((x+1) & x) == 0 and corrects with parentof. Triangle doubles each step =>
+  log2(N). Result is THE FIRST SUITABLE SLOT AT OR RIGHT OF fp_next_slot WITH WRAPAROUND, not the
+  leftmost. Descent prefers the left child; if neither child qualifies the page is TORN ->
+  DEBUG1 "fixing corrupt FSM block %u, relation %u/%u/%u", upgrade to exclusive, fsm_rebuild_page,
+  MarkBufferDirtyHint, goto restart (self-correcting measure #2).
+- fp_next_slot IS WRITTEN UNDER A SHARED LOCK, deliberately. Typed int not uint16 because "int is
+  more likely to be atomically fetchable/storable"; README: "fp_next_slot is just a hint and we can
+  easily reset it if it gets corrupted". MEASURED: after a search returning slot 0 at the bottom
+  level, bytes 24..27 = 01000000 -> fp_next_slot = 1, i.e. advancenext. fsm_search passes
+  advancenext = (addr.level == FSM_BOTTOM_LEVEL), so only leaf pages advance.
+  NOTE for master: this is now gated on BufferBeginSetHintBits()/BufferFinishSetHintBits() in
+  @126976a8, which PG 16 does not have. Flagged in the lesson's divergence note.
+- NOT WAL-LOGGED, and master's README argues the nuance HARD -- four new paragraphs. Writes use
+  MarkBufferDirtyHint(), reads use RBM_ZERO_ON_ERROR, so a bad FSM page becomes "nothing free",
+  which costs space not correctness. BUT the README insists RelationCopyStorage() (ALTER TABLE SET
+  TABLESPACE), RelationCopyStorageUsingBuffer() (CREATE DATABASE STRATEGY = wal_log), base backups
+  and pg_checksums ALL verify checksums on *_fsm files, so the hint-bit FPIs are load-bearing and
+  must not be downgraded to MarkBufferDirty(). Quote it if a later lesson claims the FSM is
+  simply unchecked. (Lesson 24/25 may want this when FPIs come up.)
+- fsm_does_block_exist: cached smgr_cached_nblocks[MAIN_FORKNUM] fast path, else
+  RelationGetNumberOfBlocks -- the comment admits the lseek() cost and says the alternative "would
+  cause FSM to set zero space available for blocks that main fork extension just recorded". A hit
+  past the end zeroes the slot and RESTARTS FROM THE ROOT, with the comment calling advancenext
+  "pessimal for this rare scenario". fsm_search has an emergency valve: restarts > 10000 ->
+  InvalidBlockNumber, "Looping indefinitely is nevertheless scary".
+- AN FSM PAGE IS AN "EMPTY" PAGE TO bufpage.c -- MEASURED. PageInit(page, BLCKSZ, 0): pd_lower 24
+  forever, pd_upper = pd_special = 8192, so PageIsEmpty() is ALWAYS true, PageGetExactFreeSpace()
+  is ALWAYS 8168, and lesson 02's four free-space functions are meaningless on this fork. The whole
+  payload lives in lesson 02's HOLE, which is why PageInit's full-page MemSet and the checksum's
+  coverage of the hole matter here.
+- THE FINGERPRINT DOES NOT IDENTIFY THE FORK -- MEASURED, and it corrects a tempting misreading of
+  lessons 02/04. FSM page bytes 12-19 = "1800 0020 0020 0420"; heap page = "2800 c001 0020 0420".
+  BYTES 16-19 ARE "00 20 04 20" FOR BOTH. The fingerprint identifies the SPECIAL-SPACE SIZE (zero),
+  which heap, sequence, TOAST and FSM pages all share. State it that way from now on.
+- MEASURED, the FSM-vs-reality chain on an empty heap page: exact hole 8164 -> PageGetHeapFreeSpace
+  / PageGetFreeSpace 8160 -> cat 255 -> reported 8160. Every step cites an earlier lesson's number.
+  pd_lower was 28 (one LP_UNUSED pointer survived PageTruncateLinePointerArray).
+- MEASURED, rounding loss: a page with exact hole 2080 / PageGetFreeSpace 2076 is recorded as 2048.
+  28 bytes invisible; maximum possible loss 31 bytes per block.
+- *** THE BEST MEASUREMENT OF THE LESSON, and the one a later lesson should cite: THE UPPER LEVELS
+  ARE STALE UNTIL VACUUM. *** fsm_set_and_search bubbles up WITHIN ONE PAGE only; nothing
+  propagates a bottom page's root into its parent's leaf except FreeSpaceMapVacuum[Range](), which
+  VACUUM calls. RecordPageWithFreeSpace's own comment says so. MEASURED on an 8-page table built
+  by plain inserts: leaves all 384, ROOT PAGE AND LEVEL-1 PAGE ENTIRELY ZERO (fsm_page_contents
+  printed only "fp_next_slot: 0"). After VACUUM both upper pages populated. THEN, with each step in
+  a SEPARATE psql process so no backend reused another's RelationGetTargetBlock relcache hint:
+  the same tiny INSERT landed at ctid (2,5) before VACUUM (FSM search failed at the root ->
+  RelationGetBufferForTuple's LAST-BLOCK FALLBACK) and at (0,5) after VACUUM (a real FSM hit).
+  Identical statement, identical table, different target block, decided by ONE BYTE at page 0
+  offset 28. The last-block fallback is why this failure mode is usually invisible.
+- *** THE 32-BYTE CEILING TRAP, MEASURED TO THE BYTE. *** pg5_cons: block 0 left with
+  PageGetFreeSpace = 8136 (one 24-byte tuple on an otherwise empty page) -> avail_to_cat floors to
+  254 -> the category promises 8128. A row whose MAXALIGNed footprint is EXACTLY 8136 asks
+  needed_to_cat = ceil(8136/32) = 255 > 254, so block 0 is NOT OFFERED; the last-block fallback
+  (block 2, 32 bytes) had no room; THE RELATION EXTENDED TO BLOCK 3 and the row landed at (3,1).
+  8 bytes of rounding cost one 8 KB page. Generalisation taught: a block recorded at category C is
+  never offered to a request above 32*C, so any block whose usable free space is not an exact
+  multiple of 32 has a dead band of up to 31 bytes at the top of its range.
+- MaxHeapTuplesPerPage = 291, FIRST MEASURED HERE (lesson 02 derived it). 291 single-NULL-column
+  tuples of lp_len 24 fit on page 0; the 292nd went to (1,1); pd_lower 1188 = 24 + 291*4, pd_upper
+  1208, exact hole 20 -- the LINE POINTER ARRAY is the binding constraint, not the tuple bytes.
+- HONEST NON-RESULT, recorded deliberately: the predicted "PageGetHeapFreeSpace returns 0 at the
+  291 ceiling" trap DID NOT FIRE. Delete 290 of 291 and vacuum: with 290 LP_UNUSED pointers present
+  PD_HAS_FREE_LINES is set (page flags 5 = PD_HAS_FREE_LINES|PD_ALL_VISIBLE), the function finds a
+  reusable pointer and returns 6976, not 0. DO NOT cite the 291 ceiling as a cause of FSM
+  under-reporting. What it DOES cost, measured: keeping the LAST row leaves all 291 line pointers
+  (pd_lower 1188, exact hole 6980, FSM 6976); keeping the FIRST row truncates the array to 1
+  (pd_lower 28, exact hole 8140, FSM 8128). SAME TABLE, SAME ONE SURVIVOR, 1152 BYTES OF DIFFERENCE
+  decided only by WHERE ON THE PAGE the survivor sits, because PageTruncateLinePointerArray can
+  only reclaim a trailing contiguous unused run (lesson 02).
+- Also measured: a ONE-PAGE table has NO FSM fork (0 bytes) and pg_freespace reports 0 for its only
+  block, because fsm_readbuf(..., extend=false) returns InvalidBuffer and GetRecordedFreeSpace
+  returns 0.
+- Index FSM semantics NAMED AND NOT TAKEN: for indexes the FSM tracks entirely-unused pages rather
+  than free space within pages, so the byte is a boolean; indexfsm.c is the separate wrapper.
+  Lesson 05's Next Step 5 asks a later reader to settle which AMs use it. Lessons 28-30 may want it.
+- The README's TODO quoted and left open: "fastroot to avoid traversing upper nodes with just 1
+  child" and "use a different system for tables that fit into one FSM page" -- the second is
+  exactly what the reverted b0eaa4c51b tried to do.
+
+VERSION DIVERGENCE: smaller than lesson 04's. storage/freespace.h is BYTE-IDENTICAL between master
+@126976a8 and REL_16_STABLE. The differences found: (1) master's fsm_search_avail writes
+fp_next_slot inside `if (exclusive_lock_held || BufferBeginSetHintBits(buf))` with a matching
+BufferFinishSetHintBits(buf, false, false) -- that hint-bit API does not exist in 16, which simply
+writes the field; (2) master's README carries four paragraphs on RBM_ZERO_ON_ERROR vs external
+checksum verifiers that older trees do not; (3) FreeSpaceMapPrepareTruncateRel's
+log_newpage_buffer() path carries an "XXX consider XLogSaveBufferForHint()" note. IDENTICAL in both:
+every constant, every conversion function, the addressing arithmetic, the tree depth rule, and the
+on-page layout. EVERY MEASURED NUMBER IS PG 16.
+
+NO SYLLABUS REVISION THIS RUN. Lesson 05's title was taught exactly as written and nothing was left
+over. The only correction made was to lesson 04's HANDOVER (the nonexistent
+HEAP_FSM_CREATION_THRESHOLD), not to the syllabus.
+
+Throwaway tables left by this run (cluster does not persist; names listed only to avoid collisions
+within a future run): pg5_grow, pg5_empty, pg5_tiny, pg5_tiny2, pg5_one, pg5_gran, pg5_round,
+pg5_stale, pg5_big, pg5_cons. Keep the pgNN_ prefix convention.
+
+-- HANDOVER TO LESSON 06 -----------------------------------------------------------------------
+Scope for lesson 06, "The Visibility Map: PD_ALL_VISIBLE, all-frozen, and the index-only scan it
+enables". Lesson 05 answered "which page has room"; lesson 06 answers "which pages can be trusted
+without looking at their tuples". The handoff is clean, and lesson 05 has already set up the frame:
+the VM is the SECOND auxiliary fork, two BITS per heap block against the FSM's one BYTE, and it is
+the fork that is WAL-logged where the FSM is not. Lead with that contrast -- it is the sharpest way
+in, and lesson 05's reader has just been shown exactly what "not WAL-logged" buys and costs.
+Take: src/backend/access/heap/visibilitymap.c and its long file-header comment (THE primary source,
+not yet read in this track); src/include/access/visibilitymap.h; VISIBILITYMAP_ALL_VISIBLE and
+VISIBILITYMAP_ALL_FROZEN, BITS_PER_HEAPBLOCK = 2, HEAPBLOCKS_PER_BYTE, HEAPBLOCKS_PER_PAGE and
+MAPSIZE -- derive them against lesson 05's SlotsPerFSMPage = 4069 and say which fork is denser and
+by how much; the LOCKING RULES in that header (the VM bit and PD_ALL_VISIBLE must be set together,
+and the rule about what may be cleared without an exclusive lock); visibilitymap_set /
+visibilitymap_clear / visibilitymap_get_status / visibilitymap_count / visibilitymap_prepare_truncate;
+WHY THE VM *IS* WAL-LOGGED while the FSM is not, and what XLOG_HEAP2_VISIBLE does; the
+index-only-scan path's dependence on it (lesson 30 owns amgetbitmap and the bitmap heap scan, so
+reference the IOS, do not teach the index AM interface); pg_visibility's
+pg_visibility_map / pg_visibility / pg_check_visible / pg_check_frozen as the observation tools; and
+PD_ALL_VISIBLE itself, which lesson 02 catalogued as flag 0x0004 and EXPLICITLY DEFERRED TO 06 --
+lesson 06 owns it entirely and must teach the two-places-one-truth invariant.
+MEASURE IT. The recipe works and is below; lesson 05's measurements are a template. Good candidates:
+decode a VM page by hexdump and recover the two bits for a known block (the offsets are as
+derivable as lesson 05's 4123+k and nobody has written them down yet); show PD_ALL_VISIBLE and the
+VM bit moving together across INSERT -> VACUUM -> UPDATE; show an index-only scan's Heap Fetches
+going to 0 after VACUUM and back up after one UPDATE; and compare pg_relation_size(rel,'vm') against
+(rel,'fsm') on the same table -- lesson 05 measured the FSM's 3-block floor and the VM's floor is a
+different number, which is worth having side by side.
+NOTE: page flags 5 = PD_HAS_FREE_LINES|PD_ALL_VISIBLE was OBSERVED by lesson 05 on a vacuumed page
+(see the 291 note above). That is an observation of the bit existing, nothing more -- lesson 06
+still owns the whole mechanism.
+Do NOT re-explain: the page header, line pointers, lp_off/lp_len, PageInit, the four free-space
+functions, checksums, the hole (02); the tuple header, t_ctid, the infomask catalogues, BITMAPLEN,
+t_hoff, the null bitmap (03); the alignment macros, varlena layouts, the 126-byte boundary, the
+pad-byte peek, attcacheoff, atthasmissing, ANY of TOAST (04); the FSM's categories, its on-page
+max-heap, fp_next_slot, fsm_logical_to_physical, the 3-block floor, the 32-byte rounding and its
+ceiling trap, MaxHeapTuplesPerPage = 291, or the "an FSM page is an empty page" framing (05).
+Cite without re-deriving: 8192, 131072, 8160, 8164, 291, 24, 23, 2032, 1996, 8136, 126, 18, 4069,
+4095, 8164 nodes, 32-byte FSM_CAT_STEP, the FSM leaf offset 4123+k, and the page fingerprint
+"00 20 04 20" at offsets 16-19 -- WHICH LESSON 05 SHOWED IS NOT FORK-SPECIFIC. Say "special space
+is zero", not "this is a heap page".
+Do NOT take: HOT, pruning, LP_REDIRECT, pd_prune_xid, heap_page_prune (07); smgr, md.c, relation
+extension, the fsync queue, ExtendBufferedRelTo internals (08) -- lesson 05 treated "extend the
+relation" as a black box and lesson 06 should too; the buffer manager, BufferDesc, clock sweep (09);
+MarkBufferDirtyHint's own implementation and the hint-bit FPI machinery (15, and 22 for FPIs) --
+lesson 05 quoted the README's argument about it but did NOT teach the function; snapshots and
+HeapTupleSatisfiesMVCC (14); freezing, relfrozenxid, anti-wraparound VACUUM (18) -- ALL-FROZEN as a
+VM BIT belongs to 06, but what freezing *is* belongs to 18, so name the bit and defer the mechanism;
+VACUUM's two heap passes, the dead-TID store, FreeSpaceMapVacuumRange's role in them (19);
+amgettuple/amgetbitmap and the bitmap heap scan (30).
+OPEN ITEM lesson 05 could not close and 19 will want: fsm_vacuum_page() and FreeSpaceMapVacuumRange()
+were NOT read this run. They are the only code that makes the upper FSM levels true. Lesson 19 must
+read them; lesson 06 does not need them.
+
+NOTE-BLOCK ROTATION DONE THIS RUN: lesson 02's note was dropped and TRACK-ARCHIVE.md gained the row
+"PG 02" pointing at commit 4b7ea85dcfcc830f71ca8ff16d7f26d84344b7a5 / blob
+f47b8260ba0cab419ce2f4fc59a3e9c439ef6650, which is the last state of TRACK.md carrying it. This
+block now holds 03, 04 and 05 -- exactly the three the policy allows. WHEN LESSON 06 SHIPS IT MUST
+DROP THE LESSON 03 BLOCK, and before dropping it MUST add its TRACK-ARCHIVE.md row first.
 
 Known environment facts for a fresh session (verify, do not assume):
 - Block size 8 KB and segment size 1 GB are compile-time (BLCKSZ, RELSEG_SIZE) and exposed as the
   read-only GUCs block_size and segment_size. State the build you measured.
 - pageinspect is what makes Part I observable (page_header, page_checksum, heap_page_items,
   heap_tuple_infomask_flags, tuple_data_split, bt_page_items, bt_metap, fsm_page_contents). All
-  of it is SUPERUSER-ONLY. pg_freespacemap and pg_visibility cover lessons 05 and 06.
-  Lesson 01's hands-on installs all three; lesson 02's hands-on needs only pageinspect.
-- CONFIRMED 2026-10-22 AND AGAIN 2026-10-23: the cloud sandbox CAN run a cluster. psql, pg_config
-  and /usr/lib/postgresql/16/bin/{initdb,postgres,pg_ctl,...} are in the image (PostgreSQL 16.15
-  on Ubuntu 24.04), and pageinspect, pg_freespacemap, pg_visibility, pgstattuple and amcheck are
-  all present in /usr/share/postgresql/16/extension/. Recipe that worked: create a non-root user,
-  initdb -D /var/tmp/pgdata --no-sync as that user, pg_ctl with -o '-p 5455 -k /var/tmp'. TWO
-  TRAPS: initdb refuses to run as root, and it refuses a data directory under the scratchpad path
-  (permission denied) -- /var/tmp works. Every lesson from here on SHOULD measure; say so when it
-  cannot. The cluster is per-run and does not persist, so table names from earlier runs are gone.
+  of it is SUPERUSER-ONLY. pg_freespacemap covered lesson 05; pg_visibility covers 06.
+  Lesson 01's hands-on installs all three; lesson 02's needs only pageinspect; lesson 05's needs
+  pageinspect and pg_freespacemap.
+- CONFIRMED 2026-10-22, 2026-10-23 AND AGAIN 2026-10-24: the cloud sandbox CAN run a cluster.
+  psql, pg_config and /usr/lib/postgresql/16/bin/{initdb,postgres,pg_ctl,...} are in the image
+  (PostgreSQL 16.15 on Ubuntu 24.04), and pageinspect, pg_freespacemap, pg_visibility, pgstattuple
+  and amcheck are all present in /usr/share/postgresql/16/extension/. Recipe that worked: create a
+  non-root user, initdb -D /var/tmp/pgdata --no-sync as that user, pg_ctl with
+  -o '-p 5455 -k /var/tmp'. TWO TRAPS: initdb refuses to run as root, and it refuses a data
+  directory under the scratchpad path (permission denied) -- /var/tmp works. A third, minor, found
+  this run: psql cannot read a -f script file living under the scratchpad path either (permission
+  denied as the pg user), so put scratch SQL somewhere world-readable such as /var/tmp. Every
+  lesson from here on SHOULD measure; say so when it cannot. The cluster is per-run and does not
+  persist, so table names from earlier runs are gone.
 - Table names used so far, for avoiding collisions within a run: seg_demo (01), pg2_fill /
-  pg2_big (02), pg3_* and w8 / w9 / w16 / w72 / w73 (03), pg4_* (04 — the full list is in the
-  lesson 04 note above). Keep the pgNN_ prefix convention.
-- pg_buffercache is needed from lesson 09; pgstattuple for lessons 07 and 19; amcheck for
-  lessons 28-29 (it is the closest thing PostgreSQL has to SQLite's integrity_check, and the
-  comparison is worth making explicitly when lesson 28 arrives).
+  pg2_big (02), pg3_* and w8 / w9 / w16 / w72 / w73 (03), pg4_* (04), pg5_* (05 -- the full lists
+  are in the lesson 04 and 05 notes above). Keep the pgNN_ prefix convention.
+- pg_freespacemap was used by lesson 05 and pg_visibility is needed by lesson 06 (both present in
+  /usr/share/postgresql/16/extension/). pg_buffercache is needed from lesson 09; pgstattuple for
+  lessons 07 and 19; amcheck for lessons 28-29 (it is the closest thing PostgreSQL has to SQLite's
+  integrity_check, and the comparison is worth making explicitly when lesson 28 arrives).
 -->
 
 ## Completed Subjects
