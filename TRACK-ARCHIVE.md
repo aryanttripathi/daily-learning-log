@@ -42,6 +42,7 @@ commit you reach them through.
 | 30 | SQLite Internals | commit `99aeb34381108985d51952987e71f9be978f235f` (2026-10-18, the last commit before the seventh trim) | `6c348998957d33c83ab6a3bc80755743eeec223a` |
 | 31 – 33 | SQLite Internals | commit `5c5c0d88e5f5caf0c4b43c579dd76edeb64be644` (2026-10-19, the last commit before the syllabus was replaced by the PostgreSQL track) | `a21eb5940c9fd0dd7a3d47bce2e141b2628cd550` |
 | **PG 01** | **PostgreSQL Internals** | commit `2fd269184b17e59f9091b82cb8934672fd32c8f7` (2026-10-23, the last commit before the eighth trim — the first of the PostgreSQL track) | `1feb2d21947ee646bf23f350c8ac84424fe87251` |
+| **PG 02** | **PostgreSQL Internals** | commit `4b7ea85dcfcc830f71ca8ff16d7f26d84344b7a5` (2026-10-24, the last commit before the ninth trim) | `f47b8260ba0cab419ce2f4fc59a3e9c439ef6650` |
 
 Notes on the rows:
 
@@ -99,13 +100,26 @@ Notes on the rows:
   reserved rather than one. Note that lessons 01 and 02 were written **without a cluster** and
   claim no observed figures; lesson 04 later measured and confirmed lesson 02's two outstanding
   predictions.
+- The **PG 02** blob carries the notes for PostgreSQL lessons **02, 03 and 04** together with the
+  handover that was written *to* lesson 05. It is therefore the right place to read lesson 02's
+  note — the one on `PageHeaderData` by byte offset, the `SizeOfPageHeaderData = offsetof` trick,
+  the page fingerprint `00 20 04 20` at offsets 16–19, `pd_flags`' four defined bits, `ItemIdData`'s
+  three bitfields and why they cap `BLCKSZ` at 32 KB, the four `lp_flags` states,
+  `PageAddItemExtended`'s four-way `PANIC` check and its three `WARNING` refusals, the 8160-vs-8164
+  `MAXALIGN` derivation, `MaxHeapTuplesPerPage` = 291, the four free-space functions and why there
+  are four, `compactify_tuples`' two modes, and the modified FNV-1a checksum in full — including
+  the **checksum validity window** ("many or even most pages in shared buffers have invalid page
+  checksums"), which is the fact most likely to be needed again.
+  **Read this one before citing the fingerprint:** lesson 05 later showed by measurement that
+  bytes 16–19 are identical on an FSM page, so the fingerprint identifies *zero special space*,
+  not *heap*. Lesson 02's framing of it is narrower than it reads.
 - Lessons 01–12 of the SQLite track predate the note block; those lessons have no handover notes,
   only their documents.
 
 After the 2026-10-19 run, `TRACK.md` describes a **new track — PostgreSQL Internals, 35 lessons** —
-and after the 2026-10-23 run its note block holds the notes for PostgreSQL lessons **02, 03 and
-04** plus the handover to lesson 05. Every SQLite note, and now PostgreSQL lesson 01's, lives in
-git history, indexed by the table above.
+and after the 2026-10-24 run its note block holds the notes for PostgreSQL lessons **03, 04 and
+05** plus the handover to lesson 06. Every SQLite note, and now PostgreSQL lessons 01 and 02's,
+lives in git history, indexed by the table above.
 
 ## Procedure for the next trim
 
@@ -127,6 +141,14 @@ that this row is also the only pointer to the outgoing track's full syllabus tex
 **Label rows by track once more than one track has been archived.** SQLite rows are bare numbers
 for historical reasons; every PostgreSQL row is prefixed `PG`, because "lesson 01" is now ambiguous
 on its own. A future third track should do the same.
+
+**A note's claims are not automatically true later.** Lesson 04's handover asserted
+`HEAP_FSM_CREATION_THRESHOLD = 4` and `FSM_LOCAL_MAP` with specific behaviour; lesson 05 found that
+neither identifier exists in any branch — the patch that introduced them was reverted in 2019 and
+never re-landed — and said so in the lesson. So treat an archived or live note as *what that run
+believed*, not as established fact: it is working memory, and one header fetch is usually enough to
+check a specific claim before building on it. When a later lesson overturns an earlier note, record
+the correction in the new note **and** annotate the archived row, as the `PG 02` row above now is.
 
 ## What this file is not
 
