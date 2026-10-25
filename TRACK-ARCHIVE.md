@@ -43,6 +43,7 @@ commit you reach them through.
 | 31 – 33 | SQLite Internals | commit `5c5c0d88e5f5caf0c4b43c579dd76edeb64be644` (2026-10-19, the last commit before the syllabus was replaced by the PostgreSQL track) | `a21eb5940c9fd0dd7a3d47bce2e141b2628cd550` |
 | **PG 01** | **PostgreSQL Internals** | commit `2fd269184b17e59f9091b82cb8934672fd32c8f7` (2026-10-23, the last commit before the eighth trim — the first of the PostgreSQL track) | `1feb2d21947ee646bf23f350c8ac84424fe87251` |
 | **PG 02** | **PostgreSQL Internals** | commit `4b7ea85dcfcc830f71ca8ff16d7f26d84344b7a5` (2026-10-24, the last commit before the ninth trim) | `f47b8260ba0cab419ce2f4fc59a3e9c439ef6650` |
+| **PG 03** | **PostgreSQL Internals** | commit `610357515b8e64cde4cb22cfaa3a34dd019456c4` (2026-10-25, the last commit before the tenth trim) | `91f09a63f3a86af94a3d519f09c62e5d69272be5` |
 
 Notes on the rows:
 
@@ -113,12 +114,27 @@ Notes on the rows:
   **Read this one before citing the fingerprint:** lesson 05 later showed by measurement that
   bytes 16–19 are identical on an FSM page, so the fingerprint identifies *zero special space*,
   not *heap*. Lesson 02's framing of it is narrower than it reads.
+- The **PG 03** blob carries the notes for PostgreSQL lessons **03, 04 and 05** together with the
+  handover that was written *to* lesson 06. It is therefore the right place to read lesson 03's
+  note — the one on `HeapTupleHeaderData` by byte offset (0 `t_xmin`, 4 `t_xmax`, 8 `t_field3`,
+  12 `t_ctid`, 18 `t_infomask2`, 20 `t_infomask`, 22 `t_hoff`, 23 `t_bits[]`, with
+  `SizeofHeapTupleHeader` = 23 and `MinHeapTupleSize` = 24), the two nested unions and the
+  27-versus-23 resolution of the documentation's Table 66.4, `ItemPointerData`'s six bytes and why
+  `BlockIdData` is split into `bi_hi`/`bi_lo` at all, `t_ctid`'s **four** meanings with the
+  chain-following rule (`xmin(next) == xmax(this)`), all sixteen `t_infomask` bits and all of
+  `t_infomask2` tabulated against their owning lesson, the composite constants that are not bits
+  (`HEAP_XMIN_FROZEN` = `0x0300`, `HEAP_MOVED` = `0xC000`), the `BITMAPLEN`/`t_hoff` step function
+  measured at natts 8/9/16/72/73, and the null bitmap's LSB-first order with **1 meaning NOT
+  NULL**. **Read this one before re-deriving anything about the tuple header**; lesson 06 cites its
+  numbers without re-deriving them. It is also the blob that still contains lesson 04's incorrect
+  `HEAP_FSM_CREATION_THRESHOLD` claim in the lesson 04 note — see the `PG 02` annotation above and
+  the correction recorded in lesson 05's note.
 - Lessons 01–12 of the SQLite track predate the note block; those lessons have no handover notes,
   only their documents.
 
 After the 2026-10-19 run, `TRACK.md` describes a **new track — PostgreSQL Internals, 35 lessons** —
-and after the 2026-10-24 run its note block holds the notes for PostgreSQL lessons **03, 04 and
-05** plus the handover to lesson 06. Every SQLite note, and now PostgreSQL lessons 01 and 02's,
+and after the 2026-10-25 run its note block holds the notes for PostgreSQL lessons **04, 05 and
+06** plus the handover to lesson 07. Every SQLite note, and now PostgreSQL lessons 01, 02 and 03's,
 lives in git history, indexed by the table above.
 
 ## Procedure for the next trim
