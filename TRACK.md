@@ -3,15 +3,15 @@ track-state
 subject: PostgreSQL
 started: 2026-10-19
 lessons-total: 35
-lessons-done: 5
+lessons-done: 6
 -->
 
 # Current Track: PostgreSQL Internals
 
 Sequential deep dive. One lesson per day, each building on the last.
 
-**STATUS: in progress — lesson 05 shipped 2026-10-24.** The syllabus was written on 2026-10-19, the
-day the SQLite track's capstone shipped. The next run takes **lesson 06**.
+**STATUS: in progress — lesson 06 shipped 2026-10-25.** The syllabus was written on 2026-10-19, the
+day the SQLite track's capstone shipped. The next run takes **lesson 07**.
 
 The order follows PostgreSQL's actual source layout rather than a textbook outline. It was built
 from two pieces of primary evidence read on 2026-10-19: the chapter list of
@@ -51,7 +51,7 @@ readable as the other answer to a question SQLite already answered.
 - [x] 03 — `HeapTupleHeaderData`: `t_xmin`, `t_xmax`, `t_ctid`, `t_infomask`/`t_infomask2`, and `t_hoff`
 - [x] 04 — Attribute storage: MAXALIGN padding between attributes, 1-byte vs 4-byte varlena headers, `atthasmissing`, and TOAST
 - [x] 05 — The Free Space Map: the FSM tree pages and how a page with room is found
-- [ ] 06 — The Visibility Map: `PD_ALL_VISIBLE`, all-frozen, and the index-only scan it enables
+- [x] 06 — The Visibility Map: `PD_ALL_VISIBLE`, all-frozen, and the index-only scan it enables
 - [ ] 07 — HOT updates and page pruning: redirect line pointers, `heap_page_prune()`, and the HOT chain
 - [ ] 08 — `smgr` and `md.c`: relation extension, the segment map, and the fsync request queue
 
@@ -112,126 +112,6 @@ The SQLite track's lessons 31-33 notes were archived on that run; see TRACK-ARCH
 "31 - 33". The capstone document (2026/10/2026-10-19-sqlite-capstone/README.md) closes the track
 and records which items were deliberately left unread. None of these carry forward into the
 PostgreSQL track. Do not hand them to a PostgreSQL lesson.
-
--- LESSON 03 (2026-10-22) AS TAUGHT ------------------------------------------------------------
-Document: 2026/10/2026-10-22-postgres-heap-tuple-header/README.md (single README, not split).
-Source commit read: postgres/postgres@f2edf5dd. Lesson 01 @ddd468ca, 02 @3cde90ec, 03 @f2edf5dd --
-the tree moved all three times. Keep stating the commit.
-
-*** THIS RUN HAD A CLUSTER. Part I is no longer unmeasured. ***
-PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1), x86_64, gcc 13.3.0, block_size 8192,
-segment_size 1GB, data_checksums OFF, pageinspect 1.12, running as a throwaway cluster in the
-sandbox (initdb into /var/tmp, port 5455, unix socket only). A LATER RUN CAN DO THE SAME: psql and
-/usr/lib/postgresql/16/bin/* are present in the cloud sandbox image, and pageinspect,
-pg_freespacemap, pg_visibility, pgstattuple and amcheck are all in
-/usr/share/postgresql/16/extension/. initdb must run as a NON-ROOT user (a 'pg' user was created)
-and the data directory must NOT be under the scratchpad path (permission denied); /var/tmp works.
-Version gap must be stated: struct and flag constants from master, observations from 16.
-
-TOOK, and must not be re-taught:
-- HeapTupleHeaderData BY BYTE OFFSET: 0 t_xmin(4), 4 t_xmax(4), 8 t_field3(4), 12 t_ctid(6),
-  18 t_infomask2(2), 20 t_infomask(2), 22 t_hoff(1), 23 t_bits[]. SizeofHeapTupleHeader =
-  offsetof(t_bits) = 23 (not sizeof, same reason as SizeOfPageHeaderData in lesson 02).
-  MinHeapTupleSize = MAXALIGN(23) = 24. MEASURED: a zero-column table's tuple has lp_len 24,
-  t_hoff 24, natts 0, lp_off 8168.
-- THE TWO NESTED UNIONS, and the 27-vs-23 resolution: docs Table 66.4 lists t_cid and t_xvac as
-  separate 4-byte rows (sum 27) but they are arms of t_field3. Outer union t_choice overlays
-  HeapTupleFields with DatumTupleFields {int32 datum_len_, int32 datum_typmod, Oid datum_typeid};
-  heap_form_tuple fills the Datum arm for EVERY tuple ("even though this tuple may never become a
-  Datum") and the insert path overwrites it. On disk t_choice is always t_heap. t_xvac only via
-  pg_upgrade; HeapTupleHeaderGetXvac returns InvalidTransactionId unless HEAP_MOVED.
-  Combo CIDs were NAMED AND DEFERRED to lesson 16.
-- MEASURED: t_cid observable as 0/1/2 for three inserts in one transaction, same t_xmin.
-  heap_page_items names the column t_field3 and comments it "/* shared with xvac */" -- nothing in
-  the tuple says which arm you are reading except HEAP_MOVED.
-- ItemPointerData fully: 6 bytes, {BlockIdData ip_blkid; OffsetNumber ip_posid}, pg_attribute_packed
-  + pg_attribute_aligned(2), with the header's "you'll waste lots of space" warning quoted.
-  BlockIdData {bi_hi, bi_lo} exists ONLY so a block number can be SHORTALIGN'd (block.h rationale
-  quoted). bi_hi = blkno>>16, bi_lo = blkno & 0xffff. MEASURED on block 299 (0x12b):
-  ip_blkid bytes "00 00 2b 01", ip_posid "01 00" -- high half first, each half LE, THE SAME SHAPE
-  AS pd_lsn from lesson 02. Lesson 01 deferred ItemPointerData's width; it is now CLOSED.
-- t_ctid's FOUR meanings: self (latest), forward pointer (superseded), MovedPartitionsOffsetNumber
-  0xfffd + InvalidBlockNumber, SpecTokenOffsetNumber 0xfffe with the token in ip_blkid. Both magics
-  exceed MaxOffsetNumber and there is a StaticAssertDecl(MaxOffsetNumber < SpecTokenOffsetNumber).
-  THE CHAIN-FOLLOWING RULE, quoted and then measured: validate with xmin(next) == xmax(this),
-  because VACUUM may erase the pointed-to tuple first and the slot may be reused.
-- MEASURED: insert-then-update pair, lp1 t_ctid (0,2) / xmax 747, lp2 t_ctid self / xmin 747.
-  That update happened to be HOT; HOT, redirect line pointers and pruning remain lesson 07's
-  entirely and were explicitly deferred.
-- t_infomask2: HEAP_NATTS_MASK 0x07FF (11 bits => 2047), "bits 0x1800 are available",
-  HEAP_KEYS_UPDATED 0x2000, HEAP_HOT_UPDATED 0x4000, HEAP_ONLY_TUPLE 0x8000, HEAP2_XACT_MASK 0xE000.
-  HEAP_TUPLE_HAS_MATCH IS HEAP_ONLY_TUPLE under another name (hash-join overlay, rationale quoted).
-  ESTABLISHED AND REUSABLE: the natts mask is NOT the binding constraint on column count --
-  t_hoff being uint8 is, per the MaxTupleAttributeNumber header comment ("a little over 1700");
-  1664 = 8*208 and 1600 = 8*200 are round numbers so layout changes do not move a user-visible
-  limit. MEASURED: "ERROR: tables can have at most 1600 columns" at 1601 columns.
-- NATTS IS PER-TUPLE, NOT PER-TABLE, and this was MEASURED: ALTER TABLE ADD COLUMN with no DEFAULT
-  does not rewrite, so one page held tuples with natts 2 and natts 3, and the natts-2 tuple reads
-  its third column as NULL with HEAP_HASNULL CLEAR and no bitmap at all. pageinspect's
-  tuple_data_split_internal comment quoted as the authority. CONSEQUENCE TAUGHT: a NULL has TWO
-  on-disk encodings (0 bit in bitmap, or attnum > natts) and heap_attisnull adds a third,
-  atthasmissing -- which was NAMED AND DEFERRED to lesson 04.
-- t_infomask: ALL SIXTEEN BITS tabulated with their owning lesson (0x0001 HASNULL, 0x0002
-  HASVARWIDTH, 0x0004 HASEXTERNAL, 0x0008 HASOID_OLD, 0x0010 XMAX_KEYSHR_LOCK, 0x0020 COMBOCID,
-  0x0040 XMAX_EXCL_LOCK, 0x0080 XMAX_LOCK_ONLY, 0x0100 XMIN_COMMITTED, 0x0200 XMIN_INVALID,
-  0x0400 XMAX_COMMITTED, 0x0800 XMAX_INVALID, 0x1000 XMAX_IS_MULTI, 0x2000 UPDATED,
-  0x4000 MOVED_OFF, 0x8000 MOVED_IN). THE FLAG WORD IS FULL; three bits are held purely for
-  pre-9.0 pg_upgrade compatibility. HEAP_XACT_MASK 0xFFF0.
-- COMPOSITE CONSTANTS ARE NOT BITS: HEAP_XMIN_FROZEN = COMMITTED|INVALID = 0x0300 ("committed AND
-  invalid" is the frozen encoding), HEAP_XMAX_SHR_LOCK = 0x0050, HEAP_MOVED = 0xC000,
-  HEAP_LOCK_MASK. Hence GetRawXmin vs GetXmin, and hence heap_tuple_infomask_flags returning TWO
-  arrays (raw_flags tests != 0, combined_flags tests (mask & COMBO) == COMBO). Freezing itself was
-  DEFERRED to lesson 18; hint bits to 15; MultiXact bits to 17; tuple-lock strengths to 12.
-- MEASURED: a fresh insert has t_infomask = 2048 = 0x0800, i.e. HEAP_XMAX_INVALID SET while
-  t_xmax = 0 -- the flag is the fast path so visibility need not read the field. With one NULL,
-  2049 = HEAP_XMAX_INVALID|HEAP_HASNULL. raw_flags/combined_flags output for the update pair:
-  {HASVARWIDTH,XMIN_COMMITTED,HOT_UPDATED} and {HASVARWIDTH,XMAX_INVALID,UPDATED,ONLY_TUPLE}.
-- t_hoff AND THE NULL BITMAP, fully taught -- LESSON 04 MUST NOT RE-TEACH THE BITMAP.
-  heap_form_tuple's five-line layout computation quoted. BITMAPLEN(NATTS) = (NATTS+7)/8, sized from
-  natts NOT from the null count. t_hoff = MAXALIGN(23 + BITMAPLEN(natts)) when hasnull, else
-  MAXALIGN(23). ESTABLISHED, MEASURED, REUSABLE STEP FUNCTION: natts 8 -> t_hoff 24 (bitmap FREE,
-  it lands in the pad byte that exists anyway); natts 9 -> 32; natts 16 -> 32; natts 72 -> 32
-  (bitmap 9 bytes, zero pad); natts 73 -> 40. So the 9th nullable column costs 8 bytes/row forever
-  and columns 9-72 cost nothing more in header. lp_len measured at 52/64/92/316/328 respectively.
-- BITMAP BIT ORDER AND POLARITY: att_isnull = !(BITS[ATT>>3] & (1 << (ATT & 0x07))) -- LSB-first,
-  and 1 MEANS NOT NULL. fill_val's `bitP = &bit[-1]; bitmask = HIGHBIT` is a SENTINEL that forces
-  the first iteration down the advance branch, NOT an MSB-first ordering -- taught explicitly
-  because it reads like the opposite. bits_to_text prints in att_isnull order.
-  MEASURED: 3 int columns with the middle NULL gives t_bits '10100000', lp_len 32 vs 36 for the
-  same shape with no nulls -- the NULL costs zero data bytes and the bitmap was free.
-  length(t_bits) = BITMAPLEN(natts)*8, so it reveals the bitmap's BYTE count, not the column count.
-- palloc0 => pad bytes are zero on disk, tied back to lesson 02's "the checksum covers the hole".
-- THE FULL HEXDUMP, measured and decoded field by field (3 ints, no nulls, lp_off 8152, lp_len 36):
-  "dc020000 00000000 00000000 00000000 0100 0300 0008 18 00 | 01000000 02000000 03000000"
-  => xmin 732, xmax 0, t_field3 0, ctid (0,1), infomask2 3, infomask 0x0800, t_hoff 0x18=24,
-  byte 23 = 00 = PURE MAXALIGN PAD (no HASNULL so no bitmap lives there), then three LE int4.
-  A later lesson may cite this dump; it does not need re-deriving.
-- THE REDUNDANCY THREAD (opened lesson 02) extended as planned: PostgreSQL's record header carries
-  NO type information at all, so decoding needs pg_class/pg_attribute -- which is why
-  tuple_data_split() takes a relid and calls relation_open(). SQLite's varint record header makes a
-  page decodable in isolation. Framed as the forensic consequence: a salvaged page parses to
-  t_hoff and no further.
-- MinimalTupleData and MINIMAL_TUPLE_OFFSET were mentioned in Further Study ONLY, not taught.
-  Lesson 32 still owns the executor's tuple slots.
-
-MEASUREMENTS NOW ON RECORD (first in this track): MinHeapTupleSize 24; the t_hoff step function at
-8/9/16/72/73 columns; t_bits polarity; the 1600-column error text; t_cid 0/1/2; the ctid halfword
-byte order on block 299; the full 24-byte header hexdump; fresh-insert infomask 0x0800.
-STILL NOT MEASURED, and lesson 02 flagged these as the first things to verify once a cluster
-exists: the heap page fingerprint bytes "00 20 04 20" at page offsets 16-19, and the 8160-byte
-MaxHeapTupleSize insert ceiling. Lesson 03 did NOT get to them and put them in its Next Steps as
-item 4. LESSON 04 SHOULD DO THEM -- it will have a cluster and it needs MaxHeapTupleSize anyway
-for the TOAST threshold discussion.
-Throwaway tables left by this run (drop or reuse, say which): pg3_fixed, pg3_null, pg3_upd,
-pg3_alter, pg3_cid, pg3_empty, pg3_blk, w8, w9, w16, w72, w73. Lesson 01's seg_demo and lesson 02's
-pg2_fill / pg2_big are from earlier runs' documents, not from a surviving cluster.
-
-SYLLABUS REVISION MADE THIS RUN: lesson 04's title previously read "Attribute storage: MAXALIGN
-padding, the null bitmap, 1-byte vs 4-byte varlena headers, and TOAST". Lesson 03 took the null
-bitmap completely (BITMAPLEN, the t_hoff arithmetic, bit order, polarity, the measured step
-function), so the title now reads "Attribute storage: MAXALIGN padding between attributes, 1-byte
-vs 4-byte varlena headers, `atthasmissing`, and TOAST". atthasmissing was added because lesson 03
-surfaced it as the third NULL encoding and deferred it. No reordering; no other change.
 
 -- LESSON 04 (2026-10-23) AS TAUGHT ------------------------------------------------------------
 Document: 2026/10/2026-10-23-postgres-attribute-storage-varlena-toast/README.md (single README,
@@ -611,64 +491,278 @@ Throwaway tables left by this run (cluster does not persist; names listed only t
 within a future run): pg5_grow, pg5_empty, pg5_tiny, pg5_tiny2, pg5_one, pg5_gran, pg5_round,
 pg5_stale, pg5_big, pg5_cons. Keep the pgNN_ prefix convention.
 
--- HANDOVER TO LESSON 06 -----------------------------------------------------------------------
-Scope for lesson 06, "The Visibility Map: PD_ALL_VISIBLE, all-frozen, and the index-only scan it
-enables". Lesson 05 answered "which page has room"; lesson 06 answers "which pages can be trusted
-without looking at their tuples". The handoff is clean, and lesson 05 has already set up the frame:
-the VM is the SECOND auxiliary fork, two BITS per heap block against the FSM's one BYTE, and it is
-the fork that is WAL-logged where the FSM is not. Lead with that contrast -- it is the sharpest way
-in, and lesson 05's reader has just been shown exactly what "not WAL-logged" buys and costs.
-Take: src/backend/access/heap/visibilitymap.c and its long file-header comment (THE primary source,
-not yet read in this track); src/include/access/visibilitymap.h; VISIBILITYMAP_ALL_VISIBLE and
-VISIBILITYMAP_ALL_FROZEN, BITS_PER_HEAPBLOCK = 2, HEAPBLOCKS_PER_BYTE, HEAPBLOCKS_PER_PAGE and
-MAPSIZE -- derive them against lesson 05's SlotsPerFSMPage = 4069 and say which fork is denser and
-by how much; the LOCKING RULES in that header (the VM bit and PD_ALL_VISIBLE must be set together,
-and the rule about what may be cleared without an exclusive lock); visibilitymap_set /
-visibilitymap_clear / visibilitymap_get_status / visibilitymap_count / visibilitymap_prepare_truncate;
-WHY THE VM *IS* WAL-LOGGED while the FSM is not, and what XLOG_HEAP2_VISIBLE does; the
-index-only-scan path's dependence on it (lesson 30 owns amgetbitmap and the bitmap heap scan, so
-reference the IOS, do not teach the index AM interface); pg_visibility's
-pg_visibility_map / pg_visibility / pg_check_visible / pg_check_frozen as the observation tools; and
-PD_ALL_VISIBLE itself, which lesson 02 catalogued as flag 0x0004 and EXPLICITLY DEFERRED TO 06 --
-lesson 06 owns it entirely and must teach the two-places-one-truth invariant.
-MEASURE IT. The recipe works and is below; lesson 05's measurements are a template. Good candidates:
-decode a VM page by hexdump and recover the two bits for a known block (the offsets are as
-derivable as lesson 05's 4123+k and nobody has written them down yet); show PD_ALL_VISIBLE and the
-VM bit moving together across INSERT -> VACUUM -> UPDATE; show an index-only scan's Heap Fetches
-going to 0 after VACUUM and back up after one UPDATE; and compare pg_relation_size(rel,'vm') against
-(rel,'fsm') on the same table -- lesson 05 measured the FSM's 3-block floor and the VM's floor is a
-different number, which is worth having side by side.
-NOTE: page flags 5 = PD_HAS_FREE_LINES|PD_ALL_VISIBLE was OBSERVED by lesson 05 on a vacuumed page
-(see the 291 note above). That is an observation of the bit existing, nothing more -- lesson 06
-still owns the whole mechanism.
-Do NOT re-explain: the page header, line pointers, lp_off/lp_len, PageInit, the four free-space
-functions, checksums, the hole (02); the tuple header, t_ctid, the infomask catalogues, BITMAPLEN,
-t_hoff, the null bitmap (03); the alignment macros, varlena layouts, the 126-byte boundary, the
-pad-byte peek, attcacheoff, atthasmissing, ANY of TOAST (04); the FSM's categories, its on-page
-max-heap, fp_next_slot, fsm_logical_to_physical, the 3-block floor, the 32-byte rounding and its
-ceiling trap, MaxHeapTuplesPerPage = 291, or the "an FSM page is an empty page" framing (05).
-Cite without re-deriving: 8192, 131072, 8160, 8164, 291, 24, 23, 2032, 1996, 8136, 126, 18, 4069,
-4095, 8164 nodes, 32-byte FSM_CAT_STEP, the FSM leaf offset 4123+k, and the page fingerprint
-"00 20 04 20" at offsets 16-19 -- WHICH LESSON 05 SHOWED IS NOT FORK-SPECIFIC. Say "special space
-is zero", not "this is a heap page".
-Do NOT take: HOT, pruning, LP_REDIRECT, pd_prune_xid, heap_page_prune (07); smgr, md.c, relation
-extension, the fsync queue, ExtendBufferedRelTo internals (08) -- lesson 05 treated "extend the
-relation" as a black box and lesson 06 should too; the buffer manager, BufferDesc, clock sweep (09);
-MarkBufferDirtyHint's own implementation and the hint-bit FPI machinery (15, and 22 for FPIs) --
-lesson 05 quoted the README's argument about it but did NOT teach the function; snapshots and
-HeapTupleSatisfiesMVCC (14); freezing, relfrozenxid, anti-wraparound VACUUM (18) -- ALL-FROZEN as a
-VM BIT belongs to 06, but what freezing *is* belongs to 18, so name the bit and defer the mechanism;
-VACUUM's two heap passes, the dead-TID store, FreeSpaceMapVacuumRange's role in them (19);
-amgettuple/amgetbitmap and the bitmap heap scan (30).
-OPEN ITEM lesson 05 could not close and 19 will want: fsm_vacuum_page() and FreeSpaceMapVacuumRange()
-were NOT read this run. They are the only code that makes the upper FSM levels true. Lesson 19 must
-read them; lesson 06 does not need them.
+-- LESSON 06 (2026-10-25) AS TAUGHT ------------------------------------------------------------
+Document: 2026/10/2026-10-25-postgres-visibility-map/README.md (single README, not split -- one
+fork, one mechanism). Source commits read: master @0019a1ecf4c7615a2570d21eeb4b32ae3b371f18
+(visibilitymap.c, visibilitymap.h, visibilitymapdefs.h) PLUS REL_16_STABLE @774c47de (the same
+three files + the five VM call sites in heapam.c) and REL_16_STABLE @0cf2c7e3 (heapam_xlog.h).
+Trees so far: 01 @ddd468ca, 02 @3cde90ec, 03 @f2edf5dd, 04 @f52d4051, 05 @126976a8,
+06 @0019a1ec (+ @774c47de / @0cf2c7e3). Keep stating the commit.
+Files read IN FULL: access/heap/visibilitymap.c (master), access/visibilitymap.h,
+access/visibilitymapdefs.h, access/heapam_xlog.h (16). Read in part: heapam.c (16) -- only the
+all_visible_cleared / all_frozen_set sites.
 
-NOTE-BLOCK ROTATION DONE THIS RUN: lesson 02's note was dropped and TRACK-ARCHIVE.md gained the row
-"PG 02" pointing at commit 4b7ea85dcfcc830f71ca8ff16d7f26d84344b7a5 / blob
-f47b8260ba0cab419ce2f4fc59a3e9c439ef6650, which is the last state of TRACK.md carrying it. This
-block now holds 03, 04 and 05 -- exactly the three the policy allows. WHEN LESSON 06 SHIPS IT MUST
-DROP THE LESSON 03 BLOCK, and before dropping it MUST add its TRACK-ARCHIVE.md row first.
+*** THIS RUN HAD A CLUSTER and crossed a VM PAGE BOUNDARY (35,000 heap blocks, ~273 MB). Same
+recipe as 03/04/05, both traps still apply (initdb not as root; data dir not under the scratchpad
+path -- /var/tmp works; psql -f scripts must also live somewhere world-readable). ***
+PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1), x86_64, gcc 13.3.0, block_size 8192,
+segment_size 1GB, data_checksums OFF, pageinspect 1.12, pg_visibility 1.2, pg_freespacemap 1.2.
+Disk headroom at the time: ~30 GB on /, which is what made the boundary table possible. pg_waldump
+is at /usr/lib/postgresql/16/bin/pg_waldump and WORKS on the live cluster's segments; --stats=record
+gives a per-record-type byte breakdown. A LATER LESSON THAT WANTS WAL EVIDENCE SHOULD USE IT (22,
+23, 24, 25 all will).
+
+TOOK, and must not be re-taught:
+- THE CONSTANTS, all of visibilitymapdefs.h (25 lines, the whole public vocabulary):
+  BITS_PER_HEAPBLOCK 2, VISIBILITYMAP_ALL_VISIBLE 0x01, VISIBILITYMAP_ALL_FROZEN 0x02,
+  VISIBILITYMAP_VALID_BITS 0x03. THE 0b10 CODE POINT IS UNREACHABLE BY ASSERTION at both ends:
+  Assert(flags != VISIBILITYMAP_ALL_FROZEN) in _set, Assert(flags != VISIBILITYMAP_ALL_VISIBLE)
+  in _clear. Two bits, three states. Taught as a deliberate waste, not an accident.
+- THE GEOMETRY, derived and then MEASURED. MAPSIZE = BLCKSZ - MAXALIGN(SizeOfPageHeaderData)
+  = 8168. HEAPBLOCKS_PER_BYTE = BITS_PER_BYTE/BITS_PER_HEAPBLOCK = 4. HEAPBLOCKS_PER_PAGE
+  = 8168*4 = 32672 = 255.25 MiB of heap per VM page = 8.03x the FSM's 4069. NO TREE, flat array,
+  so no FSM_TREE_DEPTH analogue and no ragged remainder: 8168*4 is exact, where lesson 05's
+  8164-4095 = 4069 stranded 27 leaf positions. Quote the header's "There's no extra headers".
+- BYTE OFFSETS, ESTABLISHED AND MEASURED, reusable without re-deriving (this is lesson 06's
+  equivalent of lesson 05's "leaf slot k at offset 4123+k"):
+      VM page   = b / 32672
+      offset    = 24 + (b % 32672)/4      <- PageGetContents is page+24, same base as lesson 05
+      bit shift = (b % 4) * 2             <- low bit ALL_VISIBLE, high bit ALL_FROZEN
+  MEASURED at the boundary: heap block 32671 -> VM page 0 byte index 8167 -> PAGE OFFSET 8191,
+  the last byte of the page; heap block 32672 -> VM page 1 offset 24. Byte 23 is page header, 0.
+- *** THE FIRST VM PAGE BOUNDARY CROSSED IN THIS TRACK. *** Unlogged pg6_bound, 140,000 rows x
+  1800-byte pad -> 35,000 heap blocks. vm = 16384 (2 blocks, because 35000 > 32672);
+  fsm = 90112 (11 blocks = ceil(35000/4069)=9 bottom + 1 level-1 + 1 root, LESSON 05'S ARITHMETIC
+  CONFIRMED INDEPENDENTLY). Byte 8191 of VM page 0 = 0xff, byte 24 of VM page 1 = 0xff.
+  pg_visibility_map_summary: 35000 / 35000.
+- THE FORK FLOOR, side by side with lesson 05: a ONE-BLOCK heap after its first VACUUM has
+  vm = 8192 (ONE block) and fsm = 24576 (THREE blocks). The VM has no tree so nothing stops a
+  map page being block 0. *** AND A REFINEMENT OF LESSON 05: lesson 05 measured "a one-page table
+  has NO FSM fork (0 bytes)". That is the PRE-VACUUM state only -- VACUUM creates the FSM fork
+  even for a one-block heap (measured 0 -> 24576). Do not propagate the unqualified claim. ***
+- AN FSM PAGE IS AN EMPTY PAGE / so is a VM page: PageInit(page, BLCKSZ, 0) in vm_readbuf, so
+  MEASURED pd_lower 24, pd_upper = pd_special = 8192, pd_flags 0, prune_xid 0, PageIsEmpty()
+  always true, payload entirely in lesson 02's HOLE. ONE DIFFERENCE FROM THE FSM WORTH KEEPING:
+  pd_lsn on a VM page is NON-ZERO and set deliberately (PageSetLSN in visibilitymap_set);
+  measured 0/15E9740. On an FSM page it is incidental.
+- PD_ALL_VISIBLE, WHICH LESSON 02 DEFERRED, IS NOW CLOSED. Taught as the two-places-one-truth
+  design with a reason: the VM bit is what a READER consults (cheap, stays cached); the page flag
+  is what a WRITER consults (it already holds the page; pinning the VM page might need I/O). That
+  asymmetry is the ONLY reason the pin-before-lock dance exists.
+- THE LOCKING DANCE, quoted from the header and taught: examine the heap page UNLOCKED, pin the VM
+  page if PD_ALL_VISIBLE is set, then lock the heap page; if the flag got set in between, unlock,
+  pin, relock. visibilitymap_pin_ok() is the cheap re-check (pure block-number compare, no I/O).
+  The header's "This shouldn't happen often, because only VACUUM currently sets visibility map
+  bits" was FLAGGED AS ARGUABLY STALE -- see COPY FREEZE below. Lesson 06's Next Step 3 proposes
+  it as a documentation patch.
+- THE FIVE CLEAR CALL SITES IN heapam.c (16), tabulated: heap_insert, heap_multi_insert (guarded
+  `&& !(options & HEAP_INSERT_FROZEN)`), heap_delete, heap_update old page, heap_update new page
+  (`newbuf != buffer &&`). All five do PageClearAllVisible + visibilitymap_clear(VALID_BITS) --
+  ALWAYS BOTH BITS, which is why the Assert(flags != ALL_VISIBLE) in _clear can exist. All five
+  raise a flag in the HOST record: XLH_INSERT_ALL_VISIBLE_CLEARED, XLH_DELETE_ALL_VISIBLE_CLEARED,
+  XLH_UPDATE_OLD_ALL_VISIBLE_CLEARED, XLH_UPDATE_NEW_ALL_VISIBLE_CLEARED.
+  visibilitymap_clear uses MarkBufferDirty, *NOT* MarkBufferDirtyHint -- the contrast with lesson
+  05 is literally one function name deep. Taught that way.
+- *** WHY THE VM IS WAL-LOGGED AND THE FSM IS NOT, with PG 16's own argument quoted in full.
+  The record does NOT protect the bit; it keeps the TWO COPIES from diverging in the unsafe
+  direction (map says visible, page has forgotten -> no writer will ever clear it). Clearing needs
+  no record because the clearing is always INSIDE another record. ***
+  xl_heap_visible = { TransactionId snapshotConflictHorizon; uint8 flags; }, SizeOfHeapVisible = 5,
+  XLOG_HEAP2_VISIBLE = 0x40, "Backup blk 0: visibility map buffer / Backup blk 1: heap buffer".
+- MEASURED WITH pg_waldump, the price of all that: 980 Heap2/VISIBLE records in one 16 MB segment;
+  57,830 record bytes + 16,384 FPI bytes = 74,214 total = 5.65% of the segment. Histogram: 978
+  records at EXACTLY 59 BYTES, 2 at 64/8256 (the FPI of each VM page on its first touch after a
+  checkpoint). flags 0x01 observed for VACUUM with freeze off, 0x03 for VACUUM FREEZE. Verbatim
+  record shape recorded in the lesson, with the two blkrefs and `fork vm blk 0 FPW`.
+  SO: 59 BYTES OF WAL PER HEAP PAGE MARKED, plus one FPI per VM page per checkpoint. The FSM pays
+  zero for the same VACUUM. That pair of numbers is the whole 05-vs-06 tradeoff and a later lesson
+  should cite it rather than re-measure.
+  NOT a VM-only figure, recorded separately so nobody confuses them: a VACUUM of a 118-block table
+  emitted 18,400 WAL bytes total across all record types = 155.9 bytes/block. Lesson 19 owns that
+  breakdown.
+- COPY FREEZE SETS THE BITS AT LOAD TIME, measured, NO VACUUM: heapam.c's
+  `starting_with_empty_page = PageGetMaxOffsetNumber(page) == 0; if (starting_with_empty_page &&
+  (options & HEAP_INSERT_FROZEN)) all_frozen_set = true;` with
+  Assert(!(all_visible_cleared && all_frozen_set)) and XLH_INSERT_ALL_FROZEN_SET.
+  MEASURED: 5000 rows, 80 heap blocks, 47 blocks (0..46) with BOTH bits, byte 24 = 0xff.
+  THE 33 UNSET BLOCKS ARE TRAILING *EMPTY* PAGES left by bulk relation extension -- max block
+  actually containing a row was 46, so no heap_multi_insert ever ran on 47..79. Autovacuum later
+  truncated the relation to 47 blocks and all 47 were all-visible+all-frozen. Lesson 06's Next
+  Step 4 hands the "why does extension overshoot" question to lesson 08.
+- *** THE HEADLINE MEASUREMENT, and the one a later lesson should cite: PAGE GRANULARITY COSTS 59
+  HEAP FETCHES FOR ONE UPDATED ROW. *** pg6_ios, 50,000 rows / 863 heap blocks / PK on id, query
+  `select count(id) from pg6_ios where id between 1 and 20000`, seqscan+bitmapscan off:
+    after INSERT (no vm fork):          Heap Fetches 20000, Buffers shared hit=401
+    after VACUUM:                        Heap Fetches     0, Buffers shared hit=57   (7.0x)
+    after ONE update of id=7:            Heap Fetches    59, Buffers shared hit=60
+    after pg_truncate_visibility_map():  Heap Fetches 20000, Buffers shared hit=403
+  THE PLAN NODE WAS `Index Only Scan using pg6_ios_pkey` IN ALL FOUR -- taught as "index-only is a
+  plan shape, not a promise; Heap Fetches is the only place EXPLAIN tells you which happened".
+  THE 59 IS FULLY ACCOUNTED FOR: id=7 lived on block 0, the new version landed at (862,5), and
+  pg_visibility showed EXACTLY blocks 0 and 862 cleared; block 0 holds 57 live rows + 1 dead index
+  entry still pointing at (0,7) = 58, plus 1 on block 862 = 59.
+- MEASURED, the byte sequence that proves the whole addressing scheme with three get_byte calls,
+  on a 12-block table: (no fork) -> 85 -> 255 -> 243.
+  85 = 0x55 = 01010101 = four blocks all-visible, none frozen -- LITERALLY VISIBLE_MASK8.
+  255 = 0xff after VACUUM FREEZE. 243 = 0xf3 after updating one row on BLOCK 1
+  = 0xff & ~(0x03 << 2), i.e. HEAPBLK_TO_OFFSET(1) = 2 confirmed at the bit level.
+  Byte 27 = 0 because the heap stops at block 11 -- which is what makes visibilitymap_count's
+  "we assume that any extra bytes in the last page are zeroed" safe.
+- visibilitymap_count: VISIBLE_MASK8 0x55 "the lower bit of each bit pair", FROZEN_MASK8 0xaa
+  "the upper bit of each bit pair", pg_popcount_masked, NO LOCK ("immediately stale anyway... we
+  only really need an approximate value"). This is what feeds pg_class.relallvisible. Lesson 06's
+  Next Step 6 leaves the planner's cost formula to lesson 31.
+- visibilitymap_get_status: ONE UNLOCKED BYTE READ, "A single byte read is atomic", "It is the
+  caller's responsibility to deal with all concurrency issues!". THE TWO-PARAGRAPH SAFETY PROOF
+  WAS TAUGHT because it is specific and non-obvious: INSERTS are serialised for free (the VM bit
+  is cleared BEFORE the index is touched, and index buffer lock/unlock is a full memory barrier);
+  DELETES may be arbitrarily stale but the tuple stays visible until the deleter commits and
+  ProcArrayLock acts as the read barrier. FLAGGED AS A CONSTRAINT: any NEW consumer of the VM has
+  to re-derive that argument for itself.
+- vm_readbuf's RBM_ZERO_ON_ERROR, same justification as the FSM ("It's always safe to clear bits,
+  so it's better to clear corrupt pages than error out"), and the extend=false -> InvalidBuffer ->
+  `return (uint8) 0` path, which is why a table with NO vm fork behaves as "nothing is visible"
+  rather than erroring. Matches the docs' "queries will treat the visibility map as containing all
+  zeroes". vm_extend = ExtendBufferedRelTo(EB_CREATE_FORK_IF_NEEDED | EB_CLEAR_SIZE_CACHE) +
+  CacheInvalidateSmgr; relation extension itself left to lesson 08 as a black box, as lesson 05
+  did.
+- visibilitymap_prepare_truncate: MemSet(&map[truncByte+1], 0, MAPSIZE-(truncByte+1)) and
+  map[truncByte] &= (1 << truncOffset) - 1, with the reason quoted -- the tail bits are cleared
+  "because we don't get a chance to clear the bits if the heap is extended again", i.e. a
+  re-extended heap would inherit STALE SET BITS, the unsafe direction. This is the one VM write
+  gated on XLogHintBitIsNeeded() -> log_newpage_buffer, with "We cannot use MarkBufferDirtyHint
+  here, because that will not dirty the page during recovery". UNEXERCISED: data_checksums was OFF
+  this run, so that branch was not observed. Lesson 06's Next Step 5.
+- pg_visibility 1.2 as the observation tool, all signatures taught from the docs: pg_visibility_map
+  (2 overloads), pg_visibility (2 overloads, adds pd_all_visible), pg_visibility_map_summary,
+  pg_check_frozen, pg_check_visible, pg_truncate_visibility_map. Permissions recorded: superuser
+  or pg_stat_scan_tables, except pg_truncate_visibility_map which is superuser-only.
+- *** MEASURED, A FORCED TWO-PLACES DISAGREEMENT, and the blind spot it exposes. ***
+  pg_truncate_visibility_map('pg6_ios') then pg_visibility: vm all_visible = 0 of 863, heap pages
+  pd_all_visible = 861 (861 not 863 because two blocks were already cleared by the UPDATE).
+  Nothing corrupt; the optimisation simply stopped. AND pg_check_visible STILL RETURNED 0 ROWS --
+  it is defined as "non-all-visible tuples stored in pages marked all-visible IN THE VISIBILITY
+  MAP", so a map that marks nothing can hide nothing. THE CHECKS DETECT OVER-CLAIMING ONLY. A
+  clean pg_check_visible is NOT evidence the map is right. After the repairing VACUUM: 862 / 862.
+- The docs' "four orders of magnitude smaller" claim was CHECKED rather than repeated: the
+  asymptote is 32672:1 (3.27e4, so the claim is right) but THE FORK HAS A ONE-PAGE FLOOR, so
+  MEASURED ratios were 1:1 for a one-block table, 863:1 for pg6_ios, 17500:1 for pg6_bound. The
+  advertised ratio only arrives past 255.25 MiB of heap.
+
+VERSION DIVERGENCE: LARGER THAN LESSON 05'S, and it moves RESPONSIBILITY rather than geometry.
+(1) visibilitymap_set in 16 is
+    `(Relation rel, BlockNumber heapBlk, Buffer heapBuf, XLogRecPtr recptr, Buffer vmBuf,
+      TransactionId cutoff_xid, uint8 flags) -> void`;
+    in master it is `(BlockNumber heapBlk, Buffer vmBuf, uint8 flags, RelFileLocator rlocator)
+      -> uint8` and RETURNS THE PREVIOUS BITS.
+(2) WHO LOCKS: 16's function does LockBuffer(vmBuf, BUFFER_LOCK_EXCLUSIVE) itself; master asserts
+    the CALLER holds it, via BufferIsLockedByMeInMode (a predicate 16 does not have).
+(3) WHO LOGS: 16's function calls log_heap_visible() and PageSetLSN, and sets the HEAP page's LSN
+    only `if (XLogHintBitIsNeeded())` with a four-line comment on why it must NOT otherwise;
+    master does NO WAL at all and asserts `InRecovery || CritSectionCount > 0`, leaving the caller
+    to log the VM change together with the heap change.
+(4) THE HEADER COMMENT CHANGED WITH IT, and 16's is the clearer statement of WHY: 16 says
+    "Clearing visibility map bits is not separately WAL-logged" + "When we *set* a visibility map
+    during VACUUM, we must write WAL. This may seem counterintuitive, since the bit is basically a
+    hint..."; master generalises to "Changes to the visibility map bits are not separately
+    WAL-logged" because setting no longer logs either. QUOTE 16'S VERSION even when reading master.
+(5) visibilitymap_count: 16 uses VISIBLE_MASK64/FROZEN_MASK64 + pg_popcount64 over uint64 words
+    with StaticAssertStmt(MAPSIZE % sizeof(uint64) == 0, "unsupported MAPSIZE"); master uses
+    VISIBLE_MASK8 0x55 / FROZEN_MASK8 0xaa + pg_popcount_masked over bytes.
+(6) master adds HEAPBLK_TO_MAPBLOCK_LIMIT and visibilitymap_truncation_length(); 16 has neither.
+(7) master's visibilitymap_clear gained the same BufferIsLockedByMeInMode assertion.
+IDENTICAL IN BOTH: BITS_PER_HEAPBLOCK, all three flag constants, MAPSIZE, HEAPBLOCKS_PER_BYTE,
+HEAPBLOCKS_PER_PAGE, all three address macros, PageInit(page, BLCKSZ, 0), RBM_ZERO_ON_ERROR,
+vm_extend's ExtendBufferedRelTo + CacheInvalidateSmgr, and prepare_truncate's masking arithmetic.
+EVERY MEASURED NUMBER IS PG 16.15.
+
+NO SYLLABUS REVISION THIS RUN. Lesson 06's title was taught exactly as written -- PD_ALL_VISIBLE,
+all-frozen and the index-only scan it enables were all three taken in full, and nothing was left
+over. Lesson 05's handover scope was executed completely, including the two measurements it asked
+for by name (decode a VM page by hexdump and recover the bits for a known block; compare
+pg_relation_size(rel,'vm') against (rel,'fsm') on the same table).
+
+Throwaway tables left by this run (cluster does not persist; names listed only to avoid collisions
+within a future run): pg6_one, pg6_move, pg6_ios, pg6_freeze, pg6_bound, pg6_walcost, pg6_wal.
+Keep the pgNN_ prefix convention.
+
+-- HANDOVER TO LESSON 07 -----------------------------------------------------------------------
+Scope for lesson 07, "HOT updates and page pruning: redirect line pointers, heap_page_prune(), and
+the HOT chain". Lesson 06 ends on exactly the right cliff for it: the headline measurement is that
+one UPDATE cost 59 heap fetches because the new version landed on a DIFFERENT block (862) and so
+cleared TWO VM bits and added a NEW index entry. HOT is the mechanism that makes that update not
+happen that way -- same page, no new index entry, one VM bit cleared instead of two. LEAD WITH
+THAT. Lesson 06 has already paid for the setup; 07 should open by re-deriving the 59 under HOT and
+saying what it becomes.
+Take: src/backend/access/heap/README.HOT (THE primary source, in-tree, not yet read in this
+track -- it is the design document the whole feature is specified in); heap_page_prune(),
+heap_page_prune_opt() and heap_prune_chain() in src/backend/access/heap/pruneheap.c;
+LP_REDIRECT as the fourth lp_flags value (lesson 02 catalogued LP_UNUSED/LP_NORMAL/LP_DEAD and
+*named* LP_REDIRECT -- 07 owns it); pd_prune_xid and PD_PAGE_FULL, both of which lesson 02
+catalogued and deferred; HEAP_HOT_UPDATED and HEAP_ONLY_TUPLE, which lesson 03 tabulated in
+t_infomask2 and assigned to 07; the HOT-eligibility test in heap_update (what makes an update
+non-HOT: an indexed column changed, or no room on the page); and the chain-following rule lesson 03
+taught (validate with xmin(next) == xmax(this)) applied to a redirect.
+MEASURE IT. The cluster recipe works and is below; pgstattuple is present and lesson 07 is one of
+the two lessons the environment note already earmarks it for. Good candidates, in rough order of
+value: (a) RE-RUN LESSON 06'S pg6_ios EXPERIMENT with fillfactor low enough that the new version
+stays on the same page, and show Heap Fetches going to ~57 instead of 59 -- one VM bit instead of
+two; (b) heap_page_items on a page mid-HOT-chain, showing lp_flags = 2 (LP_REDIRECT) and an
+lp_off that is an OFFSET NUMBER rather than a byte offset, which is the single most confusing
+thing about the line pointer array and lesson 02 did not cover it; (c) watch pd_prune_xid get set
+and then cleared by an opportunistic prune triggered by a plain SELECT, which is the fact most
+people do not believe; (d) count index tuples before and after a run of HOT updates to show the
+index did not grow; (e) pgstattuple's dead_tuple_percent across prune and vacuum.
+Do NOT re-explain: the page header, line pointers, lp_off/lp_len, PageInit, the four free-space
+functions, the hole (02); the tuple header, t_ctid's four meanings, the infomask catalogues,
+BITMAPLEN, t_hoff, the null bitmap (03); alignment, varlena, the 126-byte boundary, attcacheoff,
+atthasmissing, TOAST (04); the FSM's categories, its on-page max-heap, fp_next_slot,
+fsm_logical_to_physical, the 3-block floor, the 32-byte rounding and its ceiling trap,
+MaxHeapTuplesPerPage = 291 (05); ANY of the visibility map -- the constants, MAPSIZE, the 32672
+geometry, the byte/bit offsets, PD_ALL_VISIBLE's two-places design, the pin-before-lock dance, the
+five clear call sites, why it is WAL-logged, xl_heap_visible, pg_visibility's functions, the
+59-fetch measurement (06). CITE the 59 and re-derive what HOT does to it; do not re-teach the map.
+Cite without re-deriving: 8192, 131072, 8160, 8164, 291, 24, 23, 2032, 1996, 8136, 126, 18, 4069,
+4095, the 32-byte FSM_CAT_STEP, the FSM leaf offset 4123+k, the page fingerprint "00 20 04 20" at
+offsets 16-19 (WHICH IS NOT FORK-SPECIFIC -- say "special space is zero"), and now: MAPSIZE 8168,
+HEAPBLOCKS_PER_PAGE 32672, the VM offset formula 24 + (b % 32672)/4, bit shift (b % 4)*2,
+VISIBLE_MASK8 0x55 / FROZEN_MASK8 0xaa, the 59-byte XLOG_HEAP2_VISIBLE record, and the VM's
+one-block fork floor against the FSM's three.
+Do NOT take: smgr, md.c, relation extension, the fsync queue (08) -- lesson 06 treated "extend the
+relation" as a black box and 07 should too, EXCEPT that lesson 06 left 08 a concrete question (see
+OPEN ITEMS); the buffer manager, BufferDesc, clock sweep, the strategy ring (09); the heavyweight
+lock manager (11); tuple lock strengths (12); hint bits and their FPI machinery (15, 22) -- lesson
+06 quoted MarkBufferDirty vs MarkBufferDirtyHint as a CONTRAST and did not teach either; snapshots
+and HeapTupleSatisfiesMVCC (14) -- 07 will be tempted, because "is this tuple dead" is exactly a
+snapshot question; use GlobalVisState/vistest as a named black box and defer; freezing and
+relfrozenxid (18); VACUUM's two heap passes, the dead-TID store, index bulk deletion (19) -- the
+distinction 07 must hold is PRUNING (opportunistic, single page, no index touched) versus VACUUMING
+(index-aware, two passes), and 07 owns only the first; amgettuple/amgetbitmap and the bitmap heap
+scan (30).
+OPEN ITEMS carried forward:
+- FOR LESSON 08: why does bulk relation extension overshoot? Lesson 06 measured COPY FREEZE
+  leaving 33 trailing EMPTY pages out of 80, which is also why only 47 blocks got VM bits. The
+  answer is in RelationGetBufferForTuple's extension batching, which is 08's territory.
+- FOR LESSON 19 (unchanged from lesson 05, still not closed): fsm_vacuum_page() and
+  FreeSpaceMapVacuumRange() have still not been read. They are the only code that makes the upper
+  FSM levels true. ALSO NEW for 19: lesson 06 measured a VACUUM emitting 18,400 WAL bytes over 118
+  blocks (155.9/block) of which the VISIBLE records are a minority; 19 owns that breakdown.
+- FOR LESSON 22/24/25: pg_waldump works on this cluster and --stats=record gives per-record-type
+  byte and FPI counts. Lesson 06 used it for the first time in this track. Use it.
+- FOR LESSON 31: pg_class.relallvisible comes from visibilitymap_count; the index-only-scan cost
+  formula that reads it was not located this run.
+- UNEXERCISED BRANCH, for whichever lesson runs with checksums on first:
+  visibilitymap_prepare_truncate's `XLogHintBitIsNeeded() -> log_newpage_buffer` path. Every
+  measurement in lessons 03-06 was taken with data_checksums OFF.
+- A DOCUMENTATION PATCH WORTH PROPOSING UPSTREAM, if anyone wants it: visibilitymap.c's LOCKING
+  section still says "only VACUUM currently sets visibility map bits", which heap_multi_insert's
+  all_frozen_set contradicts. Lesson 06 flagged it rather than fixing it.
+
+NOTE-BLOCK ROTATION DONE THIS RUN: lesson 03's note was dropped and TRACK-ARCHIVE.md gained the row
+"PG 03" pointing at commit 610357515b8e64cde4cb22cfaa3a34dd019456c4 / blob
+91f09a63f3a86af94a3d519f09c62e5d69272be5, which is the last state of TRACK.md carrying it. This
+block now holds 04, 05 and 06 -- exactly the three the policy allows. WHEN LESSON 07 SHIPS IT MUST
+DROP THE LESSON 04 BLOCK, and before dropping it MUST add its TRACK-ARCHIVE.md row first.
 
 Known environment facts for a fresh session (verify, do not assume):
 - Block size 8 KB and segment size 1 GB are compile-time (BLCKSZ, RELSEG_SIZE) and exposed as the
@@ -678,7 +772,8 @@ Known environment facts for a fresh session (verify, do not assume):
   of it is SUPERUSER-ONLY. pg_freespacemap covered lesson 05; pg_visibility covers 06.
   Lesson 01's hands-on installs all three; lesson 02's needs only pageinspect; lesson 05's needs
   pageinspect and pg_freespacemap.
-- CONFIRMED 2026-10-22, 2026-10-23 AND AGAIN 2026-10-24: the cloud sandbox CAN run a cluster.
+- CONFIRMED 2026-10-22, 2026-10-23, 2026-10-24 AND AGAIN 2026-10-25: the cloud sandbox CAN run a
+  cluster.
   psql, pg_config and /usr/lib/postgresql/16/bin/{initdb,postgres,pg_ctl,...} are in the image
   (PostgreSQL 16.15 on Ubuntu 24.04), and pageinspect, pg_freespacemap, pg_visibility, pgstattuple
   and amcheck are all present in /usr/share/postgresql/16/extension/. Recipe that worked: create a
@@ -690,10 +785,14 @@ Known environment facts for a fresh session (verify, do not assume):
   lesson from here on SHOULD measure; say so when it cannot. The cluster is per-run and does not
   persist, so table names from earlier runs are gone.
 - Table names used so far, for avoiding collisions within a run: seg_demo (01), pg2_fill /
-  pg2_big (02), pg3_* and w8 / w9 / w16 / w72 / w73 (03), pg4_* (04), pg5_* (05 -- the full lists
-  are in the lesson 04 and 05 notes above). Keep the pgNN_ prefix convention.
-- pg_freespacemap was used by lesson 05 and pg_visibility is needed by lesson 06 (both present in
-  /usr/share/postgresql/16/extension/). pg_buffercache is needed from lesson 09; pgstattuple for
+  pg2_big (02), pg3_* and w8 / w9 / w16 / w72 / w73 (03), pg4_* (04), pg5_* (05), pg6_* (06 --
+  the full lists are in the lesson 04, 05 and 06 notes above). Keep the pgNN_ prefix convention.
+- pg_freespacemap was used by lesson 05 and pg_visibility by lesson 06 (both present in
+  /usr/share/postgresql/16/extension/, both installed cleanly).
+- pg_waldump lives at /usr/lib/postgresql/16/bin/pg_waldump, works on the live cluster's segments,
+  and `--stats=record` prints a per-record-type record/FPI byte breakdown. Lesson 06 used it to
+  price XLOG_HEAP2_VISIBLE. Lessons 21-25 should use it rather than reasoning about WAL on paper.
+- pg_buffercache is needed from lesson 09; pgstattuple for
   lessons 07 and 19; amcheck for lessons 28-29 (it is the closest thing PostgreSQL has to SQLite's
   integrity_check, and the comparison is worth making explicitly when lesson 28 arrives).
 -->
