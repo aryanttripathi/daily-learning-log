@@ -44,6 +44,7 @@ commit you reach them through.
 | **PG 01** | **PostgreSQL Internals** | commit `2fd269184b17e59f9091b82cb8934672fd32c8f7` (2026-10-23, the last commit before the eighth trim — the first of the PostgreSQL track) | `1feb2d21947ee646bf23f350c8ac84424fe87251` |
 | **PG 02** | **PostgreSQL Internals** | commit `4b7ea85dcfcc830f71ca8ff16d7f26d84344b7a5` (2026-10-24, the last commit before the ninth trim) | `f47b8260ba0cab419ce2f4fc59a3e9c439ef6650` |
 | **PG 03** | **PostgreSQL Internals** | commit `610357515b8e64cde4cb22cfaa3a34dd019456c4` (2026-10-25, the last commit before the tenth trim) | `91f09a63f3a86af94a3d519f09c62e5d69272be5` |
+| **PG 04** | **PostgreSQL Internals** | commit `fffcd6bafd24c05eb83f0e2e46d0efab0597d880` (2026-10-26, the last commit before the eleventh trim) | `9fb0a858ff439a121aa72abf94e642c6fb06bc4b` |
 
 Notes on the rows:
 
@@ -129,13 +130,31 @@ Notes on the rows:
   numbers without re-deriving them. It is also the blob that still contains lesson 04's incorrect
   `HEAP_FSM_CREATION_THRESHOLD` claim in the lesson 04 note — see the `PG 02` annotation above and
   the correction recorded in lesson 05's note.
+- The **PG 04** blob carries the notes for PostgreSQL lessons **04, 05 and 06** together with the
+  handover that was written *to* lesson 07. It is therefore the right place to read lesson 04's
+  note — the one on attribute storage: the unifying thesis that `heap_compute_data_size()` is
+  **both** the layout oracle and the TOAST loop's measuring stick (every one of the four TOAST
+  passes is a `while (heap_compute_data_size(...) > maxDataLen)`), the six alignment macros on two
+  axes (nominal vs conditional × datum vs pointer) with the `att_align_nominal` pointer-alignment
+  "hack" comment that is sound only because `t_hoff` is `MAXALIGN`ed, `att_addlength_pointer`'s
+  three cases proved exhaustive by its own `AssertMacro`, the varlena bit-layout comment quoted
+  whole for both endiannesses, the **126-byte boundary** derived from `VARATT_CAN_MAKE_SHORT` and
+  then measured with `pg_column_size` (124→125, 125→126, 126→127, 127→**131**), the pad-byte peek
+  with its two-line four-case proof, and the measured column-order result (18 pad bytes in a
+  54-byte payload). It also carries lesson 04's two **closed** lesson-02 debts: the heap page
+  fingerprint `1c00 e01f 0020 0420` at bytes 12–19 and `MaxHeapTupleSize` 8160 pinned by the
+  constant "row is too big: size 8168" message across `n = 8133..8140`.
+  **Read this one with the `PG 02` and `PG 03` annotations in hand:** it is also where lesson 04's
+  incorrect `HEAP_FSM_CREATION_THRESHOLD` / `FSM_LOCAL_MAP` handover claim lives, which lesson 05
+  disproved (the patch was reverted in 2019 and never re-landed — no released PostgreSQL has a
+  small-table FSM exemption).
 - Lessons 01–12 of the SQLite track predate the note block; those lessons have no handover notes,
   only their documents.
 
 After the 2026-10-19 run, `TRACK.md` describes a **new track — PostgreSQL Internals, 35 lessons** —
-and after the 2026-10-25 run its note block holds the notes for PostgreSQL lessons **04, 05 and
-06** plus the handover to lesson 07. Every SQLite note, and now PostgreSQL lessons 01, 02 and 03's,
-lives in git history, indexed by the table above.
+and after the 2026-10-26 run its note block holds the notes for PostgreSQL lessons **05, 06 and
+07** plus the handover to lesson 08. Every SQLite note, and now PostgreSQL lessons 01–04's, lives
+in git history, indexed by the table above.
 
 ## Procedure for the next trim
 
@@ -161,10 +180,13 @@ on its own. A future third track should do the same.
 **A note's claims are not automatically true later.** Lesson 04's handover asserted
 `HEAP_FSM_CREATION_THRESHOLD = 4` and `FSM_LOCAL_MAP` with specific behaviour; lesson 05 found that
 neither identifier exists in any branch — the patch that introduced them was reverted in 2019 and
-never re-landed — and said so in the lesson. So treat an archived or live note as *what that run
-believed*, not as established fact: it is working memory, and one header fetch is usually enough to
-check a specific claim before building on it. When a later lesson overturns an earlier note, record
-the correction in the new note **and** annotate the archived row, as the `PG 02` row above now is.
+never re-landed — and said so in the lesson. Lesson 07 did the same thing to a *measurement*:
+lesson 06's "59 heap fetches after one cold update" turned out not to be a constant but
+`rows-on-the-old-block + 1`, and reproduced as **58** on a table one row per page narrower. So treat
+an archived or live note as *what that run believed*, not as established fact: it is working memory,
+and one header fetch (or one re-measurement) is usually enough to check a specific claim before
+building on it. When a later lesson overturns an earlier note, record the correction in the new note
+**and** annotate the archived row, as the `PG 02`, `PG 03` and `PG 04` rows above now are.
 
 ## What this file is not
 
