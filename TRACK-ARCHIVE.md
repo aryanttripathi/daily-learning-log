@@ -45,6 +45,7 @@ commit you reach them through.
 | **PG 02** | **PostgreSQL Internals** | commit `4b7ea85dcfcc830f71ca8ff16d7f26d84344b7a5` (2026-10-24, the last commit before the ninth trim) | `f47b8260ba0cab419ce2f4fc59a3e9c439ef6650` |
 | **PG 03** | **PostgreSQL Internals** | commit `610357515b8e64cde4cb22cfaa3a34dd019456c4` (2026-10-25, the last commit before the tenth trim) | `91f09a63f3a86af94a3d519f09c62e5d69272be5` |
 | **PG 04** | **PostgreSQL Internals** | commit `fffcd6bafd24c05eb83f0e2e46d0efab0597d880` (2026-10-26, the last commit before the eleventh trim) | `9fb0a858ff439a121aa72abf94e642c6fb06bc4b` |
+| **PG 05** | **PostgreSQL Internals** | commit `5d3a81e3c7b92c6679f964fb9354092862b4c6a3` (2026-10-26, the last commit before the twelfth trim) | `54c92e672c6081eec9935d5f6f8514ad8520a7ed` |
 
 Notes on the rows:
 
@@ -102,6 +103,10 @@ Notes on the rows:
   reserved rather than one. Note that lessons 01 and 02 were written **without a cluster** and
   claim no observed figures; lesson 04 later measured and confirmed lesson 02's two outstanding
   predictions.
+  **Read this one with lesson 08's note in hand:** lesson 08 (2026-10-27) turned the segment
+  invariant and the zero-length K+1st segment from paper into measurements — a 142,858-block
+  relation with segment 0 at exactly 1,073,741,824 bytes and a `.1` of 11,786 blocks, and a
+  `VACUUM` truncation that left `.1` present at **0 bytes** and invisible to `mdnblocks`.
 - The **PG 02** blob carries the notes for PostgreSQL lessons **02, 03 and 04** together with the
   handover that was written *to* lesson 05. It is therefore the right place to read lesson 02's
   note — the one on `PageHeaderData` by byte offset, the `SizeOfPageHeaderData = offsetof` trick,
@@ -148,12 +153,32 @@ Notes on the rows:
   incorrect `HEAP_FSM_CREATION_THRESHOLD` / `FSM_LOCAL_MAP` handover claim lives, which lesson 05
   disproved (the patch was reverted in 2019 and never re-landed — no released PostgreSQL has a
   small-table FSM exemption).
+- The **PG 05** blob carries the notes for PostgreSQL lessons **05, 06 and 07** together with the
+  handover that was written *to* lesson 08. It is therefore the right place to read lesson 05's
+  note — the one on the Free Space Map: `FSM_CATEGORIES` 256 and `FSM_CAT_STEP` 32 with the floor/
+  ceil asymmetry between `fsm_space_avail_to_cat` and `fsm_space_needed_to_cat` and why category
+  255 is reserved, `NonLeafNodesPerPage` 4095 against `SlotsPerFSMPage` **4069** as the ragged
+  remainder, the reusable byte offsets (`fp_next_slot` at page offset 24, the page root at 28, leaf
+  slot *k* at **4123 + k**), `fsm_logical_to_physical` fully evaluated so the fork is **not**
+  level-major and the minimum fork is three blocks, `fsm_search_avail`'s expanding search triangle
+  and the two self-correcting rebuild paths, `fp_next_slot` written under a *shared* lock on
+  purpose, the measured finding that **the upper levels are stale until `VACUUM`** (the same
+  `INSERT` landing on a different block before and after), the 32-byte ceiling trap measured to the
+  byte (8 bytes of rounding costing one 8 KB page), `MaxHeapTuplesPerPage` = 291 first *observed*,
+  and the honest non-result that the predicted 291-ceiling `PageGetHeapFreeSpace() == 0` trap
+  **did not fire**. It is also where the correction to lesson 04's `HEAP_FSM_CREATION_THRESHOLD`
+  claim is recorded in full, and where the "bytes 16–19 identify zero special space, not heap"
+  correction to lesson 02 lives.
+  **Two of its claims were narrowed by later runs:** lesson 06 showed that "a one-page table has no
+  FSM fork" holds only *pre-*`VACUUM`, and lesson 08 answered its open question about whether the
+  three-block FSM floor is a consequence of extension (it is `fsm_logical_to_physical`'s
+  interleaving, not `smgrextend`).
 - Lessons 01–12 of the SQLite track predate the note block; those lessons have no handover notes,
   only their documents.
 
 After the 2026-10-19 run, `TRACK.md` describes a **new track — PostgreSQL Internals, 35 lessons** —
-and after the 2026-10-26 run its note block holds the notes for PostgreSQL lessons **05, 06 and
-07** plus the handover to lesson 08. Every SQLite note, and now PostgreSQL lessons 01–04's, lives
+and after the 2026-10-27 run its note block holds the notes for PostgreSQL lessons **06, 07 and
+08** plus the handover to lesson 09. Every SQLite note, and now PostgreSQL lessons 01–05's, lives
 in git history, indexed by the table above.
 
 ## Procedure for the next trim
@@ -186,7 +211,7 @@ lesson 06's "59 heap fetches after one cold update" turned out not to be a const
 an archived or live note as *what that run believed*, not as established fact: it is working memory,
 and one header fetch (or one re-measurement) is usually enough to check a specific claim before
 building on it. When a later lesson overturns an earlier note, record the correction in the new note
-**and** annotate the archived row, as the `PG 02`, `PG 03` and `PG 04` rows above now are.
+**and** annotate the archived row, as the `PG 02`, `PG 03`, `PG 04` and `PG 05` rows above now are.
 
 ## What this file is not
 
