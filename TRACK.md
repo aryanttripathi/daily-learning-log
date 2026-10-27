@@ -3,15 +3,15 @@ track-state
 subject: PostgreSQL
 started: 2026-10-19
 lessons-total: 35
-lessons-done: 7
+lessons-done: 8
 -->
 
 # Current Track: PostgreSQL Internals
 
 Sequential deep dive. One lesson per day, each building on the last.
 
-**STATUS: in progress — lesson 07 shipped 2026-10-26.** The syllabus was written on 2026-10-19, the
-day the SQLite track's capstone shipped. The next run takes **lesson 08**.
+**STATUS: in progress — lesson 08 shipped 2026-10-27.** The syllabus was written on 2026-10-19, the
+day the SQLite track's capstone shipped. The next run takes **lesson 09**.
 
 The order follows PostgreSQL's actual source layout rather than a textbook outline. It was built
 from two pieces of primary evidence read on 2026-10-19: the chapter list of
@@ -53,7 +53,7 @@ readable as the other answer to a question SQLite already answered.
 - [x] 05 — The Free Space Map: the FSM tree pages and how a page with room is found
 - [x] 06 — The Visibility Map: `PD_ALL_VISIBLE`, all-frozen, and the index-only scan it enables
 - [x] 07 — HOT updates and page pruning: redirect line pointers, `heap_page_prune()`, and the HOT chain
-- [ ] 08 — `smgr` and `md.c`: relation extension, the segment map, and the fsync request queue
+- [x] 08 — `smgr` and `md.c`: relation extension, the segment map, and the fsync request queue
 
 ### Part II — Shared memory: buffers and locks (`storage/buffer`, `storage/lmgr`)
 
@@ -112,171 +112,6 @@ The SQLite track's lessons 31-33 notes were archived on that run; see TRACK-ARCH
 "31 - 33". The capstone document (2026/10/2026-10-19-sqlite-capstone/README.md) closes the track
 and records which items were deliberately left unread. None of these carry forward into the
 PostgreSQL track. Do not hand them to a PostgreSQL lesson.
-
--- LESSON 05 (2026-10-24) AS TAUGHT ------------------------------------------------------------
-Document: 2026/10/2026-10-24-postgres-free-space-map/README.md (single README, not split -- one
-mechanism, no sub-topic deserved its own file). Source commit read: postgres/postgres@126976a8
-(master) PLUS REL_16_STABLE for src/include/storage/freespace.h. Trees so far: 01 @ddd468ca,
-02 @3cde90ec, 03 @f2edf5dd, 04 @f52d4051, 05 @126976a8. Keep stating the commit.
-Files read IN FULL: storage/freespace/README, fsmpage.c, freespace.c, storage/fsm_internals.h,
-storage/freespace.h.
-
-*** THIS RUN HAD A CLUSTER, and EVERY number in the lesson is measured. Same recipe as 03/04. ***
-PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1), x86_64, gcc 13.3.0, block_size 8192,
-data_checksums off, pageinspect 1.12, pg_freespacemap 1.2, pgstattuple 1.5. The two traps still
-apply (initdb not as root; data dir not under the scratchpad path -- /var/tmp works).
-
-*** CORRECTION TO LESSON 04'S HANDOVER, important: HEAP_FSM_CREATION_THRESHOLD AND FSM_LOCAL_MAP
-DO NOT EXIST. *** Not in master @126976a8, not in REL_16_STABLE (freespace.h is byte-identical
-between the two branches), and a repo-wide code search returns zero hits. The feature was
-b0eaa4c51b "Avoid creation of the free space map for small heap relations" and it was REVERTED
-WHOLESALE by 7db0cde6b58eef2ba0c70437324cbc7622230320 on 2019-05-07 along with six follow-ups
-(06c8a5090e, 13e8643bfc, 6f918159a9, 9c32e4c350, 29d108cdec, 08ecdfe7e5). The revert message says
-the process-local map "was reset whenever a block with enough free space was found" and that a
-per-relation relcache map would be better; that redesign was never landed. SO NO RELEASED
-POSTGRESQL HAS A SMALL-TABLE FSM EXEMPTION. Measured confirmation: the FSM fork appears at TWO
-heap pages, not five. Do not propagate the 4-page threshold claim.
-
-TOOK, and must not be re-taught:
-- THE CATEGORY. FSM_CATEGORIES 256, FSM_CAT_STEP = BLCKSZ/256 = 32, MaxFSMRequestSize =
-  MaxHeapTupleSize = 8160. fsm_space_avail_to_cat FLOORS (and clamps to 254 below 8160, returning
-  255 only at >= 8160); fsm_space_needed_to_cat CEILS ((needed+31)/32) and returns 1 for needed==0;
-  fsm_space_cat_to_avail(255) = 8160 exactly, else cat*32. The reason 255 is reserved is quoted
-  from the header: otherwise a page with exactly MaxFSMRequestSize free would not satisfy a
-  request for MaxFSMRequestSize. needed > 8160 is an elog(ERROR) "invalid FSM request size", and
-  it is UNREACHABLE from SQL because lesson 04's "row is too big" fires first.
-- A STALE COMMENT, flagged and resolved by measurement: freespace.c's worked example says
-  "MaxFSMRequestSize is 8164 bytes" and tabulates 8164-8192 as category 255. The code says 8160.
-  MEASURED: pg_freespace on the emptiest possible heap page returns 8160. The comment's example is
-  4 bytes wrong (8164 is lesson 02's PageGetFreeSpace on a fresh page). Lesson 05's Next Step 6
-  asks whether it was ever true -- a git log question, not yet answered.
-- THE ON-PAGE STRUCTURE, derived and then MEASURED. FSMPageData { int fp_next_slot; uint8
-  fp_nodes[] }, offsetof(fp_nodes) = 4. NodesPerPage = 8192 - MAXALIGN(24) - 4 = 8164.
-  NonLeafNodesPerPage = BLCKSZ/2 - 1 = 4095 = 2^12 - 1. LeafNodesPerPage = SlotsPerFSMPage =
-  8164 - 4095 = 4069. The non-leaf count is a round power of two minus one and the leaf count is
-  the RAGGED REMAINDER -- which is why SlotsPerFSMPage is not a power of two, why 4096-4069 = 27
-  leaf positions do not exist on the page, and why the README says "a few right-most leaf nodes
-  are missing". One bottom FSM page covers 4069 heap blocks = 31.79 MiB of heap.
-- BYTE OFFSETS, ESTABLISHED AND MEASURED, reusable without re-deriving: PageGetContents = page+24,
-  so fp_next_slot is at page offset 24 (int32 LE), fp_nodes[0] (the page root) at offset 28, and
-  LEAF SLOT k AT OFFSET 4123 + k. Node 8163 lands on byte 8191 -- the array exactly fills the page.
-  MEASURED: get_byte(...,28) = get_byte(...,4123) = 12 on a page whose pg_freespace avail was 384
-  = 12*32; bytes 24..31 = "00000000 0c 0c 00 0c" decoded field by field against fsm_page_contents.
-- THE TREE OF PAGES. FSM_TREE_DEPTH = ((SlotsPerFSMPage >= 1626) ? 3 : 4) = 3; FSM_ROOT_LEVEL 2,
-  FSM_BOTTOM_LEVEL 0; constant height by design. 4069^3 = 67,369,460,509 >> 2^32-1. Logical
-  addressing {level, logpageno} + slot; fsm_get_location = heapblk/4069, heapblk%4069;
-  fsm_get_parent/fsm_get_child divide and multiply by SlotsPerFSMPage.
-- fsm_logical_to_physical FULLY EVALUATED AND MEASURED. root {2,0} -> block 0; {1,0} -> 1;
-  {0,0} -> 2; {0,1} -> 3; {0,4068} -> 4070; {1,1} -> 4071; {0,4069} -> 4072. THE FORK IS NOT
-  LEVEL-MAJOR: upper-level pages are interleaved into the stream where they become necessary.
-  CONSEQUENCE, MEASURED: the minimum FSM fork is THREE BLOCKS = 24576 bytes, because the bottom
-  page cannot be block 0. Observed: 1 heap page -> fsm 0 bytes; 2..4069 heap pages -> 24576;
-  4071 heap pages -> 32768, and the level-1 page (block 1) gains its second populated leaf
-  (node 4096). SlotsPerFSMPage = 4069 is now an OBSERVATION.
-- fsm_set_avail: bubble up via parentof, stop as soon as a parent's recomputed max is unchanged;
-  the no-op fast path has TWO conditions (oldvalue == value AND value <= fp_nodes[0]) because an
-  equal leaf under a too-low root must still proceed so the trailing sanity check fires; and that
-  check (value > fp_nodes[0] -> fsm_rebuild_page) is self-correcting measure #1.
-- fsm_search_avail: the EXPANDING SEARCH TRIANGLE. Root byte < minvalue -> return -1 (one unlocked
-  byte answers "nothing anywhere"). Start at fp_next_slot, ALWAYS clamped. Loop
-  parentof(rightneighbor(nodeno)); rightneighbor detects stepping onto a level's leftmost node
-  (2^level - 1) with ((x+1) & x) == 0 and corrects with parentof. Triangle doubles each step =>
-  log2(N). Result is THE FIRST SUITABLE SLOT AT OR RIGHT OF fp_next_slot WITH WRAPAROUND, not the
-  leftmost. Descent prefers the left child; if neither child qualifies the page is TORN ->
-  DEBUG1 "fixing corrupt FSM block %u, relation %u/%u/%u", upgrade to exclusive, fsm_rebuild_page,
-  MarkBufferDirtyHint, goto restart (self-correcting measure #2).
-- fp_next_slot IS WRITTEN UNDER A SHARED LOCK, deliberately. Typed int not uint16 because "int is
-  more likely to be atomically fetchable/storable"; README: "fp_next_slot is just a hint and we can
-  easily reset it if it gets corrupted". MEASURED: after a search returning slot 0 at the bottom
-  level, bytes 24..27 = 01000000 -> fp_next_slot = 1, i.e. advancenext. fsm_search passes
-  advancenext = (addr.level == FSM_BOTTOM_LEVEL), so only leaf pages advance.
-  NOTE for master: this is now gated on BufferBeginSetHintBits()/BufferFinishSetHintBits() in
-  @126976a8, which PG 16 does not have. Flagged in the lesson's divergence note.
-- NOT WAL-LOGGED, and master's README argues the nuance HARD -- four new paragraphs. Writes use
-  MarkBufferDirtyHint(), reads use RBM_ZERO_ON_ERROR, so a bad FSM page becomes "nothing free",
-  which costs space not correctness. BUT the README insists RelationCopyStorage() (ALTER TABLE SET
-  TABLESPACE), RelationCopyStorageUsingBuffer() (CREATE DATABASE STRATEGY = wal_log), base backups
-  and pg_checksums ALL verify checksums on *_fsm files, so the hint-bit FPIs are load-bearing and
-  must not be downgraded to MarkBufferDirty(). Quote it if a later lesson claims the FSM is
-  simply unchecked. (Lesson 24/25 may want this when FPIs come up.)
-- fsm_does_block_exist: cached smgr_cached_nblocks[MAIN_FORKNUM] fast path, else
-  RelationGetNumberOfBlocks -- the comment admits the lseek() cost and says the alternative "would
-  cause FSM to set zero space available for blocks that main fork extension just recorded". A hit
-  past the end zeroes the slot and RESTARTS FROM THE ROOT, with the comment calling advancenext
-  "pessimal for this rare scenario". fsm_search has an emergency valve: restarts > 10000 ->
-  InvalidBlockNumber, "Looping indefinitely is nevertheless scary".
-- AN FSM PAGE IS AN "EMPTY" PAGE TO bufpage.c -- MEASURED. PageInit(page, BLCKSZ, 0): pd_lower 24
-  forever, pd_upper = pd_special = 8192, so PageIsEmpty() is ALWAYS true, PageGetExactFreeSpace()
-  is ALWAYS 8168, and lesson 02's four free-space functions are meaningless on this fork. The whole
-  payload lives in lesson 02's HOLE, which is why PageInit's full-page MemSet and the checksum's
-  coverage of the hole matter here.
-- THE FINGERPRINT DOES NOT IDENTIFY THE FORK -- MEASURED, and it corrects a tempting misreading of
-  lessons 02/04. FSM page bytes 12-19 = "1800 0020 0020 0420"; heap page = "2800 c001 0020 0420".
-  BYTES 16-19 ARE "00 20 04 20" FOR BOTH. The fingerprint identifies the SPECIAL-SPACE SIZE (zero),
-  which heap, sequence, TOAST and FSM pages all share. State it that way from now on.
-- MEASURED, the FSM-vs-reality chain on an empty heap page: exact hole 8164 -> PageGetHeapFreeSpace
-  / PageGetFreeSpace 8160 -> cat 255 -> reported 8160. Every step cites an earlier lesson's number.
-  pd_lower was 28 (one LP_UNUSED pointer survived PageTruncateLinePointerArray).
-- MEASURED, rounding loss: a page with exact hole 2080 / PageGetFreeSpace 2076 is recorded as 2048.
-  28 bytes invisible; maximum possible loss 31 bytes per block.
-- *** THE BEST MEASUREMENT OF THE LESSON, and the one a later lesson should cite: THE UPPER LEVELS
-  ARE STALE UNTIL VACUUM. *** fsm_set_and_search bubbles up WITHIN ONE PAGE only; nothing
-  propagates a bottom page's root into its parent's leaf except FreeSpaceMapVacuum[Range](), which
-  VACUUM calls. RecordPageWithFreeSpace's own comment says so. MEASURED on an 8-page table built
-  by plain inserts: leaves all 384, ROOT PAGE AND LEVEL-1 PAGE ENTIRELY ZERO (fsm_page_contents
-  printed only "fp_next_slot: 0"). After VACUUM both upper pages populated. THEN, with each step in
-  a SEPARATE psql process so no backend reused another's RelationGetTargetBlock relcache hint:
-  the same tiny INSERT landed at ctid (2,5) before VACUUM (FSM search failed at the root ->
-  RelationGetBufferForTuple's LAST-BLOCK FALLBACK) and at (0,5) after VACUUM (a real FSM hit).
-  Identical statement, identical table, different target block, decided by ONE BYTE at page 0
-  offset 28. The last-block fallback is why this failure mode is usually invisible.
-- *** THE 32-BYTE CEILING TRAP, MEASURED TO THE BYTE. *** pg5_cons: block 0 left with
-  PageGetFreeSpace = 8136 (one 24-byte tuple on an otherwise empty page) -> avail_to_cat floors to
-  254 -> the category promises 8128. A row whose MAXALIGNed footprint is EXACTLY 8136 asks
-  needed_to_cat = ceil(8136/32) = 255 > 254, so block 0 is NOT OFFERED; the last-block fallback
-  (block 2, 32 bytes) had no room; THE RELATION EXTENDED TO BLOCK 3 and the row landed at (3,1).
-  8 bytes of rounding cost one 8 KB page. Generalisation taught: a block recorded at category C is
-  never offered to a request above 32*C, so any block whose usable free space is not an exact
-  multiple of 32 has a dead band of up to 31 bytes at the top of its range.
-- MaxHeapTuplesPerPage = 291, FIRST MEASURED HERE (lesson 02 derived it). 291 single-NULL-column
-  tuples of lp_len 24 fit on page 0; the 292nd went to (1,1); pd_lower 1188 = 24 + 291*4, pd_upper
-  1208, exact hole 20 -- the LINE POINTER ARRAY is the binding constraint, not the tuple bytes.
-- HONEST NON-RESULT, recorded deliberately: the predicted "PageGetHeapFreeSpace returns 0 at the
-  291 ceiling" trap DID NOT FIRE. Delete 290 of 291 and vacuum: with 290 LP_UNUSED pointers present
-  PD_HAS_FREE_LINES is set (page flags 5 = PD_HAS_FREE_LINES|PD_ALL_VISIBLE), the function finds a
-  reusable pointer and returns 6976, not 0. DO NOT cite the 291 ceiling as a cause of FSM
-  under-reporting. What it DOES cost, measured: keeping the LAST row leaves all 291 line pointers
-  (pd_lower 1188, exact hole 6980, FSM 6976); keeping the FIRST row truncates the array to 1
-  (pd_lower 28, exact hole 8140, FSM 8128). SAME TABLE, SAME ONE SURVIVOR, 1152 BYTES OF DIFFERENCE
-  decided only by WHERE ON THE PAGE the survivor sits, because PageTruncateLinePointerArray can
-  only reclaim a trailing contiguous unused run (lesson 02).
-- Also measured: a ONE-PAGE table has NO FSM fork (0 bytes) and pg_freespace reports 0 for its only
-  block, because fsm_readbuf(..., extend=false) returns InvalidBuffer and GetRecordedFreeSpace
-  returns 0.
-- Index FSM semantics NAMED AND NOT TAKEN: for indexes the FSM tracks entirely-unused pages rather
-  than free space within pages, so the byte is a boolean; indexfsm.c is the separate wrapper.
-  Lesson 05's Next Step 5 asks a later reader to settle which AMs use it. Lessons 28-30 may want it.
-- The README's TODO quoted and left open: "fastroot to avoid traversing upper nodes with just 1
-  child" and "use a different system for tables that fit into one FSM page" -- the second is
-  exactly what the reverted b0eaa4c51b tried to do.
-
-VERSION DIVERGENCE: smaller than lesson 04's. storage/freespace.h is BYTE-IDENTICAL between master
-@126976a8 and REL_16_STABLE. The differences found: (1) master's fsm_search_avail writes
-fp_next_slot inside `if (exclusive_lock_held || BufferBeginSetHintBits(buf))` with a matching
-BufferFinishSetHintBits(buf, false, false) -- that hint-bit API does not exist in 16, which simply
-writes the field; (2) master's README carries four paragraphs on RBM_ZERO_ON_ERROR vs external
-checksum verifiers that older trees do not; (3) FreeSpaceMapPrepareTruncateRel's
-log_newpage_buffer() path carries an "XXX consider XLogSaveBufferForHint()" note. IDENTICAL in both:
-every constant, every conversion function, the addressing arithmetic, the tree depth rule, and the
-on-page layout. EVERY MEASURED NUMBER IS PG 16.
-
-NO SYLLABUS REVISION THIS RUN. Lesson 05's title was taught exactly as written and nothing was left
-over. The only correction made was to lesson 04's HANDOVER (the nonexistent
-HEAP_FSM_CREATION_THRESHOLD), not to the syllabus.
-
-Throwaway tables left by this run (cluster does not persist; names listed only to avoid collisions
-within a future run): pg5_grow, pg5_empty, pg5_tiny, pg5_tiny2, pg5_one, pg5_gran, pg5_round,
-pg5_stale, pg5_big, pg5_cons. Keep the pgNN_ prefix convention.
 
 -- LESSON 06 (2026-10-25) AS TAUGHT ------------------------------------------------------------
 Document: 2026/10/2026-10-25-postgres-visibility-map/README.md (single README, not split -- one
@@ -376,6 +211,11 @@ TOOK, and must not be re-taught:
   actually containing a row was 46, so no heap_multi_insert ever ran on 47..79. Autovacuum later
   truncated the relation to 47 blocks and all 47 were all-visible+all-frozen. Lesson 06's Next
   Step 4 hands the "why does extension overshoot" question to lesson 08.
+  *** ANSWERED BY LESSON 08 (2026-10-27): RelationAddBlocks() in hio.c multiplies the pages it
+  needs by (1 + the number of extension-lock waiters) and takes Max() with
+  bistate->already_extended_by, which ACCUMULATES, so a COPY ramps 10, 10, 20, 40, 64, 64, ...
+  up to MAX_BUFFERS_TO_EXTEND_BY = 64 and the surplus goes to the FSM or to bistate->next_free.
+  Measured cost of the overshoot on a 20,000-row COPY: 2,896 blocks against 2,858. ***
 - *** THE HEADLINE MEASUREMENT, and the one a later lesson should cite: PAGE GRANULARITY COSTS 59
   HEAP FETCHES FOR ONE UPDATED ROW. *** pg6_ios, 50,000 rows / 863 heap blocks / PK on id, query
   `select count(id) from pg6_ios where id between 1 and 20000`, seqscan+bitmapscan off:
@@ -668,7 +508,6 @@ TOOK, and must not be re-taught:
 - The MaxHeapTuplesPerPage = 291 cap (lesson 05's number) CITED, with README.HOT's reason quoted:
   the feature is a resurrection of an idea "proposed and rejected before because of fear of line
   pointer bloat", and the cap limits the damage. NOT OBSERVED -- see open items.
-
 DELIBERATELY TREATED AS BLACK BOXES, as the handover asked: GlobalVisState / vistest (14),
 relation extension and RelationGetBufferForTuple (08), the buffer cleanup lock's implementation
 (09/10), HeapTupleSatisfiesVacuum's internals (14), VACUUM's two passes and index bulk deletion
@@ -687,117 +526,293 @@ Throwaway tables left by this run (cluster does not persist; names listed only t
 within a future run): pg7_chain, pg7_dead, pg7_ios, pg7_hot, pg7_steady, pg7_cold, pg7_hold,
 pg7_idx, pg7_x. Keep the pgNN_ prefix convention.
 
--- HANDOVER TO LESSON 08 -----------------------------------------------------------------------
-Scope for lesson 08, "smgr and md.c: relation extension, the segment map, and the fsync request
-queue". LESSONS 05, 06 AND 07 HAVE ALL NOW TREATED "EXTEND THE RELATION" AS A BLACK BOX AND EACH
-LEFT 08 A DIFFERENT CONCRETE QUESTION. Lesson 08 is where they get answered, and it should open by
-naming all three rather than starting from the file layout, because lesson 01 already taught the
-file layout (GetRelationPath, the three forks, the 1 GB segments, mdtruncate's zero-length K+1st
-segment) and 08 must NOT re-teach it.
-THE THREE INHERITED QUESTIONS, in descending order of value:
- (1) *** FROM LESSON 06, STILL OPEN: WHY DOES BULK RELATION EXTENSION OVERSHOOT? *** Lesson 06
-     measured COPY FREEZE leaving 33 trailing EMPTY pages out of 80, which is also why only 47 of
-     80 blocks got VM bits, and autovacuum later truncated the relation to 47. The answer is in
-     RelationGetBufferForTuple's extension batching (and in PG 16, ExtendBufferedRelBy /
-     EB_* flags, which lesson 06 saw named in vm_extend but did not read).
- (2) NEW FROM LESSON 07: lesson 07 measured, repeatedly, that N cold updates produce EXACTLY N new
-     blocks when the old page is full (35 cold -> 35 blocks; 173 cold -> 172 blocks). That is a
-     statement about RelationGetBufferForTuple's page-choice policy and its interaction with
-     LESSON 05'S FSM, and it sits exactly on 08's boundary. Lesson 07 also found that
-     heap_page_prune deliberately does NOT update the FSM after recovering space ("The free space
-     should be reused by UPDATEs to *this* page") -- so 08 should say which path DOES tell the FSM
-     about a prune-recovered page, and whether a cold update can ever be routed back onto it.
- (3) FROM LESSON 05, unchanged: smgrextend / mdextend and whether the FSM fork's 3-block floor is a
-     consequence of extension or of fsm_vacuum.
-Take: src/backend/storage/smgr/README and smgr.c (the f_smgr indirection table and why it exists
-with exactly one implementation); md.c in full -- mdopenfork/mdextend/mdzeroextend/mdread/mdwrite/
-mdnblocks/mdtruncate/mdimmedsync, the _mdfd_getseg segment map and _fdvec_resize; the SYNC REQUEST
-QUEUE in storage/sync/sync.c (RegisterSyncRequest, ForgetRelationSyncRequests, the checkpointer's
-AbsorbSyncRequests) which is the part nobody reads and the part that makes checkpoints correct;
-RelationGetBufferForTuple in hio.c WITH its extension batching; and ExtendBufferedRelBy /
-ExtendBufferedRelTo in bufmgr.c (the EB_CREATE_FORK_IF_NEEDED / EB_CLEAR_SIZE_CACHE flags lesson 06
-quoted without reading). bufmgr.c is also lesson 09's territory: 08 should read ONLY the extension
-entry points and leave BufferDesc, the clock sweep and the strategy ring alone.
-MEASURE IT. The recipe below works and has now worked five runs running. Good candidates, in rough
-order of value: (a) close question (1) by instrumenting extension -- watch pg_relation_size grow in
-steps larger than one block under concurrent inserters, and find the batch size; (b) cross a 1 GB
-SEGMENT BOUNDARY for the first time in this track -- lesson 01 derived RELSEG_SIZE 131072 and the
-32,767-segment ceiling on paper and NOTHING has observed a `.1` file yet, and ~31 GB of disk
-headroom was available this run, so a 1 GB+ unlogged table is feasible and would turn lesson 01's
-arithmetic into an observation the way lesson 06 did for the VM boundary; (c) mdtruncate's
-zero-length K+1st segment, also still unobserved; (d) pg_waldump the extension path to see whether
-extension is WAL-logged at all (it is not, for the heap -- say so with evidence); (e) watch the
-sync request queue with a forced checkpoint and pg_stat_bgwriter.
+-- LESSON 08 (2026-10-27) AS TAUGHT ------------------------------------------------------------
+Document: 2026/10/2026-10-27-postgres-smgr-md-segments-fsync-queue/README.md (single README, not
+split -- the segment map, the extension batching and the fsync queue are three sections of one
+vertical slice, and splitting would have hidden that they are the same layer).
+
+SOURCE PROVENANCE: `apt-get source postgresql-16` again, version 16.15-0ubuntu0.24.04.1, the same
+build the cluster runs. LESSON 07'S ROUTE WORKS AND IS NOW THE DEFAULT -- see the environment notes
+below for the exact recipe (deb-src on noble, then apt-get source into a world-readable dir).
+PATCH CHECK, AND IT MATTERS MORE THIS RUN THAN LAST: there are 15 patches in debian/patches/ now,
+and ONE OF THEM TOUCHES bufmgr.c (v8-0001-Fix-recovery-conflict-SIGUSR1-handling.patch). Its only
+bufmgr.c hunk is at LockBufferForCleanup(), nowhere near ExtendBufferedRel*, so the extension code
+quoted is upstream verbatim -- but DO NOT repeat lesson 07's blanket "no patch touches anything we
+read"; extract the +++/--- paths and check per file. md.c, smgr.c, sync.c, hio.c, checkpointer.c
+and fd.c are untouched. Trees/releases so far: 01 @ddd468ca, 02 @3cde90ec, 03 @f2edf5dd,
+04 @f52d4051, 05 @126976a8, 06 @0019a1ec, 07 = release 16.15, 08 = release 16.15.
+Files read IN FULL: storage/smgr/README (52 lines), include/storage/smgr.h, include/storage/sync.h.
+Read substantially: storage/smgr/md.c (1649 lines -- every function named in the lesson),
+storage/sync/sync.c (624 lines). Read in part: postmaster/checkpointer.c (ForwardSyncRequest,
+CompactCheckpointerRequestQueue, the CheckpointerShmemStruct declaration, CheckpointerShmemSize),
+access/heap/hio.c (RelationAddBlocks), storage/buffer/bufmgr.c (ExtendBufferedRelBy/To/Common/
+Shared, LimitAdditionalPins), common/file_utils.c (pg_pwrite_zeros), utils/misc/guc_tables.c
+(the file_extend_method entry), include/storage/fd.h (enum FileExtendMethod),
+include/port/pg_iovec.h (PG_IOV_MAX), catalog/storage.c (AddPendingSync, smgrDoPendingSyncs),
+access/nbtree/nbtsort.c (the smgrimmedsync call site).
+
+*** THIS RUN HAD A CLUSTER, EVERY number is measured, AND THE PRIMARY INSTRUMENT WAS strace, NOT
+SQL. *** PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1), x86_64, gcc 13.3.0, Linux 6.18, ext4,
+2 vCPU / 8 GB RAM, ~30 GB free. block_size 8192, segment_size 131072 blocks, wal_segment_size
+16 MB, wal_level replica, max_wal_size 1 GB, checkpoint_timeout 300 s, fsync on, data_sync_retry
+off, max_files_per_process 1000, file_extend_method posix_fallocate, shared_buffers 128 MB except
+where a measurement says otherwise, data_checksums OFF.
+*** A DIFFERENT CLUSTER RECIPE WORKED THIS RUN AND IS SIMPLER: `apt-get install postgresql
+postgresql-contrib` then `pg_ctlcluster 16 main start`, running psql as the postgres user via
+`su postgres -c`. No initdb, no /var/tmp dance, ALTER SYSTEM + pg_ctlcluster restart works for
+PGC_POSTMASTER settings, and the log is at /var/log/postgresql/postgresql-16-main.log which is
+where log_checkpoints and DEBUG1 output land. Both recipes work; this one is fewer steps. The
+world-readable-script trap still applies: put psql -f scripts in /tmp/<dir> with chmod 777. ***
+
+TOOK, and must not be re-taught:
+- THE SWITCH: smgrsw[] has ONE element, 16 md* function pointers, and the README's own defence of
+  the indirection quoted ("Removing the switch layer would save nothing noticeable anyway, since
+  storage-access operations are surely far more expensive than one extra layer of C function
+  calls"). smgropen() does NO I/O -- hash entry only, keyed on RelFileLocatorBackend.
+- THE SEGMENT MAP, structurally: SMgrRelationData's md_num_open_segs[fork] + md_seg_fds[fork] ->
+  MdfdVec { File mdfd_vfd; BlockNumber mdfd_segno; } -> fd.c VFD -> file. _fdvec_resize() NEVER
+  SHRINKS, deliberately, "because we want mdtruncate() to be able to promise that it won't allocate
+  memory, so that it is allowed in a critical section". _mdfd_openseg asserts segments open in
+  strict order -- NO SPARSE MAP. md_num_open_segs IS A CACHE, NOT A CENSUS (header comment quoted).
+- *** THE 1 GB SEGMENT BOUNDARY, CROSSED AND MEASURED -- lesson 01's arithmetic is now an
+  observation, which is what its handover asked for. *** 1,000,000 rows x 1000-byte pad ->
+  base/16388/16438, 142,858 blocks, 1,170,292,736 bytes. On disk: segment 0 = EXACTLY
+  1,073,741,824 bytes = 131,072 blocks = RELSEG_SIZE; `.1` = 96,550,912 = 11,786 blocks;
+  `_fsm` = 311,296 (38 blocks); no `_vm` until the first VACUUM. 131072 + 11786 = 142858 exactly.
+  SIDE DETAIL: stat reports segment 0 as 2,097,160 x 512 B = 1,073,745,920 allocated, 4,096 bytes
+  MORE than apparent -- ext4 extent metadata, not PostgreSQL.
+- *** mdnblocks() IS TWO SYSCALLS AND THE TRACE SHOWS THE LOOP CONDITION:
+    openat("base/16388/16438") = 14 ; lseek(14,0,SEEK_END) = 1073741824   <- == RELSEG_SIZE, advance
+    openat("base/16388/16438.1") = 15 ; lseek(15,0,SEEK_END) = 96550912   <- < RELSEG_SIZE, return
+  1.45 ms for the pair. _mdfd_openseg deliberately passes NO O_CREAT here ("might create a segment
+  which has vanished through some operating system misadventure"). ***
+- *** RELATION SIZE IS A SYSCALL, EVERY TIME, OUTSIDE RECOVERY -- MEASURED: the same backend did
+  lseek(15,0,SEEK_END) again 3 s later for the same unchanged relation. smgrnblocks_cached()
+  returns InvalidBlockNumber when not InRecovery, reason quoted from smgr.h ("lack of a shared
+  invalidation mechanism for changes in file size"). THIS IS THE REMOVED-REDUNDANCY THREAD'S
+  STRUCTURAL LIMIT: PostgreSQL stores a relation's size NOWHERE, where SQLite keeps a page count
+  in the header at offset 28 and validates it against the change counter. ***
+- *** RELATION EXTENSION, THE LESSON'S BEST EXPERIMENT: THE SAME 20,000 ROWS, FOUR SYSCALL SHAPES.
+    (1) INSERT..SELECT (no bistate):        2,860 pwritev, iovcnt=1, 0 fallocate; 2,858 blocks
+    (2) COPY (bistate):                     48 fallocate, 1 pwritev;              2,896 blocks
+    (3) COPY, file_extend_method=write_zeros: 0 fallocate, 97 pwritev;            2,896 blocks
+    (4) COPY, shared_buffers=128kB:         2,861 pwritev, iovcnt=1;              2,858 blocks
+  (2)'s fallocate lengths IN ORDER: 81920, 81920, 163840, 327680, then 524288 x 44 = 10, 10, 20,
+  40, 64, 64, ... That is hio.c arithmetic exactly: extend_by = num_pages*(1+waitcount), then
+  Max(.., bistate->already_extended_by) which ACCUMULATES (0->10->20->40->80), then
+  Min(.., MAX_BUFFERS_TO_EXTEND_BY = 64). 48 syscalls instead of 2,860 = 60x. ***
+- *** THE CLAMP NOBODY EXPECTS, and the most operationally surprising thing in the lesson:
+  LimitAdditionalPins() computes NBuffers / (MaxBackends + NUM_AUXILIARY_PROCS), subtracts
+  PrivateRefCountOverflowed + REFCOUNT_ARRAY_ENTRIES, floors at 1. At shared_buffers=128kB
+  (16 buffers) with max_connections=100 the quotient is 0, so EVERY extension went back to ONE
+  BLOCK -- measured, row (4). EXTENSION BATCHING IS A FUNCTION OF shared_buffers /
+  max_connections, documented nowhere a DBA would look. ***
+- THE COST OF BATCHING, measured: 2,896 vs 2,858 blocks = +38 blocks = +1.3% permanent slack for
+  the same 20,000 rows. Bulk extension over-extends by design (not_in_fsm_pages, then
+  FreeSpaceMapVacuumRange, or bistate->next_free).
+- file_extend_method IS A REAL GUC IN THIS BUILD (PGC_SIGHUP, RESOURCES_DISK, default
+  posix_fallocate, alternative write_zeros, the fallocate option compiled in only
+  #ifdef HAVE_POSIX_FALLOCATE). *** IT CHANGES THE SYSCALL, NOT THE CLOCK -- MEASURED: five COPY
+  runs of a 97 MB CSV each way, medians 638 ms (fallocate) vs 670 ms (write_zeros), no difference
+  outside noise. What DOES move: backend write_bytes in /proc/<pid>/io, 197,615,616 vs 219,070,464
+  for a 117,047,296-byte relation (+21.5 MB, +10.9%). HONEST LIMIT STATED IN THE LESSON:
+  write_bytes cannot separate WAL from heap writeback, and the nominal 117 MB of zero writes mostly
+  never reach the device because the real data overwrites the same page-cache pages. A cold-cache
+  or blktrace run would be needed for a precise figure. ***
+- pg_pwrite_zeros / FileZero: PG_IOV_MAX = Min(IOV_MAX, 32), and EVERY iovec points at the SAME
+  `static const PGIOAlignedBlock zbuffer` of BLCKSZ. MEASURED: a 40-block extension splits 32 + 8,
+  a 64-block extension splits 32 + 32.
+- *** pg_stat_io SEES BLOCKS, NOT SYSCALLS -- worth remembering before trusting it for I/O shape.
+  MEASURED after pg_stat_reset_shared('io'): client backend / relation / bulkwrite extends = 14288,
+  exactly the relation's block count, writes = 12240, fsyncs NULL; client backend / relation /
+  normal extends = 6 (the FSM fork, extended without a strategy). Those 14,288 blocks were ~224
+  fallocate calls. IOOP_EXTEND is counted with extend_by as its count argument. ***
+- *** skipFsync IS A TRANSFER OF OBLIGATION, NOT A WAIVER, and the proof is a measurement that
+  looks like a bug: four plain `CREATE TABLE q (id int, pad text)` produced FOUR fsync() syscalls
+  in the CLIENT BACKEND, on relfilenodes that pg_class identifies as pg_toast_*_index. nbtsort.c
+  builds btrees OUTSIDE shared buffers with smgrextend(..., skipFsync=true) and pays the debt in
+  _bt_leafbuild's `if (wstate->btws_use_wal) smgrimmedsync(...)`, comment quoted. THE TELL IN THE
+  TRACE is openat("<relfilenode>.1") = -1 ENOENT immediately before the fsync -- that is
+  mdimmedsync's deliberate probe past the last active segment, which mdnblocks would never do. ***
+  NOT taken here: smgrDoPendingSyncs / wal_skip_threshold is DEAD CODE at wal_level=replica
+  because AddPendingSync is guarded by `relpersistence == PERMANENT && !XLogIsNeeded()`. Verified
+  by reading the guard, not measured. A LESSON THAT RUNS WITH wal_level=minimal CAN TAKE IT.
+- THE FSYNC REQUEST QUEUE, the part nobody reads, now read: FileTag { int16 handler; int16 forknum;
+  RelFileLocator rlocator; uint32 segno; } is the WHOLE design. Constants that are code, not
+  folklore: max_requests = Min(NBuffers, MAX_CHECKPOINT_REQUESTS=10000000) -> 16,384 at
+  shared_buffers=128MB and 16 at 128kB (DERIVED from checkpointer.c:912, nothing exposes it);
+  FSYNCS_PER_ABSORB = UNLINKS_PER_ABSORB = 10; too_full = (num_requests >= max_requests/2) with the
+  SetLatch deliberately AFTER LWLockRelease. FOUR request types (SYNC/UNLINK/FORGET/FILTER) and SIX
+  handlers (MD, CLOG, COMMIT_TS, MULTIXACT_OFFSET, MULTIXACT_MEMBER, NONE) share one queue.
+  retryOnError DIFFERS BY CALLER and the difference is a durability argument: register_dirty_segment
+  passes FALSE (fall back to a local fsync), register_unlink_segment and register_forget_request
+  pass TRUE (spin on WaitLatch 10 ms forever), because dropping an unlink leaks a file.
+- *** THE OBSERVATION TECHNIQUE WORTH REUSING: log_min_messages = debug1 MAKES
+  ProcessSyncRequests() PRINT ONE LINE PER pendingOps ENTRY. That is a direct dump of the
+  checkpointer's hash table, with real paths. MEASURED after CHECKPOINT (drain), then two UPDATEs
+  by ctid '(0,1)' and '(131072,1)' on the two-segment relation, then CHECKPOINT:
+    number=1 file=base/16388/16438   time=0.421 ms
+    number=2 file=base/16388/16438.1 time=0.125 ms
+    number=3 file=pg_xact/0000       time=0.138 ms
+  "wrote 4 buffers ... sync files=3". THREE FACTS: segno is part of the key so ONE RELATION COSTS
+  TWO ENTRIES; pg_xact rides the same queue via SYNC_HANDLER_CLOG; and `sync files=N` in
+  checkpoint complete IS ckpt_sync_rels, i.e. literally the number of hash entries processed. ***
+- *** THE DEDUP RATIO, MEASURED: ~40,800 block writes (buffers_backend 24,490 + buffers_clean 100 +
+  3 + the checkpoint's own 16,214) collapsed into sync files=21, longest=0.083 s. The 22,500-block
+  heap written and rewritten three times is ONE entry fsynced once in 59.153 ms; its `_fsm` fork is
+  a SEPARATE entry (forknum is in the key -- this is the mechanical justification for "forks grow
+  and truncate independently", which lessons 05/06 asserted from the README). ~1,940:1. ***
+- buffers_backend_fsync STAYED 0 IN EVERY CONFIGURATION, including 57,987 backend writes against a
+  16-SLOT queue. That is the design working, not a weak test: CompactCheckpointerRequestQueue
+  hashes {type, ftag} and keeps only the last occurrence, so a queue of near-duplicates always
+  compacts and ForwardSyncRequest never returns false. THE FAILURE NEEDS A QUEUE BOTH FULL AND
+  DUPLICATE-FREE -- many distinct hot segments, not many writes.
+- *** AN EXPERIMENT THAT FAILED, REPORTED AS A FAILURE IN THE DOCUMENT: SIGSTOPping the
+  checkpointer to force queue overflow DEADLOCKED -- the inserting backend hit max_wal_size and
+  waited for a checkpoint that could not start. Abandoned, checkpointer resumed. THE QUEUE-FULL
+  FALLBACK IN register_dirty_segment() WAS READ AND NEVER EXECUTED. DO NOT REPEAT THIS METHOD. ***
+- *** THE INACTIVE ZERO-LENGTH SEGMENT, OBSERVED -- lesson 01 derived it, nothing had seen it.
+  DELETE FROM seg WHERE ctid >= '(100000,1)' then VACUUM: "truncated 142858 to 100000 pages".
+  After: segment 0 = 819,200,000 B (= 100,000 x 8192), `.1` = 0 BYTES AND STILL PRESENT,
+  `_fsm` 311,296 -> 221,184, `_vm` created at 32,768 (4 blocks). mdtruncate's reason quoted ("other
+  backends and/or the checkpointer might be holding open file references"), plus
+  register_dirty_segment being called ON A TRUNCATION (the queue carries "this file got shorter"
+  with the same FileTag), and Assert(v != &md_seg_fds[fork][0]) -- "we never drop the 1st segment".
+  AND THE ZERO-LENGTH SEGMENT IS INVISIBLE ABOVE: a fresh backend scanning the table did
+  openat("base/16388/16438") + lseek = 819200000 and made ZERO references to `.1` in the whole
+  trace. NOT REACHED: truncating to an exact multiple of RELSEG_SIZE, which the comment says keeps
+  segment K+1 at length 0. ***
+- ANSWERS TO THE THREE INHERITED QUESTIONS, recorded so nobody re-asks them:
+  (1) LESSON 06'S "why does bulk extension overshoot": RelationAddBlocks's waitcount multiplier and
+      the accumulating bistate->already_extended_by, capped at 64. Measured ramp above.
+  (2) LESSON 07'S "N cold updates produce exactly N new blocks": consistent with extend_by = 1 on
+      the no-bistate path -- heap_update's RelationGetBufferForTuple has no BulkInsertState, so each
+      cold update that cannot fit extends by exactly one block. The FSM question (can a cold update
+      be routed back onto a prune-recovered page) is STILL OPEN; the answer needs
+      FreeSpaceMapVacuumRange, which is lesson 19's.
+  (3) LESSON 05'S "is the FSM's 3-block floor a consequence of extension": NO. It is
+      fsm_logical_to_physical's interleaving (the bottom page cannot be block 0), which lesson 05
+      already derived. smgrextend has nothing to do with it. CLOSED.
+- WAL AND EXTENSION: not separately measured this run, but stated with evidence from the code --
+  mdextend/mdzeroextend emit no WAL; the new page's contents are logged by whatever writes into it.
+  A LESSON THAT WANTS THE EVIDENCE SHOULD pg_waldump an INSERT that extends and show there is no
+  extension record. Lesson 08's Next Steps do not claim otherwise.
+DELIBERATELY TREATED AS BLACK BOXES: GetVictimBuffer, StrategyFreeBuffer, IOContextForStrategy and
+the bulkwrite ring (09); BufferDesc, the clock sweep (09); pin accounting beyond the one line in
+LimitAdditionalPins (10); max_safe_fds and the VFD LRU (named, not measured); BufferSync and the
+checkpoint's spread writes (24); pendingUnlinks/SyncPostCheckpoint (19).
+
+NO SYLLABUS REVISION THIS RUN. Lesson 08's title was taught exactly as written -- relation
+extension, the segment map and the fsync request queue were all three taken in full -- and all
+three inherited questions were answered or explicitly closed.
+
+Throwaway tables left by this run (cluster does not persist; names listed only to avoid collisions
+within a future run): seg, ext_insert, ext_copy, ext_copy_wz, tiny_copy, q1..q4, dedup, b, io_t,
+iostat_t. NOTE: this run did NOT use the pgNN_ prefix convention and should have. Lesson 09 should
+go back to pg9_*.
+
+-- HANDOVER TO LESSON 09 -----------------------------------------------------------------------
+Scope for lesson 09, "The buffer manager: BufferDesc, the clock-sweep victim search, and the
+strategy ring". LESSON 08 STOPPED EXACTLY AT 09'S DOOR AND NAMED THE HANDLES IT LEFT THERE, so 09
+should open from them rather than from first principles.
+THE INHERITED QUESTIONS, in descending order of value:
+ (1) *** GetVictimBuffer() WAS THE BLACK BOX AT THE CENTRE OF LESSON 08'S BEST MEASUREMENT. ***
+     ExtendBufferedRelShared() calls it extend_by times BEFORE taking the extension lock, zeroes
+     each buffer with MemSet, and the comment says why ("Writing out victim buffers is the most
+     expensive part of extending the relation, particularly when doing so requires WAL flushes").
+     Lesson 09 owns the clock sweep that answers it, and should price that claim.
+ (2) THE bulkwrite RING. Lesson 08 measured, via pg_stat_io, that a COPY of 14,288 blocks reported
+     extends=14288 AND writes=12240 in the `bulkwrite` context -- i.e. the ring evicted 86% of what
+     it had just created, inside one statement. BufferAccessStrategy / BAS_BULKWRITE /
+     IOContextForStrategy are 09's, and that pair of numbers is a ready-made experiment.
+ (3) LimitAdditionalPins()'s arithmetic (NBuffers / (MaxBackends + NUM_AUXILIARY_PROCS), minus
+     PrivateRefCountOverflowed + REFCOUNT_ARRAY_ENTRIES, floored at 1) reduced a 64-block
+     extension to ONE BLOCK at shared_buffers=128kB -- measured. The pin accounting itself is
+     lesson 10's, but 09 should at least say what a pin costs and why a backend can only hold a
+     proportional share.
+Take: src/backend/storage/buffer/README IN FULL (it is the design document for the whole part and
+nothing has read it yet); buf_internals.h (BufferDesc, the packed buf_state and its BM_* flags,
+BufferTag, the buffer mapping table's partitions); freelist.c (StrategyGetBuffer, the clock sweep,
+nextVictimBuffer, StrategyNotifyBgWriter, and the BufferAccessStrategy ring types); and the
+bufmgr.c core -- ReadBuffer_common, BufferAlloc, GetVictimBuffer, FlushBuffer, and the
+StartBufferIO/TerminateBufferIO protocol. pg_buffercache IS THE OBSERVATION TOOL and has not been
+installed in any run yet -- it is present in /usr/share/postgresql/16/extension/.
+MEASURE IT. Good candidates: (a) watch nextVictimBuffer sweep by sampling pg_buffercache's
+usagecount histogram under a scan; (b) prove the ring is a ring -- a seqscan of a table larger than
+shared_buffers should leave only ~32 blocks of it cached (BAS_BULKREAD's 256 kB), and a COPY should
+show the eviction lesson 08 measured; (c) find the usagecount ceiling (BM_MAX_USAGE_COUNT = 5) by
+re-reading one block repeatedly; (d) measure what a cache-miss read costs against a hit with
+EXPLAIN (BUFFERS) and pg_stat_io's reads/hits; (e) pg_buffercache_summary / _usage_counts if the
+version in 16 has them.
 Do NOT re-explain: the page header, line pointers, lp_off/lp_len, the hole (02); the tuple header,
 t_ctid's four meanings, the infomask catalogues (03); alignment, varlena, the 126-byte boundary,
-TOAST (04); the FSM's categories, its on-page max-heap, fsm_logical_to_physical, the 3-block floor,
-MaxHeapTuplesPerPage = 291 (05); ANY of the visibility map (06); AND NOW, FROM 07: LP_REDIRECT and
-the lp_off unit change, the full line-pointer state machine, HEAP_HOT_UPDATED/HEAP_ONLY_TUPLE,
-pd_prune_xid and PageSetPrunable, PD_PAGE_FULL, the Max(fillfactor, BLCKSZ/10) prune gate,
-heap_page_prune's plan/execute split, heap_prune_chain's four outcomes, the HOT-eligibility test and
-the bitwise-equality rule, the HOT-blocking matrix, and the prune/VACUUM dividing line.
-Cite without re-deriving: 8192, 131072, 8160, 8164, 291, 24, 23, 2032, 1996, 8136, 126, 18, 4069,
-4095, FSM_CAT_STEP 32, the FSM leaf offset 4123+k, the page fingerprint "00 20 04 20" at offsets
-16-19 (NOT fork-specific -- say "special space is zero"), MAPSIZE 8168, HEAPBLOCKS_PER_PAGE 32672,
-the VM offset formula 24 + (b % 32672)/4, bit shift (b % 4)*2, VISIBLE_MASK8 0x55 /
-FROZEN_MASK8 0xaa, the 59-byte XLOG_HEAP2_VISIBLE record, the VM's one-block fork floor against the
-FSM's three, and now: the 59/61-byte XLOG_HEAP2_PRUNE record, SizeOfHeapPrune 9, the 71-byte
-HOT_UPDATE record, 34-byte COMMIT, 166 vs 247 WAL bytes per update (HOT vs cold), the 140-bytes-per
--row geometry (133 lp_len + MAXALIGN + 4) and the 58-at-ff100 / 40-at-ff70 rows-per-page it
-predicts, and LESSON 07'S CORRECTION THAT LESSON 06'S "59 HEAP FETCHES" IS NOT A CONSTANT (it is
-rows-on-the-old-block + 1; measured 58 on lesson 07's table).
-Do NOT take: the buffer manager, BufferDesc, clock sweep, the strategy ring (09); pins vs content
-locks and LWLocks (10); the heavyweight lock manager (11); tuple lock strengths (12); hint bits and
-their FPI machinery (15, 22) -- lesson 07 found MarkBufferDirty and MarkBufferDirtyHint side by
-side in heap_page_prune and taught the CONTRAST only; snapshots and HeapTupleSatisfiesMVCC (14);
-freezing and relfrozenxid (18); VACUUM's two heap passes, the dead-TID store, index bulk deletion
-(19); nbtree (28/29).
+TOAST (04); the FSM's categories, its on-page max-heap, fsm_logical_to_physical, the 3-block floor
+(05); ANY of the visibility map (06); LP_REDIRECT and the lp_off unit change, the line-pointer state
+machine, HEAP_HOT_UPDATED/HEAP_ONLY_TUPLE, pd_prune_xid, PD_PAGE_FULL, the Max(fillfactor, BLCKSZ/10)
+prune gate, heap_page_prune's plan/execute split, the HOT-blocking matrix, the prune/VACUUM dividing
+line (07); AND NOW, FROM 08: the smgr switch and smgrsw[], the MdfdVec segment map, _mdfd_getseg's
+targetseg arithmetic, mdnblocks's walk, the RELSEG_SIZE invariant and inactive zero-length segments,
+mdzeroextend's fallocate-vs-FileZero branch and the >8 cutoff, PG_IOV_MAX 32, the
+MAX_BUFFERS_TO_EXTEND_BY 64 ramp, skipFsync's meaning, FileTag's four fields, and the whole fsync
+request queue (register_dirty_segment -> ForwardSyncRequest -> AbsorbSyncRequests -> pendingOps ->
+ProcessSyncRequests).
+Cite without re-deriving: 8192, 131072, 8160, 8164, 291, 24, 23, 126, 4069, 4095, FSM_CAT_STEP 32,
+the FSM leaf offset 4123+k, the fingerprint "00 20 04 20" at offsets 16-19 (= zero special space,
+NOT "heap"), MAPSIZE 8168, HEAPBLOCKS_PER_PAGE 32672, the VM offset formula 24 + (b % 32672)/4,
+VISIBLE_MASK8 0x55 / FROZEN_MASK8 0xaa, the 59-byte XLOG_HEAP2_VISIBLE record, the 59/61-byte
+XLOG_HEAP2_PRUNE record, the 71-byte HOT_UPDATE record, 166 vs 247 WAL bytes per update (HOT vs
+cold), the 140-bytes-per-row geometry, lesson 07's correction that lesson 06's "59 heap fetches" is
+rows-on-the-old-block + 1, and now: RELSEG_SIZE observed as 1,073,741,824 bytes of segment 0,
+MAX_BUFFERS_TO_EXTEND_BY 64, PG_IOV_MAX 32, max_requests = Min(NBuffers, 10000000),
+FSYNCS_PER_ABSORB 10, and the ~1,940:1 writes-to-fsyncs dedup ratio.
+Do NOT take: pins vs content locks and the LWLock implementation (10) -- 09 may name
+LockBufHdr/UnlockBufHdr but must not teach LWLocks; the heavyweight lock manager (11); tuple lock
+strengths (12); hint bits and their FPI machinery (15, 22); snapshots (14); the checkpointer's
+spread writes and the REDO pointer (24) -- lesson 08 touched ProcessSyncRequests only, and
+BufferSync belongs to 24; crash recovery (25).
 OPEN ITEMS carried forward:
-- FOR LESSON 08: the three inherited questions above.
-- FOR LESSON 14: lesson 07 used GlobalVisState / vistest and heap_prune_satisfies_vacuum as named
-  black boxes. NOTE A LIVE XXX IN THE SOURCE worth chasing there: heap_page_prune_opt opens with
-  "XXX: Magic to keep old_snapshot_threshold tests appear 'working'. They currently are broken, and
-  discussion of what to do about them is ongoing", citing
-  postgresql.org/message-id/20200403001235.e6jfdll3gh2ygbuc%40alap3.anarazel.de, and calls
-  SnapshotTooOldMagicForTest() when old_snapshot_threshold == 0. The whole old_snap_xmin /
-  old_snap_ts / old_snap_used plumbing threaded through PruneState exists for that feature.
-- FOR LESSON 19 (unchanged from 05/06, still not closed): fsm_vacuum_page() and
+- FOR LESSON 09: the three inherited questions above.
+- FOR LESSON 10: LimitAdditionalPins's REFCOUNT_ARRAY_ENTRIES / PrivateRefCountOverflowed.
+- FOR LESSON 14: unchanged from 07 -- GlobalVisState / vistest and heap_prune_satisfies_vacuum were
+  black boxes, and heap_page_prune_opt carries a live XXX about old_snapshot_threshold citing
+  postgresql.org/message-id/20200403001235.e6jfdll3gh2ygbuc%40alap3.anarazel.de.
+- FOR LESSON 19 (unchanged from 05/06/07, still not closed): fsm_vacuum_page() and
   FreeSpaceMapVacuumRange() have STILL not been read -- they are the only code that makes the upper
-  FSM levels true. Plus lesson 06's 18,400 WAL bytes over 118 blocks (155.9/block) breakdown. AND
-  NEW FROM 07: VACUUM is the ONLY path that takes LP_DEAD -> LP_UNUSED and the only path that
-  removes an index entry; lesson 07 measured the index going 19 -> 18 entries at VACUUM and 0
-  change at prune, and the two heap passes are what 19 owes the reader.
-- FOR LESSON 29: lesson 07's cold-update WAL run emitted 74 Btree/DELETE records unprompted --
-  nbtree deletion defending its own leaves. 29 owns that; 07 only noted it.
-- FOR LESSON 31: pg_class.relallvisible comes from visibilitymap_count (06); the index-only-scan
-  cost formula that reads it is still not located. AND NEW: the planner has no notion of HOT, so
-  lesson 07's 58-vs-49 Heap Fetches difference is invisible to cost estimation -- worth checking
-  whether anything in costsize.c models it.
+  FSM levels true, AND they are the answer to lesson 07's open question about whether a cold update
+  can be routed onto a prune-recovered page. Plus lesson 06's 18,400 WAL bytes over 118 blocks
+  breakdown, and VACUUM's two heap passes. NEW FROM 08: register_unlink_segment, pendingUnlinks and
+  SyncPostCheckpoint() were read but not exercised -- the one-checkpoint delay before a dropped
+  relation's file is actually unlinked is observable with DROP TABLE + two CHECKPOINTs.
+- FOR LESSON 24: lesson 08 read ProcessSyncRequests and left BufferSync alone. The race the comment
+  describes ("a buffer that must be written and fsync'd for the checkpoint could have been dumped by
+  a backend just before it was visited by BufferSync()") and the Absorb-after-BufferSync ordering
+  that closes it are 24's to teach. Also ckpt_longest_sync: measured spread 0.095-82.894 ms per
+  file, and nothing bounds it.
+- FOR LESSON 29: unchanged -- lesson 07's cold-update WAL run emitted 74 Btree/DELETE records.
+- FOR LESSON 31: unchanged -- pg_class.relallvisible's cost formula, and whether costsize.c models
+  HOT at all.
 - UNOBSERVED, for whoever gets there first: MaxHeapTuplesPerPage = 291 has been DERIVED three times
-  (05, 07) and never reached. Build a page with hundreds of LP_DEAD stubs and find where PageAddItem
-  refuses.
+  (05, 07) and never reached.
 - UNOBSERVED BRANCH, for whichever lesson runs with checksums on first: every measurement in
-  lessons 03-07 was taken with data_checksums OFF. Two paths are still unexercised:
+  lessons 03-08 was taken with data_checksums OFF. Still unexercised:
   visibilitymap_prepare_truncate's XLogHintBitIsNeeded() -> log_newpage_buffer (06), and
   heap_page_prune's MarkBufferDirtyHint branch under XLogHintBitIsNeeded() (07).
-- UNEXERCISED CODE PATH: heap_prune_chain's outcome (4), the orphaned-redirect self-heal
-  (nchain < 2 && ItemIdIsRedirected(rootlp)). Reachable only via a specific visit order.
-  coverage.postgresql.org/src/backend/access/heap/pruneheap.c.func.html will say whether the
-  regression suite reaches it.
-- NOT MEASURED THIS RUN, and lesson 07 said so in the document: the SUMMARIZING-INDEX path. Every
-  HOT/cold verdict used btree. A BRIN index on the updated column should give n_tup_hot_upd + 1
-  AND a revised summary; README.HOT admits the propagation is pessimistic ("Realistically, we only
-  need to propagate the update to the indexes that contain the updated values, but that is yet to
-  be implemented"). Any later lesson that wants a cheap, high-value measurement can take this.
+- UNEXERCISED CODE PATHS: heap_prune_chain's outcome (4), the orphaned-redirect self-heal (07); and
+  NEW FROM 08, register_dirty_segment's queue-full local-fsync fallback, plus
+  ExtendBufferedRelShared's `existing_id >= 0` branch with its
+  errhint("This has been seen to occur with buggy kernels") -- both read, neither reached.
+- NOT MEASURED, carried from 07: the SUMMARIZING-INDEX (BRIN) HOT path.
+- NEW FROM 08, worth one cheap run: truncate a relation to an exact multiple of RELSEG_SIZE and
+  check whether segment K+1 is kept at length 0, as mdtruncate's comment promises.
 - A DOCUMENTATION PATCH WORTH PROPOSING UPSTREAM, unchanged from 06: visibilitymap.c's LOCKING
   section still says "only VACUUM currently sets visibility map bits", which heap_multi_insert's
   all_frozen_set contradicts.
 
-NOTE-BLOCK ROTATION DONE THIS RUN: lesson 04's note was dropped and TRACK-ARCHIVE.md gained the row
-"PG 04" pointing at commit fffcd6bafd24c05eb83f0e2e46d0efab0597d880 / blob
-9fb0a858ff439a121aa72abf94e642c6fb06bc4b, which is the last state of TRACK.md carrying it. This
-block now holds 05, 06 and 07 -- exactly the three the policy allows. WHEN LESSON 08 SHIPS IT MUST
-DROP THE LESSON 05 BLOCK, and before dropping it MUST add its TRACK-ARCHIVE.md row first.
+NOTE-BLOCK ROTATION DONE THIS RUN: lesson 05's note was dropped and TRACK-ARCHIVE.md gained the row
+"PG 05" pointing at commit 5d3a81e3c7b92c6679f964fb9354092862b4c6a3 / blob
+54c92e672c6081eec9935d5f6f8514ad8520a7ed, which is the last state of TRACK.md carrying it. This
+block now holds 06, 07 and 08 -- exactly the three the policy allows. WHEN LESSON 09 SHIPS IT MUST
+DROP THE LESSON 06 BLOCK, and before dropping it MUST add its TRACK-ARCHIVE.md row first.
 
 Known environment facts for a fresh session (verify, do not assume):
 - Block size 8 KB and segment size 1 GB are compile-time (BLCKSZ, RELSEG_SIZE) and exposed as the
@@ -806,25 +821,35 @@ Known environment facts for a fresh session (verify, do not assume):
   heap_tuple_infomask_flags, tuple_data_split, bt_page_items, bt_metap, fsm_page_contents). All
   of it is SUPERUSER-ONLY. pg_freespacemap covered lesson 05; pg_visibility covers 06.
   Lesson 01's hands-on installs all three; lesson 02's needs only pageinspect; lesson 05's needs
-  pageinspect and pg_freespacemap; lesson 07's needs pageinspect and pgstattuple.
-- CONFIRMED 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-25 AND AGAIN 2026-10-26: the cloud sandbox
-  CAN run a cluster.
-  psql, pg_config and /usr/lib/postgresql/16/bin/{initdb,postgres,pg_ctl,...} are in the image
-  (PostgreSQL 16.15 on Ubuntu 24.04), and pageinspect, pg_freespacemap, pg_visibility, pgstattuple
-  and amcheck are all present in /usr/share/postgresql/16/extension/. Recipe that worked: create a
-  non-root user, initdb -D /var/tmp/pgdata --no-sync as that user, pg_ctl with
-  -o '-p 5455 -k /var/tmp'. TWO TRAPS: initdb refuses to run as root, and it refuses a data
-  directory under the scratchpad path (permission denied) -- /var/tmp works. A third, minor, found
-  this run: psql cannot read a -f script file living under the scratchpad path either (permission
-  denied as the pg user), so put scratch SQL somewhere world-readable such as /var/tmp. Every
-  lesson from here on SHOULD measure; say so when it cannot. The cluster is per-run and does not
-  persist, so table names from earlier runs are gone.
+  pageinspect and pg_freespacemap; lesson 07's needs pageinspect and pgstattuple. Lesson 08 needed
+  only pageinspect (and barely that -- its instrument was strace).
+- CONFIRMED 2026-10-22 THROUGH 2026-10-27 (six runs): the cloud sandbox CAN run a cluster.
+  *** TWO RECIPES, BOTH WORKING, AND THE SECOND IS SIMPLER. ***
+  (A) Lessons 03-07's: create a non-root user, initdb -D /var/tmp/pgdata --no-sync as that user,
+      pg_ctl with -o '-p 5455 -k /var/tmp'. TWO TRAPS: initdb refuses to run as root, and it
+      refuses a data directory under the scratchpad path -- /var/tmp works.
+  (B) Lesson 08's, fewer steps: `apt-get install postgresql postgresql-contrib`, then
+      `pg_ctlcluster 16 main start`, then run everything as `su postgres -c "psql ..."`. The data
+      dir is /var/lib/postgresql/16/main, the log is /var/log/postgresql/postgresql-16-main.log,
+      ALTER SYSTEM + `pg_ctlcluster 16 main restart` applies PGC_POSTMASTER settings, and
+      `ALTER SYSTEM SET log_min_messages='debug1'; SELECT pg_reload_conf();` is how you get
+      checkpoint-sync and other DEBUG1 lines into that log. Remember to set it back to 'warning'.
+  BOTH recipes keep the world-readable-script trap: psql -f cannot read a file under the scratchpad
+  path as the pg user, so put scratch SQL in /tmp/<dir> with chmod 777 (or /var/tmp).
+  The cluster is per-run and does not persist, so table names from earlier runs are gone.
+- *** strace IS AVAILABLE AND IT IS THE RIGHT INSTRUMENT FOR ANYTHING BELOW THE BUFFER MANAGER.
+  gdb is installed too (no debug symbols, so it cannot read shared-memory structs). THE HARNESS
+  LESSON 08 BUILT AND LATER LESSONS SHOULD COPY: mkfifo a pipe, start
+  `su postgres -c "psql -d DB -At -q < fifo > out"` in the background, write
+  "SELECT pg_backend_pid();" into the fifo, read the pid out of the output file, then
+  `strace -f -tt -p <pid> -e trace=<syscalls> -o trace.txt &`, then feed the real SQL into the fifo
+  and poll for a DONE marker. That gives a clean per-statement syscall trace of a NAMED backend.
+  Note that parallel workers are NOT children of that backend, so -f does not follow them; disable
+  parallelism or trace the postmaster if you need them. ***
 - Table names used so far, for avoiding collisions within a run: seg_demo (01), pg2_fill /
   pg2_big (02), pg3_* and w8 / w9 / w16 / w72 / w73 (03), pg4_* (04), pg5_* (05), pg6_* (06),
-  pg7_* (07 -- the full lists are in the lesson 05, 06 and 07 notes above). Keep the pgNN_ prefix
-  convention.
-- pg_freespacemap was used by lesson 05 and pg_visibility by lesson 06 (both present in
-  /usr/share/postgresql/16/extension/, both installed cleanly).
+  pg7_* (07), and 08's unprefixed set (seg, ext_*, tiny_copy, q1..q4, dedup, b, io_t, iostat_t --
+  a lapse; go back to pgNN_*). Keep the pgNN_ prefix convention.
 - pg_waldump lives at /usr/lib/postgresql/16/bin/pg_waldump, works on the live cluster's segments,
   and `--stats=record` prints a per-record-type record/FPI byte breakdown. Lesson 06 used it to
   price XLOG_HEAP2_VISIBLE and lesson 07 to price XLOG_HEAP2_PRUNE against Btree/INSERT_LEAF.
@@ -833,18 +858,20 @@ Known environment facts for a fresh session (verify, do not assume):
   LSN again, then `pg_waldump -s <lsn1> -e <lsn2> --stats=record` for the table and
   `-r <rmgr>` for verbatim records. That isolates one workload's WAL exactly.
 - *** GETTING THE SOURCE: `apt-get source postgresql-16` IS THE RIGHT ROUTE IN THIS SANDBOX AND
-  LESSON 07 ESTABLISHED IT. *** /etc/apt/sources.list has no deb-src lines by default; write
-  `deb-src http://archive.ubuntu.com/ubuntu/ noble main universe` (plus noble-updates) to
-  /etc/apt/sources.list.d/, `apt-get update`, then `apt-get source postgresql-16` into a
-  world-readable dir. ~33 MB, a few seconds, and it unpacks postgresql-16-16.15/ WITH debian/patches/
-  applied -- so CHECK which files the patch series touches before quoting anything (extract the
-  +++/--- paths; as of 16.15 none of them touches access/heap, storage/ or include/access). This is
-  strictly better than WebFetching files one at a time: it is the exact build the cluster runs, it
-  allows reading a file IN FULL, and WebFetch on postgresql.org summarises rather than reproducing.
-  The Sources section must still cite only URLs actually seen that run; the local tree is evidence,
-  not a citation.
-- pg_buffercache is needed from lesson 09; pgstattuple was used by
-  lesson 07 and is needed again by 19; amcheck for lessons 28-29 (it is the closest thing PostgreSQL has to SQLite's
+  LESSONS 07 AND 08 BOTH USED IT. *** Ubuntu 24.04 ships deb-src DISABLED in
+  /etc/apt/sources.list.d/ubuntu.sources (a deb822 file with `Types: deb`); the fix that worked in
+  lesson 08 is `sed -i 's/^Types: deb$/Types: deb deb-src/'` on that file, then `apt-get update`,
+  then `apt-get source postgresql-16` into a world-readable dir. ~33 MB, a few seconds, and it
+  unpacks postgresql-16-16.15/ WITH debian/patches/ applied -- so CHECK WHICH FILES THE PATCH SERIES
+  TOUCHES BEFORE QUOTING ANYTHING, per file and not in bulk: as of 16.15 there are 15 patches and
+  one of them DOES touch src/backend/storage/buffer/bufmgr.c (at LockBufferForCleanup only).
+  Extract the +++/--- paths and check the hunk offsets. This is strictly better than WebFetching
+  files one at a time: it is the exact build the cluster runs, it allows reading a file IN FULL, and
+  WebFetch on postgresql.org summarises rather than reproducing. The Sources section must still
+  cite only URLs actually seen that run; the local tree is evidence, not a citation.
+- pg_buffercache is needed from lesson 09 and has NOT been installed in any run yet (present in
+  /usr/share/postgresql/16/extension/); pgstattuple was used by lesson 07 and is needed again by
+  19; amcheck for lessons 28-29 (it is the closest thing PostgreSQL has to SQLite's
   integrity_check, and the comparison is worth making explicitly when lesson 28 arrives).
 -->
 
