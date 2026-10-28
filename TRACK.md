@@ -3,15 +3,15 @@ track-state
 subject: PostgreSQL
 started: 2026-10-19
 lessons-total: 35
-lessons-done: 8
+lessons-done: 9
 -->
 
 # Current Track: PostgreSQL Internals
 
 Sequential deep dive. One lesson per day, each building on the last.
 
-**STATUS: in progress — lesson 08 shipped 2026-10-27.** The syllabus was written on 2026-10-19, the
-day the SQLite track's capstone shipped. The next run takes **lesson 09**.
+**STATUS: in progress — lesson 09 shipped 2026-10-28.** The syllabus was written on 2026-10-19, the
+day the SQLite track's capstone shipped. The next run takes **lesson 10**.
 
 The order follows PostgreSQL's actual source layout rather than a textbook outline. It was built
 from two pieces of primary evidence read on 2026-10-19: the chapter list of
@@ -57,7 +57,7 @@ readable as the other answer to a question SQLite already answered.
 
 ### Part II — Shared memory: buffers and locks (`storage/buffer`, `storage/lmgr`)
 
-- [ ] 09 — The buffer manager: `BufferDesc`, the clock-sweep victim search, and the strategy ring
+- [x] 09 — The buffer manager: `BufferDesc`, the clock-sweep victim search, and the strategy ring
 - [ ] 10 — Buffer pins versus content locks, and the LWLock implementation
 - [ ] 11 — The heavyweight lock manager: `LOCKTAG`, lock partitions, and the deadlock detector
 - [ ] 12 — Tuple locks: the four strengths, the conflict table, and the `LockTuple`/`XactLockTableWait` protocol
@@ -112,212 +112,6 @@ The SQLite track's lessons 31-33 notes were archived on that run; see TRACK-ARCH
 "31 - 33". The capstone document (2026/10/2026-10-19-sqlite-capstone/README.md) closes the track
 and records which items were deliberately left unread. None of these carry forward into the
 PostgreSQL track. Do not hand them to a PostgreSQL lesson.
-
--- LESSON 06 (2026-10-25) AS TAUGHT ------------------------------------------------------------
-Document: 2026/10/2026-10-25-postgres-visibility-map/README.md (single README, not split -- one
-fork, one mechanism). Source commits read: master @0019a1ecf4c7615a2570d21eeb4b32ae3b371f18
-(visibilitymap.c, visibilitymap.h, visibilitymapdefs.h) PLUS REL_16_STABLE @774c47de (the same
-three files + the five VM call sites in heapam.c) and REL_16_STABLE @0cf2c7e3 (heapam_xlog.h).
-Trees so far: 01 @ddd468ca, 02 @3cde90ec, 03 @f2edf5dd, 04 @f52d4051, 05 @126976a8,
-06 @0019a1ec (+ @774c47de / @0cf2c7e3). Keep stating the commit.
-Files read IN FULL: access/heap/visibilitymap.c (master), access/visibilitymap.h,
-access/visibilitymapdefs.h, access/heapam_xlog.h (16). Read in part: heapam.c (16) -- only the
-all_visible_cleared / all_frozen_set sites.
-
-*** THIS RUN HAD A CLUSTER and crossed a VM PAGE BOUNDARY (35,000 heap blocks, ~273 MB). Same
-recipe as 03/04/05, both traps still apply (initdb not as root; data dir not under the scratchpad
-path -- /var/tmp works; psql -f scripts must also live somewhere world-readable). ***
-PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1), x86_64, gcc 13.3.0, block_size 8192,
-segment_size 1GB, data_checksums OFF, pageinspect 1.12, pg_visibility 1.2, pg_freespacemap 1.2.
-Disk headroom at the time: ~30 GB on /, which is what made the boundary table possible. pg_waldump
-is at /usr/lib/postgresql/16/bin/pg_waldump and WORKS on the live cluster's segments; --stats=record
-gives a per-record-type byte breakdown. A LATER LESSON THAT WANTS WAL EVIDENCE SHOULD USE IT (22,
-23, 24, 25 all will).
-
-TOOK, and must not be re-taught:
-- THE CONSTANTS, all of visibilitymapdefs.h (25 lines, the whole public vocabulary):
-  BITS_PER_HEAPBLOCK 2, VISIBILITYMAP_ALL_VISIBLE 0x01, VISIBILITYMAP_ALL_FROZEN 0x02,
-  VISIBILITYMAP_VALID_BITS 0x03. THE 0b10 CODE POINT IS UNREACHABLE BY ASSERTION at both ends:
-  Assert(flags != VISIBILITYMAP_ALL_FROZEN) in _set, Assert(flags != VISIBILITYMAP_ALL_VISIBLE)
-  in _clear. Two bits, three states. Taught as a deliberate waste, not an accident.
-- THE GEOMETRY, derived and then MEASURED. MAPSIZE = BLCKSZ - MAXALIGN(SizeOfPageHeaderData)
-  = 8168. HEAPBLOCKS_PER_BYTE = BITS_PER_BYTE/BITS_PER_HEAPBLOCK = 4. HEAPBLOCKS_PER_PAGE
-  = 8168*4 = 32672 = 255.25 MiB of heap per VM page = 8.03x the FSM's 4069. NO TREE, flat array,
-  so no FSM_TREE_DEPTH analogue and no ragged remainder: 8168*4 is exact, where lesson 05's
-  8164-4095 = 4069 stranded 27 leaf positions. Quote the header's "There's no extra headers".
-- BYTE OFFSETS, ESTABLISHED AND MEASURED, reusable without re-deriving (this is lesson 06's
-  equivalent of lesson 05's "leaf slot k at offset 4123+k"):
-      VM page   = b / 32672
-      offset    = 24 + (b % 32672)/4      <- PageGetContents is page+24, same base as lesson 05
-      bit shift = (b % 4) * 2             <- low bit ALL_VISIBLE, high bit ALL_FROZEN
-  MEASURED at the boundary: heap block 32671 -> VM page 0 byte index 8167 -> PAGE OFFSET 8191,
-  the last byte of the page; heap block 32672 -> VM page 1 offset 24. Byte 23 is page header, 0.
-- *** THE FIRST VM PAGE BOUNDARY CROSSED IN THIS TRACK. *** Unlogged pg6_bound, 140,000 rows x
-  1800-byte pad -> 35,000 heap blocks. vm = 16384 (2 blocks, because 35000 > 32672);
-  fsm = 90112 (11 blocks = ceil(35000/4069)=9 bottom + 1 level-1 + 1 root, LESSON 05'S ARITHMETIC
-  CONFIRMED INDEPENDENTLY). Byte 8191 of VM page 0 = 0xff, byte 24 of VM page 1 = 0xff.
-  pg_visibility_map_summary: 35000 / 35000.
-- THE FORK FLOOR, side by side with lesson 05: a ONE-BLOCK heap after its first VACUUM has
-  vm = 8192 (ONE block) and fsm = 24576 (THREE blocks). The VM has no tree so nothing stops a
-  map page being block 0. *** AND A REFINEMENT OF LESSON 05: lesson 05 measured "a one-page table
-  has NO FSM fork (0 bytes)". That is the PRE-VACUUM state only -- VACUUM creates the FSM fork
-  even for a one-block heap (measured 0 -> 24576). Do not propagate the unqualified claim. ***
-- AN FSM PAGE IS AN EMPTY PAGE / so is a VM page: PageInit(page, BLCKSZ, 0) in vm_readbuf, so
-  MEASURED pd_lower 24, pd_upper = pd_special = 8192, pd_flags 0, prune_xid 0, PageIsEmpty()
-  always true, payload entirely in lesson 02's HOLE. ONE DIFFERENCE FROM THE FSM WORTH KEEPING:
-  pd_lsn on a VM page is NON-ZERO and set deliberately (PageSetLSN in visibilitymap_set);
-  measured 0/15E9740. On an FSM page it is incidental.
-- PD_ALL_VISIBLE, WHICH LESSON 02 DEFERRED, IS NOW CLOSED. Taught as the two-places-one-truth
-  design with a reason: the VM bit is what a READER consults (cheap, stays cached); the page flag
-  is what a WRITER consults (it already holds the page; pinning the VM page might need I/O). That
-  asymmetry is the ONLY reason the pin-before-lock dance exists.
-- THE LOCKING DANCE, quoted from the header and taught: examine the heap page UNLOCKED, pin the VM
-  page if PD_ALL_VISIBLE is set, then lock the heap page; if the flag got set in between, unlock,
-  pin, relock. visibilitymap_pin_ok() is the cheap re-check (pure block-number compare, no I/O).
-  The header's "This shouldn't happen often, because only VACUUM currently sets visibility map
-  bits" was FLAGGED AS ARGUABLY STALE -- see COPY FREEZE below. Lesson 06's Next Step 3 proposes
-  it as a documentation patch.
-- THE FIVE CLEAR CALL SITES IN heapam.c (16), tabulated: heap_insert, heap_multi_insert (guarded
-  `&& !(options & HEAP_INSERT_FROZEN)`), heap_delete, heap_update old page, heap_update new page
-  (`newbuf != buffer &&`). All five do PageClearAllVisible + visibilitymap_clear(VALID_BITS) --
-  ALWAYS BOTH BITS, which is why the Assert(flags != ALL_VISIBLE) in _clear can exist. All five
-  raise a flag in the HOST record: XLH_INSERT_ALL_VISIBLE_CLEARED, XLH_DELETE_ALL_VISIBLE_CLEARED,
-  XLH_UPDATE_OLD_ALL_VISIBLE_CLEARED, XLH_UPDATE_NEW_ALL_VISIBLE_CLEARED.
-  visibilitymap_clear uses MarkBufferDirty, *NOT* MarkBufferDirtyHint -- the contrast with lesson
-  05 is literally one function name deep. Taught that way.
-- *** WHY THE VM IS WAL-LOGGED AND THE FSM IS NOT, with PG 16's own argument quoted in full.
-  The record does NOT protect the bit; it keeps the TWO COPIES from diverging in the unsafe
-  direction (map says visible, page has forgotten -> no writer will ever clear it). Clearing needs
-  no record because the clearing is always INSIDE another record. ***
-  xl_heap_visible = { TransactionId snapshotConflictHorizon; uint8 flags; }, SizeOfHeapVisible = 5,
-  XLOG_HEAP2_VISIBLE = 0x40, "Backup blk 0: visibility map buffer / Backup blk 1: heap buffer".
-- MEASURED WITH pg_waldump, the price of all that: 980 Heap2/VISIBLE records in one 16 MB segment;
-  57,830 record bytes + 16,384 FPI bytes = 74,214 total = 5.65% of the segment. Histogram: 978
-  records at EXACTLY 59 BYTES, 2 at 64/8256 (the FPI of each VM page on its first touch after a
-  checkpoint). flags 0x01 observed for VACUUM with freeze off, 0x03 for VACUUM FREEZE. Verbatim
-  record shape recorded in the lesson, with the two blkrefs and `fork vm blk 0 FPW`.
-  SO: 59 BYTES OF WAL PER HEAP PAGE MARKED, plus one FPI per VM page per checkpoint. The FSM pays
-  zero for the same VACUUM. That pair of numbers is the whole 05-vs-06 tradeoff and a later lesson
-  should cite it rather than re-measure.
-  NOT a VM-only figure, recorded separately so nobody confuses them: a VACUUM of a 118-block table
-  emitted 18,400 WAL bytes total across all record types = 155.9 bytes/block. Lesson 19 owns that
-  breakdown.
-- COPY FREEZE SETS THE BITS AT LOAD TIME, measured, NO VACUUM: heapam.c's
-  `starting_with_empty_page = PageGetMaxOffsetNumber(page) == 0; if (starting_with_empty_page &&
-  (options & HEAP_INSERT_FROZEN)) all_frozen_set = true;` with
-  Assert(!(all_visible_cleared && all_frozen_set)) and XLH_INSERT_ALL_FROZEN_SET.
-  MEASURED: 5000 rows, 80 heap blocks, 47 blocks (0..46) with BOTH bits, byte 24 = 0xff.
-  THE 33 UNSET BLOCKS ARE TRAILING *EMPTY* PAGES left by bulk relation extension -- max block
-  actually containing a row was 46, so no heap_multi_insert ever ran on 47..79. Autovacuum later
-  truncated the relation to 47 blocks and all 47 were all-visible+all-frozen. Lesson 06's Next
-  Step 4 hands the "why does extension overshoot" question to lesson 08.
-  *** ANSWERED BY LESSON 08 (2026-10-27): RelationAddBlocks() in hio.c multiplies the pages it
-  needs by (1 + the number of extension-lock waiters) and takes Max() with
-  bistate->already_extended_by, which ACCUMULATES, so a COPY ramps 10, 10, 20, 40, 64, 64, ...
-  up to MAX_BUFFERS_TO_EXTEND_BY = 64 and the surplus goes to the FSM or to bistate->next_free.
-  Measured cost of the overshoot on a 20,000-row COPY: 2,896 blocks against 2,858. ***
-- *** THE HEADLINE MEASUREMENT, and the one a later lesson should cite: PAGE GRANULARITY COSTS 59
-  HEAP FETCHES FOR ONE UPDATED ROW. *** pg6_ios, 50,000 rows / 863 heap blocks / PK on id, query
-  `select count(id) from pg6_ios where id between 1 and 20000`, seqscan+bitmapscan off:
-    after INSERT (no vm fork):          Heap Fetches 20000, Buffers shared hit=401
-    after VACUUM:                        Heap Fetches     0, Buffers shared hit=57   (7.0x)
-    after ONE update of id=7:            Heap Fetches    59, Buffers shared hit=60
-    after pg_truncate_visibility_map():  Heap Fetches 20000, Buffers shared hit=403
-  THE PLAN NODE WAS `Index Only Scan using pg6_ios_pkey` IN ALL FOUR -- taught as "index-only is a
-  plan shape, not a promise; Heap Fetches is the only place EXPLAIN tells you which happened".
-  THE 59 IS FULLY ACCOUNTED FOR: id=7 lived on block 0, the new version landed at (862,5), and
-  pg_visibility showed EXACTLY blocks 0 and 862 cleared; block 0 holds 57 live rows + 1 dead index
-  entry still pointing at (0,7) = 58, plus 1 on block 862 = 59.
-  *** CORRECTED BY LESSON 07 (2026-10-26): THE 59 IS NOT A CONSTANT. *** Lesson 07 rebuilt this
-  experiment, reproduced the geometry EXACTLY (863 blocks, shared hit=57, new version on block
-  862, exactly blocks 0 and 862 cleared) and measured 58, because its table holds 57 rows on
-  block 0 where this one held 58. The figure is (index entries in range pointing at the dirtied
-  block) + 1. Cite the formula and give the measured instance; do not carry 59 forward as a
-  constant.
-- MEASURED, the byte sequence that proves the whole addressing scheme with three get_byte calls,
-  on a 12-block table: (no fork) -> 85 -> 255 -> 243.
-  85 = 0x55 = 01010101 = four blocks all-visible, none frozen -- LITERALLY VISIBLE_MASK8.
-  255 = 0xff after VACUUM FREEZE. 243 = 0xf3 after updating one row on BLOCK 1
-  = 0xff & ~(0x03 << 2), i.e. HEAPBLK_TO_OFFSET(1) = 2 confirmed at the bit level.
-  Byte 27 = 0 because the heap stops at block 11 -- which is what makes visibilitymap_count's
-  "we assume that any extra bytes in the last page are zeroed" safe.
-- visibilitymap_count: VISIBLE_MASK8 0x55 "the lower bit of each bit pair", FROZEN_MASK8 0xaa
-  "the upper bit of each bit pair", pg_popcount_masked, NO LOCK ("immediately stale anyway... we
-  only really need an approximate value"). This is what feeds pg_class.relallvisible. Lesson 06's
-  Next Step 6 leaves the planner's cost formula to lesson 31.
-- visibilitymap_get_status: ONE UNLOCKED BYTE READ, "A single byte read is atomic", "It is the
-  caller's responsibility to deal with all concurrency issues!". THE TWO-PARAGRAPH SAFETY PROOF
-  WAS TAUGHT because it is specific and non-obvious: INSERTS are serialised for free (the VM bit
-  is cleared BEFORE the index is touched, and index buffer lock/unlock is a full memory barrier);
-  DELETES may be arbitrarily stale but the tuple stays visible until the deleter commits and
-  ProcArrayLock acts as the read barrier. FLAGGED AS A CONSTRAINT: any NEW consumer of the VM has
-  to re-derive that argument for itself.
-- vm_readbuf's RBM_ZERO_ON_ERROR, same justification as the FSM ("It's always safe to clear bits,
-  so it's better to clear corrupt pages than error out"), and the extend=false -> InvalidBuffer ->
-  `return (uint8) 0` path, which is why a table with NO vm fork behaves as "nothing is visible"
-  rather than erroring. Matches the docs' "queries will treat the visibility map as containing all
-  zeroes". vm_extend = ExtendBufferedRelTo(EB_CREATE_FORK_IF_NEEDED | EB_CLEAR_SIZE_CACHE) +
-  CacheInvalidateSmgr; relation extension itself left to lesson 08 as a black box, as lesson 05
-  did.
-- visibilitymap_prepare_truncate: MemSet(&map[truncByte+1], 0, MAPSIZE-(truncByte+1)) and
-  map[truncByte] &= (1 << truncOffset) - 1, with the reason quoted -- the tail bits are cleared
-  "because we don't get a chance to clear the bits if the heap is extended again", i.e. a
-  re-extended heap would inherit STALE SET BITS, the unsafe direction. This is the one VM write
-  gated on XLogHintBitIsNeeded() -> log_newpage_buffer, with "We cannot use MarkBufferDirtyHint
-  here, because that will not dirty the page during recovery". UNEXERCISED: data_checksums was OFF
-  this run, so that branch was not observed. Lesson 06's Next Step 5.
-- pg_visibility 1.2 as the observation tool, all signatures taught from the docs: pg_visibility_map
-  (2 overloads), pg_visibility (2 overloads, adds pd_all_visible), pg_visibility_map_summary,
-  pg_check_frozen, pg_check_visible, pg_truncate_visibility_map. Permissions recorded: superuser
-  or pg_stat_scan_tables, except pg_truncate_visibility_map which is superuser-only.
-- *** MEASURED, A FORCED TWO-PLACES DISAGREEMENT, and the blind spot it exposes. ***
-  pg_truncate_visibility_map('pg6_ios') then pg_visibility: vm all_visible = 0 of 863, heap pages
-  pd_all_visible = 861 (861 not 863 because two blocks were already cleared by the UPDATE).
-  Nothing corrupt; the optimisation simply stopped. AND pg_check_visible STILL RETURNED 0 ROWS --
-  it is defined as "non-all-visible tuples stored in pages marked all-visible IN THE VISIBILITY
-  MAP", so a map that marks nothing can hide nothing. THE CHECKS DETECT OVER-CLAIMING ONLY. A
-  clean pg_check_visible is NOT evidence the map is right. After the repairing VACUUM: 862 / 862.
-- The docs' "four orders of magnitude smaller" claim was CHECKED rather than repeated: the
-  asymptote is 32672:1 (3.27e4, so the claim is right) but THE FORK HAS A ONE-PAGE FLOOR, so
-  MEASURED ratios were 1:1 for a one-block table, 863:1 for pg6_ios, 17500:1 for pg6_bound. The
-  advertised ratio only arrives past 255.25 MiB of heap.
-
-VERSION DIVERGENCE: LARGER THAN LESSON 05'S, and it moves RESPONSIBILITY rather than geometry.
-(1) visibilitymap_set in 16 is
-    `(Relation rel, BlockNumber heapBlk, Buffer heapBuf, XLogRecPtr recptr, Buffer vmBuf,
-      TransactionId cutoff_xid, uint8 flags) -> void`;
-    in master it is `(BlockNumber heapBlk, Buffer vmBuf, uint8 flags, RelFileLocator rlocator)
-      -> uint8` and RETURNS THE PREVIOUS BITS.
-(2) WHO LOCKS: 16's function does LockBuffer(vmBuf, BUFFER_LOCK_EXCLUSIVE) itself; master asserts
-    the CALLER holds it, via BufferIsLockedByMeInMode (a predicate 16 does not have).
-(3) WHO LOGS: 16's function calls log_heap_visible() and PageSetLSN, and sets the HEAP page's LSN
-    only `if (XLogHintBitIsNeeded())` with a four-line comment on why it must NOT otherwise;
-    master does NO WAL at all and asserts `InRecovery || CritSectionCount > 0`, leaving the caller
-    to log the VM change together with the heap change.
-(4) THE HEADER COMMENT CHANGED WITH IT, and 16's is the clearer statement of WHY: 16 says
-    "Clearing visibility map bits is not separately WAL-logged" + "When we *set* a visibility map
-    during VACUUM, we must write WAL. This may seem counterintuitive, since the bit is basically a
-    hint..."; master generalises to "Changes to the visibility map bits are not separately
-    WAL-logged" because setting no longer logs either. QUOTE 16'S VERSION even when reading master.
-(5) visibilitymap_count: 16 uses VISIBLE_MASK64/FROZEN_MASK64 + pg_popcount64 over uint64 words
-    with StaticAssertStmt(MAPSIZE % sizeof(uint64) == 0, "unsupported MAPSIZE"); master uses
-    VISIBLE_MASK8 0x55 / FROZEN_MASK8 0xaa + pg_popcount_masked over bytes.
-(6) master adds HEAPBLK_TO_MAPBLOCK_LIMIT and visibilitymap_truncation_length(); 16 has neither.
-(7) master's visibilitymap_clear gained the same BufferIsLockedByMeInMode assertion.
-IDENTICAL IN BOTH: BITS_PER_HEAPBLOCK, all three flag constants, MAPSIZE, HEAPBLOCKS_PER_BYTE,
-HEAPBLOCKS_PER_PAGE, all three address macros, PageInit(page, BLCKSZ, 0), RBM_ZERO_ON_ERROR,
-vm_extend's ExtendBufferedRelTo + CacheInvalidateSmgr, and prepare_truncate's masking arithmetic.
-EVERY MEASURED NUMBER IS PG 16.15.
-
-NO SYLLABUS REVISION THIS RUN. Lesson 06's title was taught exactly as written -- PD_ALL_VISIBLE,
-all-frozen and the index-only scan it enables were all three taken in full, and nothing was left
-over. Lesson 05's handover scope was executed completely, including the two measurements it asked
-for by name (decode a VM page by hexdump and recover the bits for a known block; compare
-pg_relation_size(rel,'vm') against (rel,'fsm') on the same table).
-
-Throwaway tables left by this run (cluster does not persist; names listed only to avoid collisions
-within a future run): pg6_one, pg6_move, pg6_ios, pg6_freeze, pg6_bound, pg6_walcost, pg6_wal.
-Keep the pgNN_ prefix convention.
 
 -- LESSON 07 (2026-10-26) AS TAUGHT ------------------------------------------------------------
 Document: 2026/10/2026-10-26-postgres-hot-updates-page-pruning/README.md (single README, not split
@@ -711,108 +505,360 @@ within a future run): seg, ext_insert, ext_copy, ext_copy_wz, tiny_copy, q1..q4,
 iostat_t. NOTE: this run did NOT use the pgNN_ prefix convention and should have. Lesson 09 should
 go back to pg9_*.
 
--- HANDOVER TO LESSON 09 -----------------------------------------------------------------------
-Scope for lesson 09, "The buffer manager: BufferDesc, the clock-sweep victim search, and the
-strategy ring". LESSON 08 STOPPED EXACTLY AT 09'S DOOR AND NAMED THE HANDLES IT LEFT THERE, so 09
-should open from them rather than from first principles.
+-- LESSON 09 (2026-10-28) AS TAUGHT ------------------------------------------------------------
+Document: 2026/10/2026-10-28-postgres-buffer-manager-clock-sweep/README.md (single README, not
+split -- BufferDesc, the sweep and the ring are one decision procedure, and the ring only makes
+sense as a modification of the sweep).
+
+SOURCE PROVENANCE: `apt-get source postgresql-16` for the third run in a row, version
+16.15-0ubuntu0.24.04.1, the same build the cluster runs. PATCH CHECK DONE PER FILE as lesson 08
+insisted: the patch series touches src/Makefile.global.in, bufmgr.c, procsignal.c, postgres.c,
+pgstat_database.c, psql/settings.h, fe_utils/print.h, pg_config_manual.h, storage/procsignal.h,
+tcop/tcopprot.h and tutorial/README. freelist.c, buf_init.c, buf_table.c and buf_internals.h are
+UNTOUCHED; bufmgr.c's only hunk is at LockBufferForCleanup() (line 4923), nowhere near
+BufferAlloc / GetVictimBuffer / PinBuffer / ExtendBufferedRel*. Trees/releases so far:
+01 @ddd468ca, 02 @3cde90ec, 03 @f2edf5dd, 04 @f52d4051, 05 @126976a8, 06 @0019a1ec,
+07 = release 16.15, 08 = release 16.15, 09 = release 16.15.
+Files read IN FULL: storage/buffer/README (276 lines -- lesson 08's handover asked for this and it
+was worth it), storage/buffer/freelist.c (774 lines), include/storage/buf_internals.h (440 lines),
+storage/buffer/buf_init.c (186 lines). Read in part: storage/buffer/bufmgr.c (5676 lines --
+BufferAlloc, GetVictimBuffer, PinBuffer, PinBuffer_Locked, UnpinBuffer, InvalidateVictimBuffer,
+BgBufferSync), include/storage/lwlock.h (NUM_BUFFER_PARTITIONS), access/heap/heapam.c (initscan's
+`rs_nblocks > NBuffers / 4`), and the pg_buffercache 1.4 extension SQL in
+/usr/share/postgresql/16/extension/.
+
+*** THIS RUN HAD A CLUSTER, EVERY number is measured, AND THE INSTRUMENT WAS pg_buffercache +
+pg_stat_io + pg_shmem_allocations -- NOT strace. *** PostgreSQL 16.15 (Ubuntu
+16.15-0ubuntu0.24.04.1), x86_64, gcc 13.3.0, Linux 6.18, ext4, 2 vCPU / 8 GB RAM. block_size 8192,
+shared_buffers 128 MB = 16,384 buffers except where a measurement says otherwise,
+vacuum_buffer_usage_limit 256 kB, bgwriter_lru_maxpages 100, bgwriter_lru_multiplier 2.0,
+data_checksums OFF, fsync on. pg_buffercache 1.4 AND pg_prewarm 1.2 INSTALLED FOR THE FIRST TIME IN
+THIS TRACK -- both were already present in /usr/share/postgresql/16/extension/, `CREATE EXTENSION`
+is all it took.
+*** RECIPE NOTE, SIMPLER AGAIN THAN LESSON 08'S: postgresql-16 was ALREADY INSTALLED in the sandbox
+image this run (psql 16.15 on PATH, cluster "16 main" present but down). `pg_ctlcluster 16 main
+start` was the only step, and `sudo -u postgres psql -X -q` works directly -- no `su postgres -c`
+quoting, no initdb, no /var/tmp dance. CHECK FOR AN EXISTING CLUSTER WITH pg_lsclusters BEFORE
+INSTALLING ANYTHING. Two traps hit this run: (a) ALTER SYSTEM cannot run inside an implicit
+transaction block, so psql -c with TWO statements fails -- use one -c per ALTER SYSTEM; (b) VACUUM
+likewise cannot share a -c with other statements. ***
+*** NO DEBUG SYMBOLS: postgresql-16-dbgsym IS NOT IN THE UBUNTU 24.04 ARCHIVE (apt-cache policy
+returns nothing, apt-get install says "Unable to locate package"). gdb is installed but cannot
+resolve StrategyControl, which is a static in freelist.c. ANY LESSON PLANNING TO READ A
+SHARED-MEMORY STRUCT DIRECTLY MUST FIND ANOTHER WAY -- see the arc trick below, which is the way. ***
+
+TOOK, and must not be re-taught:
+- THE FOUR SHMEM ARRAYS and their per-buffer costs, MEASURED out of pg_shmem_allocations at
+  shared_buffers=128MB and divided by 16,384: "Buffer Descriptors" 1,048,576 = EXACTLY 64.0 B
+  (BUFFERDESC_PAD_TO_SIZE = (SIZEOF_VOID_P == 8 ? 64 : 1), pure cache-line padding against false
+  sharing); "Buffer Blocks" 134,221,824 = 16384*8192 + 4096, the remainder being PG_IO_ALIGN_SIZE
+  slack so the pool start can be TYPEALIGNed; "Buffer IO Condition Variables" 262,144 = 16.0 B
+  (deliberately OUTSIDE BufferDesc to keep it under 64 B -- header comment says they would fit
+  "but for now that is not done"); "Checkpoint BufferIds" 327,680 = 20.0 B = sizeof(CkptSortItem),
+  preallocated so a checkpoint never mallocs (LESSON 24'S). *** AND "Buffer Strategy Status" = 28
+  BYTES TOTAL FOR THE WHOLE CLUSTER -- that is the entire replacement policy's shared state. ***
+  TRAP RECORDED: "Shared Buffer Lookup Table" is only 2,896 B; that is the HTAB directory, the
+  elements come from a separate ShmemInitHash freelist and do not carry the name.
+- THE 32-BIT STATE WORD, which is the heart of the whole file: 18-bit refcount (mask (1U<<18)-1),
+  4-bit usagecount (mask 0x003C0000, shift 18), 10 flag bits (mask 0xFFC00000). ALL TEN FLAGS
+  tabulated with their bit numbers: BM_LOCKED 22, BM_DIRTY 23, BM_VALID 24, BM_TAG_VALID 25,
+  BM_IO_IN_PROGRESS 26, BM_IO_ERROR 27, BM_JUST_DIRTIED 28, BM_PIN_COUNT_WAITER 29,
+  BM_CHECKPOINT_NEEDED 30, BM_PERMANENT 31. *** THE TRICK IS THAT BM_LOCKED IS THE BUFFER HEADER
+  SPINLOCK AND IT LIVES IN THE WORD IT PROTECTS, so pin/unpin/usagecount are a CAS with ZERO
+  lock-acquire pairs. The asymmetry from the header comment: a lock HOLDER may do arbitrary updates
+  in one store (clearing BM_LOCKED in the same write); a non-holder is restricted to CAS, and plain
+  atomic increment/OR/AND are FORBIDDEN because they cannot check BM_LOCKED. ***
+- BM_MAX_USAGE_COUNT = 5, with the tradeoff comment quoted ("a large value (comparable to NBuffers)
+  would approximate LRU semantics. But it can take as many as BM_MAX_USAGE_COUNT+1 complete cycles
+  of clock sweeps to find a free buffer"). Four bits would allow 15; the policy chooses 5.
+- BufferTag's five 4-byte fields (spcOid, dbOid, relNumber, forkNum, blockNum) and the constraint
+  that forces that shape, quoted: the tag "must be sufficient to determine where to write the
+  block, without reference to pg_class or pg_tablespace entries". SAME TUPLE as lesson 01's path
+  and lesson 08's FileTag -- the identity is stable from filename to buffer header.
+- NUM_BUFFER_PARTITIONS = 128 (lwlock.h), partition = hashcode % NUM_BUFFER_PARTITIONS, "NB:
+  NUM_BUFFER_PARTITIONS must be a power of 2". Share lock to look up, exclusive to change a tag.
+  Two rules: pin the found buffer BEFORE releasing the partition lock; lock multiple partitions in
+  partition-number order. README's history recorded: one cluster-wide BufMgrLock before 8.1, split
+  128 ways in 8.2.
+- StrategyGetBuffer's TWO-STAGE SEARCH, in full, with four details that are easy to miss:
+  (a) the freelist peek `firstFreeBuffer >= 0` is DELIBERATELY RACY and the comment defends it
+      ("it'd be sad to acquire it here -- uselessly in most cases ... that's pretty harmless");
+      the freelist is only never-used buffers plus InvalidateBuffer/tag-race returns, so once the
+      pool is full it stays empty forever and every allocation is a sweep.
+  (b) *** trycounter RESETS ON EVERY DECREMENT, NOT EVERY TICK. *** Only the PINNED branch does
+      --trycounter; the usagecount-decrement branch sets trycounter = NBuffers. So
+      "no unpinned buffers available" fires ONLY when NBuffers consecutive buffers were all
+      pinned, never because the sweep is doing work. The sweep may run arbitrarily long while
+      making progress.
+  (c) ClockSweepTick is LOCK-FREE EXCEPT ON WRAP: nextVictimBuffer is a pg_atomic_uint32 only ever
+      INCREMENTED, modulo applied at read time; the spinlock is taken on exactly one tick in
+      NBuffers, purely to keep completePasses consistent for StrategySyncStart. Comment accepts the
+      consequence ("buffers being returned slightly out of apparent order").
+  (d) THE VICTIM IS RETURNED WITH ITS HEADER SPINLOCK STILL HELD, and the comment says why ("To
+      ensure that no one else can pin the buffer before we do"). GetVictimBuffer immediately calls
+      PinBuffer_Locked. There is no window.
+- *** THE LESSON'S BEST TRICK, AND IT IS REUSABLE WHENEVER A SHARED-MEMORY COUNTER IS NOT EXPOSED:
+  LOCATE THE CLOCK HAND FROM pg_buffercache.bufferid. Fill the pool with one generation of blocks,
+  allocate exactly N fresh ones with pg_prewarm(...,'buffer',...) (which passes a NULL strategy, so
+  every block goes through the normal sweep), and ask which bufferids the new generation occupies.
+  MEASURED: 2,000 blocks landed in bufferid 373..2372 -- EXACTLY 2,000 CONSECUTIVE IDS, an arc, not
+  a scatter. Next batch predicted 2373..4372, measured 2396..4395 (23 buffers skipped because
+  catalog queries between the two calls re-pinned them); third batch predicted 4396..6395,
+  MEASURED 4396..6395 EXACTLY, with a lead()-based gap check returning holes = 0. SO: THE HAND
+  ADVANCES ONE BUFFER PER ALLOCATION PLUS ONE PER SKIP, and EVICTION ORDER IS POSITION ORDER, NOT
+  AGE ORDER -- 14,000 buffers at usagecount 0 sat untouched because the hand was elsewhere. ***
+- A SECOND SIGNATURE OF THE SWEEP, measured: after ONE full pass of allocations (16,384 prewarmed
+  blocks into a 16,384-buffer pool) the usagecount histogram was 0=16027, 1=211, 2=18, 3=99, 4=8,
+  5=21. BufferAlloc stamps each new tag with BUF_USAGECOUNT_ONE and the hand comes round and
+  decrements it back to 0, so A POOL JUST FILLED ONCE IS, BEHIND THE HAND, A POOL OF
+  USAGECOUNT-0 BUFFERS.
+- PinBuffer's CAS loop, and THE PART THAT MATTERS MOST: the whole usagecount block is guarded by
+  `ref == NULL` from GetPrivateRefCountEntry. If this backend already holds a pin it takes the else
+  branch and TOUCHES THE SHARED state WORD NOT AT ALL. *** THE SHARED COUNTER MEASURES DISTINCT
+  BACKEND PIN EPISODES, NOT ACCESSES. *** And with a strategy the increment is capped at 1 ("Ring
+  buffers shouldn't evict others from pool. Thus we don't make usagecount more than 1").
+  MEASURED saturation on a 3,449-block cached table, one full scan per iteration:
+  1, 2, 3, 4, 5, 5, 5, 5 -- exactly BM_MAX_USAGE_COUNT, so a 5-touch and a 500-touch page are
+  INDISTINGUISHABLE to the policy.
+- GetVictimBuffer's THREE `goto again` PATHS, each a real race: (1) the dirty victim's content lock
+  is held, so the acquisition is LWLockConditionalAcquire(LW_SHARED) and the comment names the bug
+  that forced it ("two backends are both trying to split btree index pages, and the second one just
+  happens to be trying to split the page the first one got from StrategyGetBuffer"); (2) a strategy
+  would need a WAL flush, so StrategyRejectBuffer votes -- BAS_BULKREAD only, from_ring only, and it
+  sets that slot to InvalidBuffer "necessary to prevent infinite loop if all ring members are
+  dirty"; (3) InvalidateVictimBuffer failed. EXIT CONTRACT asserted: refcount == 1 and NONE of
+  BM_TAG_VALID / BM_VALID / BM_DIRTY -- a victim is ANONYMOUS before BufferAlloc stamps the new tag.
+- *** reuses AND evictions IN pg_stat_io ARE THE SAME EVENT, labelled by from_ring:
+  pgstat_count_io_op(..., from_ring ? IOOP_REUSE : IOOP_EVICT). That is the measuring instrument
+  for everything about rings. ***
+- THE RING, structurally: GetAccessStrategy is a four-case switch -- BAS_NORMAL returns NULL (no
+  object at all), BAS_BULKREAD 256 kB, BAS_BULKWRITE 16*1024 kB, BAS_VACUUM 256 kB overridable by
+  vacuum_buffer_usage_limit. Then GetAccessStrategyWithSize does ring_buffers = kb / (BLCKSZ/1024),
+  returns NULL if 0 (*** 0 kB MEANS NO RING, NOT A TINY RING ***), and clamps
+  ring_buffers = Min(NBuffers / 8, ring_buffers). The object is BACKEND-PRIVATE, palloc'd, no lock:
+  btype, nbuffers, a `current` cursor, a flat Buffer[]. GetBufferFromRing accepts a slot only if
+  refcount == 0 AND usagecount <= 1 (the counterpart of PinBuffer's capped increment: 1 means
+  "only I touched this"). AND THE RING IS NOT A RESERVATION -- slots are filled by AddBufferToRing
+  from inside StrategyGetBuffer, i.e. by an ordinary sweep/freelist allocation.
+- *** THE SINGLE MOST REUSABLE FACT IN THE LESSON: reads - reuses = THE RING SIZE IN BUFFERS,
+  readable straight out of pg_stat_io with no source access. MEASURED FOUR WAYS:
+    seq scan t_mid (7,242 blk), bulkread:        7,242 - 7,210 = 32
+    VACUUM t_big, BUFFER_USAGE_LIMIT '256kB':   76,376 - 76,344 = 32
+    VACUUM t_big, BUFFER_USAGE_LIMIT '2MB':     49,775 - 49,519 = 256   (2MB/8kB, no rounding)
+    COPY FROM (15,560 extends), bulkwrite:      15,560 - 13,512 = 2,048
+    seq scan t_mid at shared_buffers=128kB:      7,242 - 7,240 = 2      (= Min(16/8, 32)) ***
+- THE SEQ-SCAN THRESHOLD, measured on both sides: initscan's `rs_nblocks > NBuffers / 4` = 4,096
+  blocks at 16,384 buffers. t_small (3,449 blk, BELOW) -> context `normal`, 3,449 buffers resident,
+  THE WHOLE TABLE CACHED. t_mid (7,242 blk, ABOVE) -> context `bulkread`, 32 buffers resident.
+  NOTHING GRADUAL. And the threshold MOVES WITH shared_buffers, so the same table and query change
+  caching behaviour completely when the pool is resized, with nothing in EXPLAIN to say so.
+- *** THE RING IS PER PARTICIPANT, NOT PER QUERY -- caught by accident. The first t_mid run was
+  taken with max_parallel_workers_per_gather=2 and showed 96 resident buffers, not 32, with the
+  leader reading only 2,392 of 7,242 blocks. leader + 2 workers x 32 = 96. BufferAccessStrategy is
+  palloc'd backend-local, so parallelism MULTIPLIES the footprint the ring is meant to bound. SET
+  max_parallel_workers_per_gather=0 FOR ANY BUFFER MEASUREMENT. ***
+- *** THE HEADLINE EXPERIMENT, AND THE ONE A LATER LESSON SHOULD CITE: THE SAME 242 MB READ, TWO
+  PLAN NODES, OPPOSITE OUTCOMES. Warm t_small (3,449 blk) to usagecount 2, then read t_big
+  (31,035 blk = 242 MB) through a 128 MB pool.
+    A) SEQ SCAN (BAS_BULKREAD): bulkread reads=31035 reuses=31003 EVICTIONS=0; t_small still 3,449
+       buffers at avg usagecount 2.00, UNTOUCHED; t_big occupies 32 buffers; 12,647 buffers unused.
+    B) INDEX SCAN (no strategy object): normal reads=36013 EVICTIONS=23320; t_small ZERO BUFFERS,
+       GONE; t_big 13,944 + index 2,210 buffers at avg usagecount 0.44; pool unused = 0.
+  initscan() builds a ring; index_beginscan and the bitmap heap scan DO NOT. An index scan that
+  touches most of a large table is the pathology the ring prevents AND the case it does not cover. ***
+- BUFFER_USAGE_LIMIT 0 MEASURED AS THE CONTROL: context flips from `vacuum` to `normal`, reuses
+  becomes NULL, and one VACUUM of t_big took 16,255 of 16,384 buffers with 60,309 evictions and
+  zero unused. That single row is the whole justification for the ring's existence.
+- BgBufferSync's ONE call into the policy: StrategySyncStart returns nextVictimBuffer % NBuffers,
+  completePasses PLUS nextVictimBuffer / NBuffers (correcting for an unlanded wrap), and
+  numBufferAllocs read with pg_atomic_exchange_u32(...,0) -- *** READING IT RESETS IT ***. The
+  bgwriter scans forward from that position "which it does not change!", keeps smoothed_density
+  (init 10.0) and multiplies by bgwriter_lru_multiplier, stopping at bgwriter_lru_maxpages.
+  MEASURED on the dirtied cluster: buffers_clean 10448, maxwritten_clean 95, buffers_alloc 804317,
+  buffers_backend 498979. NOTE: StrategyGetBuffer increments numBufferAllocs AFTER the ring check
+  ("buffers recycled by a strategy object are intentionally not counted here"), so buffers_alloc
+  UNDERCOUNTS ring-served accesses by design.
+- ANSWERS TO LESSON 08'S THREE INHERITED QUESTIONS, all three closed:
+  (1) GetVictimBuffer: opened in full (the three retry paths, the exit contract, the
+      IOOP_REUSE/IOOP_EVICT split). Lesson 08's quoted claim that "writing out victim buffers is
+      the most expensive part of extending the relation" is consistent with the code path
+      (FlushBuffer + ScheduleBufferTagForWriteback inside the BM_DIRTY branch) but was NOT priced
+      independently this run -- the extension path was not re-measured. Still open as a price.
+  (2) The bulkwrite ring: ANSWERED AND BETTER THAN ASKED. Lesson 08's "extends=14288, writes=12240,
+      the ring evicted 86% of what it created" is exactly reads/extends - reuses = ring size. This
+      run measured extends 15,560 and reuses 13,512 on a fresh COPY: the difference is 2,048, and
+      2,048 = Min(NBuffers/8, 16MB/8kB) = Min(2048, 2048), which at shared_buffers=128MB is a
+      coincidence of the two constants. The ring did not "waste" 86%; it reused 2,048 slots 13,512
+      times, writing out each previous occupant.
+  (3) What a pin costs: stated as the state-word CAS and the backend-private refcount short-circuit;
+      REFCOUNT_ARRAY_ENTRIES / PrivateRefCountOverflowed deliberately left to lesson 10.
+- *** UPSTREAM HAS ALREADY REMOVED THE FREELIST, and the lesson says so: commit
+  2c789405275928ce0d2ceb7c4add91d27df92502, "bufmgr: Remove freelist, always use clock-sweep",
+  Greg Burd, 2025-09-05, on master; reviewed by Tomas Vondra and Andres Freund; 6 files,
+  +31/-209, INCLUDING 40 LINES OF THE README THIS LESSON QUOTES. Rationale quoted from the commit
+  message: "While on the surface this appears to be removing an optimization it is in fact
+  eliminating code that induces overhead in the form of synchronization that is problematic for
+  multi-core systems", and the main motive was that "having the freelist would require dedicated
+  complexity in several upcoming patches". have_free_buffer() goes too, and pg_autoprewarm is
+  capped at NBuffers. A FOLLOW-ON PATCH REMOVES buffer_strategy_lock ENTIRELY. So the two-stage
+  search measured here is a snapshot of a structure mid-retirement; 16.15 still has both paths. ***
+- HONEST NULL RESULT, recorded as one: THE SIX-PASS BOUND IMPLIED BY BM_MAX_USAGE_COUNT IS NOT
+  VISIBLE IN WALL CLOCK on this hardware. A 16,035-block eviction storm against a pool saturated
+  at usagecount 5 measured 65.7/73.3/65.7 ms and at usagecount 1 measured 86.5/74.1/86.5 ms --
+  no separation above the noise, because the per-block 8 KB memcpy out of the OS page cache
+  dominates the header examinations. The bound is real in the code; this box cannot see it.
+  pg_prewarm's usagecount-K setup DOES work and is in the lesson (prewarm the same range K times).
+DELIBERATELY TREATED AS BLACK BOXES: the LWLock implementation and pins vs content locks (10) --
+LockBufHdr/UnlockBufHdr and content_lock are NAMED and counted, never explained; StartBufferIO /
+TerminateBufferIO and the BM_IO_IN_PROGRESS condition variable (named only); FlushBuffer's internals
+and the writeback context (24); BufferSync and BM_CHECKPOINT_NEEDED (24); hint bits and
+MarkBufferDirtyHint (15); localbuf.c and temp-table buffers (not scheduled -- a candidate for 35).
+
+NO SYLLABUS REVISION THIS RUN. Lesson 09's title was taught exactly as written -- BufferDesc, the
+clock-sweep victim search and the strategy ring were all three taken in full -- and all three of
+lesson 08's inherited questions were answered or explicitly narrowed. Lesson 08's handover asked
+for five measurements by name and all five were taken: (a) the usagecount histogram under a scan
+(and better, the hand's position); (b) the ring proved to be a ring (32 buffers of a 7,242-block
+table); (c) the BM_MAX_USAGE_COUNT = 5 ceiling by repeated reads; (d) reads/hits/evictions out of
+pg_stat_io across hit and miss; (e) pg_buffercache_summary and pg_buffercache_usage_counts, which
+DO exist in the 1.4 extension shipped with 16.
+
+Throwaway tables left by this run (cluster does not persist; names listed only to avoid collisions
+within a future run): t_small, t_mid, t_big, t_copy, t_tiny, in database `bufdemo`. NOTE: LIKE
+LESSON 08, THIS RUN DID NOT USE THE pgNN_ PREFIX AND SHOULD HAVE. Lesson 10, please use pg10_*.
+
+-- HANDOVER TO LESSON 10 -----------------------------------------------------------------------
+Scope for lesson 10, "Buffer pins versus content locks, and the LWLock implementation". LESSON 09
+NAMED BOTH MECHANISMS AND REFUSED TO EXPLAIN EITHER, so 10 has a clean surface to open.
 THE INHERITED QUESTIONS, in descending order of value:
- (1) *** GetVictimBuffer() WAS THE BLACK BOX AT THE CENTRE OF LESSON 08'S BEST MEASUREMENT. ***
-     ExtendBufferedRelShared() calls it extend_by times BEFORE taking the extension lock, zeroes
-     each buffer with MemSet, and the comment says why ("Writing out victim buffers is the most
-     expensive part of extending the relation, particularly when doing so requires WAL flushes").
-     Lesson 09 owns the clock sweep that answers it, and should price that claim.
- (2) THE bulkwrite RING. Lesson 08 measured, via pg_stat_io, that a COPY of 14,288 blocks reported
-     extends=14288 AND writes=12240 in the `bulkwrite` context -- i.e. the ring evicted 86% of what
-     it had just created, inside one statement. BufferAccessStrategy / BAS_BULKWRITE /
-     IOContextForStrategy are 09's, and that pair of numbers is a ready-made experiment.
- (3) LimitAdditionalPins()'s arithmetic (NBuffers / (MaxBackends + NUM_AUXILIARY_PROCS), minus
-     PrivateRefCountOverflowed + REFCOUNT_ARRAY_ENTRIES, floored at 1) reduced a 64-block
-     extension to ONE BLOCK at shared_buffers=128kB -- measured. The pin accounting itself is
-     lesson 10's, but 09 should at least say what a pin costs and why a backend can only hold a
-     proportional share.
-Take: src/backend/storage/buffer/README IN FULL (it is the design document for the whole part and
-nothing has read it yet); buf_internals.h (BufferDesc, the packed buf_state and its BM_* flags,
-BufferTag, the buffer mapping table's partitions); freelist.c (StrategyGetBuffer, the clock sweep,
-nextVictimBuffer, StrategyNotifyBgWriter, and the BufferAccessStrategy ring types); and the
-bufmgr.c core -- ReadBuffer_common, BufferAlloc, GetVictimBuffer, FlushBuffer, and the
-StartBufferIO/TerminateBufferIO protocol. pg_buffercache IS THE OBSERVATION TOOL and has not been
-installed in any run yet -- it is present in /usr/share/postgresql/16/extension/.
-MEASURE IT. Good candidates: (a) watch nextVictimBuffer sweep by sampling pg_buffercache's
-usagecount histogram under a scan; (b) prove the ring is a ring -- a seqscan of a table larger than
-shared_buffers should leave only ~32 blocks of it cached (BAS_BULKREAD's 256 kB), and a COPY should
-show the eviction lesson 08 measured; (c) find the usagecount ceiling (BM_MAX_USAGE_COUNT = 5) by
-re-reading one block repeatedly; (d) measure what a cache-miss read costs against a hit with
-EXPLAIN (BUFFERS) and pg_stat_io's reads/hits; (e) pg_buffercache_summary / _usage_counts if the
-version in 16 has them.
+ (1) *** THE buffer/README's "Notes About Shared Buffer Access Rules" SECTION IS LESSON 10'S
+     PRIMARY TEXT AND LESSON 09 DID NOT TEACH IT. *** Lesson 09 read all 276 lines but taught only
+     the "Buffer Manager's Internal Locking", "Normal Buffer Replacement Strategy", "Buffer Ring
+     Replacement Strategy" and "Background Writer's Processing" sections. THE FIVE NUMBERED ACCESS
+     RULES AND THE CLEANUP-LOCK PROTOCOL ARE UNTOUCHED AND ARE 10'S CORE: rule 4 (hint bits may be
+     OR'd in under a SHARED lock because a conflicting update only loses a hint) and rule 5 (to
+     remove a tuple you must observe refcount == 1 while holding the exclusive lock) are the two
+     worth measuring. LockBufferForCleanup's single-waiter limitation ("The current implementation
+     only supports a single waiter for pin-count-1 on any particular shared buffer") and
+     BM_PIN_COUNT_WAITER / wait_backend_pgprocno are the mechanism; note that the ONE Debian patch
+     touching bufmgr.c patches exactly this function, so READ THE PATCH, not just the file.
+ (2) THE PRIVATE REFCOUNT MACHINERY, which lesson 09 used as an explanation and never opened:
+     GetPrivateRefCountEntry / ReservePrivateRefCountEntry / NewPrivateRefCountEntry,
+     REFCOUNT_ARRAY_ENTRIES, PrivateRefCountOverflowed, and the ResourceOwner integration
+     (ResourceOwnerRememberBuffer / ResourceOwnerEnlargeBuffers). *** LESSON 08 LEFT THIS AS A LIVE
+     OPEN ITEM BECAUSE LimitAdditionalPins() SUBTRACTS BOTH OF THEM AND THAT ARITHMETIC REDUCED A
+     64-BLOCK EXTENSION TO ONE BLOCK AT shared_buffers=128kB. *** Closing it closes a two-lesson
+     thread. Also: README says pins may be held for long intervals and across a whole seqscan page,
+     but NOT across transaction boundaries -- ask what enforces that.
+ (3) THE LWLock ITSELF: lwlock.c's state word, the shared/exclusive/wait-queue encoding,
+     LWLockAcquire / LWLockConditionalAcquire / LWLockAcquireOrWait, the tranches
+     (LWTRANCHE_BUFFER_CONTENT is assigned in buf_init.c and lesson 09 quoted that line), and the
+     MainLWLockArray layout with BUFFER_MAPPING_LWLOCK_OFFSET. Lesson 09 measured that
+     GetVictimBuffer MUST use LWLockConditionalAcquire or deadlock; 10 owns why.
+Take: storage/buffer/README's access-rules half IN FULL; storage/lmgr/lwlock.c and
+include/storage/lwlock.h (the state word, the wait queue, the tranche registry); bufmgr.c's
+LockBuffer / LockBufferForCleanup / ConditionalLockBufferForCleanup / CheckBufferIsPinnedOnce /
+PinBuffer / UnpinBuffer and the PrivateRefCount block at the top of the file; and
+include/storage/buf_internals.h's BufferDescriptorGetContentLock / BufferDescriptorGetIOCV.
+MEASURE IT. Good candidates: (a) pg_buffercache.pinning_backends and pg_buffercache_summary()'s
+buffers_pinned are THE ONLY SQL-VISIBLE PIN COUNTS -- find something that holds a pin long enough
+to see (a cursor left open mid-seqscan is the obvious one); (b) make LockBufferForCleanup WAIT, by
+running VACUUM against a table with an open cursor pinning a page, and watch pg_stat_activity's
+wait_event / wait_event_type (BufferPin); (c) pg_stat_activity and pg_wait_events (16 has the
+latter) give the LWLock wait_event names -- BufferMapping, BufferContent, BufferIO are all
+reachable; (d) prove rule 4 by watching a SELECT dirty a page via hint bits under a shared lock
+(pg_buffercache's isdirty before/after, with lesson 09's measurement method); (e) if a
+contention measurement is wanted, pgbench -c N with a small shared_buffers makes BufferMapping
+waits appear -- but note lesson 09's finding that this box is 2 vCPU, so contention results will be
+weak and should be reported as such.
 Do NOT re-explain: the page header, line pointers, lp_off/lp_len, the hole (02); the tuple header,
 t_ctid's four meanings, the infomask catalogues (03); alignment, varlena, the 126-byte boundary,
-TOAST (04); the FSM's categories, its on-page max-heap, fsm_logical_to_physical, the 3-block floor
-(05); ANY of the visibility map (06); LP_REDIRECT and the lp_off unit change, the line-pointer state
-machine, HEAP_HOT_UPDATED/HEAP_ONLY_TUPLE, pd_prune_xid, PD_PAGE_FULL, the Max(fillfactor, BLCKSZ/10)
-prune gate, heap_page_prune's plan/execute split, the HOT-blocking matrix, the prune/VACUUM dividing
-line (07); AND NOW, FROM 08: the smgr switch and smgrsw[], the MdfdVec segment map, _mdfd_getseg's
-targetseg arithmetic, mdnblocks's walk, the RELSEG_SIZE invariant and inactive zero-length segments,
-mdzeroextend's fallocate-vs-FileZero branch and the >8 cutoff, PG_IOV_MAX 32, the
-MAX_BUFFERS_TO_EXTEND_BY 64 ramp, skipFsync's meaning, FileTag's four fields, and the whole fsync
-request queue (register_dirty_segment -> ForwardSyncRequest -> AbsorbSyncRequests -> pendingOps ->
-ProcessSyncRequests).
+TOAST (04); the FSM (05); ANY of the visibility map (06); LP_REDIRECT, the line-pointer state
+machine, pd_prune_xid, PD_PAGE_FULL, the Max(fillfactor, BLCKSZ/10) prune gate,
+heap_page_prune's plan/execute split, the HOT-blocking matrix (07); the smgr switch, the MdfdVec
+segment map, mdnblocks's walk, the RELSEG_SIZE invariant, mdzeroextend's branch, PG_IOV_MAX 32, the
+MAX_BUFFERS_TO_EXTEND_BY 64 ramp, skipFsync, FileTag, the whole fsync request queue (08); AND NOW,
+FROM 09: the four shmem arrays and their per-buffer sizes, the 32-bit state word and all ten BM_*
+flags, BM_MAX_USAGE_COUNT 5, BufferTag's five fields, NUM_BUFFER_PARTITIONS 128,
+StrategyGetBuffer's two-stage search and ClockSweepTick, trycounter's reset semantics,
+GetVictimBuffer's three retry paths, the IOOP_REUSE/IOOP_EVICT split, all four
+BufferAccessStrategyType ring sizes and the Min(NBuffers/8) cap, the initscan NBuffers/4 threshold,
+and BgBufferSync's StrategySyncStart call.
 Cite without re-deriving: 8192, 131072, 8160, 8164, 291, 24, 23, 126, 4069, 4095, FSM_CAT_STEP 32,
 the FSM leaf offset 4123+k, the fingerprint "00 20 04 20" at offsets 16-19 (= zero special space,
 NOT "heap"), MAPSIZE 8168, HEAPBLOCKS_PER_PAGE 32672, the VM offset formula 24 + (b % 32672)/4,
 VISIBLE_MASK8 0x55 / FROZEN_MASK8 0xaa, the 59-byte XLOG_HEAP2_VISIBLE record, the 59/61-byte
 XLOG_HEAP2_PRUNE record, the 71-byte HOT_UPDATE record, 166 vs 247 WAL bytes per update (HOT vs
 cold), the 140-bytes-per-row geometry, lesson 07's correction that lesson 06's "59 heap fetches" is
-rows-on-the-old-block + 1, and now: RELSEG_SIZE observed as 1,073,741,824 bytes of segment 0,
+rows-on-the-old-block + 1, RELSEG_SIZE observed as 1,073,741,824 bytes of segment 0,
 MAX_BUFFERS_TO_EXTEND_BY 64, PG_IOV_MAX 32, max_requests = Min(NBuffers, 10000000),
-FSYNCS_PER_ABSORB 10, and the ~1,940:1 writes-to-fsyncs dedup ratio.
-Do NOT take: pins vs content locks and the LWLock implementation (10) -- 09 may name
-LockBufHdr/UnlockBufHdr but must not teach LWLocks; the heavyweight lock manager (11); tuple lock
-strengths (12); hint bits and their FPI machinery (15, 22); snapshots (14); the checkpointer's
-spread writes and the REDO pointer (24) -- lesson 08 touched ProcessSyncRequests only, and
-BufferSync belongs to 24; crash recovery (25).
+FSYNCS_PER_ABSORB 10, the ~1,940:1 writes-to-fsyncs dedup ratio, and now: 64 bytes per BufferDesc,
+28 bytes of Buffer Strategy Status, 16,384 buffers at shared_buffers=128MB, the ring sizes
+32/2048/32 buffers and the Min(NBuffers/8) cap, reads-minus-reuses = ring size, the 4,096-block
+seq-scan threshold, and the 0-evictions-vs-23,320-evictions pair for the same 242 MB read.
+Do NOT take: the heavyweight lock manager, LOCKTAG and the deadlock detector (11); tuple lock
+strengths and the conflict table (12); hint bits' FPI machinery (15, 22); snapshots and
+GlobalVisState (14); the checkpointer's spread writes, BufferSync and BM_CHECKPOINT_NEEDED (24);
+crash recovery (25).
 OPEN ITEMS carried forward:
-- FOR LESSON 09: the three inherited questions above.
-- FOR LESSON 10: LimitAdditionalPins's REFCOUNT_ARRAY_ENTRIES / PrivateRefCountOverflowed.
-- FOR LESSON 14: unchanged from 07 -- GlobalVisState / vistest and heap_prune_satisfies_vacuum were
-  black boxes, and heap_page_prune_opt carries a live XXX about old_snapshot_threshold citing
+- FOR LESSON 10: the three inherited questions above, and lesson 08's REFCOUNT_ARRAY_ENTRIES /
+  PrivateRefCountOverflowed item, which is now (2).
+- NEW FROM 09, FOR WHOEVER WANTS IT: write a tiny extension exposing StrategySyncStart()'s three
+  outputs as a SQL function. nextVictimBuffer and completePasses have NO SQL exposure, there are no
+  debug symbols in this sandbox, and the arc trick is an inference that only works on a quiet
+  cluster. That extension would turn it into a direct reading and make the six-pass bound
+  measurable.
+- NEW FROM 09: GetVictimBuffer's cost in the EXTENSION path was not priced (question (1) above is
+  only half closed). A run that re-does lesson 08's COPY measurement while watching pg_stat_io's
+  bulkwrite writes and the bgwriter's buffers_clean would close it.
+- FOR LESSON 14: unchanged -- GlobalVisState / vistest and heap_prune_satisfies_vacuum were black
+  boxes, and heap_page_prune_opt carries a live XXX about old_snapshot_threshold citing
   postgresql.org/message-id/20200403001235.e6jfdll3gh2ygbuc%40alap3.anarazel.de.
-- FOR LESSON 19 (unchanged from 05/06/07, still not closed): fsm_vacuum_page() and
+- FOR LESSON 19 (unchanged from 05/06/07/08, still not closed): fsm_vacuum_page() and
   FreeSpaceMapVacuumRange() have STILL not been read -- they are the only code that makes the upper
   FSM levels true, AND they are the answer to lesson 07's open question about whether a cold update
   can be routed onto a prune-recovered page. Plus lesson 06's 18,400 WAL bytes over 118 blocks
-  breakdown, and VACUUM's two heap passes. NEW FROM 08: register_unlink_segment, pendingUnlinks and
-  SyncPostCheckpoint() were read but not exercised -- the one-checkpoint delay before a dropped
-  relation's file is actually unlinked is observable with DROP TABLE + two CHECKPOINTs.
-- FOR LESSON 24: lesson 08 read ProcessSyncRequests and left BufferSync alone. The race the comment
-  describes ("a buffer that must be written and fsync'd for the checkpoint could have been dumped by
-  a backend just before it was visited by BufferSync()") and the Absorb-after-BufferSync ordering
-  that closes it are 24's to teach. Also ckpt_longest_sync: measured spread 0.095-82.894 ms per
-  file, and nothing bounds it.
+  breakdown, VACUUM's two heap passes, and 08's register_unlink_segment / pendingUnlinks /
+  SyncPostCheckpoint (the one-checkpoint delay before a dropped relation's file is unlinked is
+  observable with DROP TABLE + two CHECKPOINTs). NEW FROM 09: vacuum_buffer_usage_limit's full
+  range and VACUUM's ring behaviour are now measured (32 and 256 buffers at '256kB' and '2MB',
+  and the normal strategy at 0) -- cite those rather than re-measuring.
+- FOR LESSON 24: unchanged from 08 -- ProcessSyncRequests was read and BufferSync left alone; the
+  race the comment describes and the Absorb-after-BufferSync ordering are 24's. NEW FROM 09: the
+  "Checkpoint BufferIds" array is 20 bytes per buffer of preallocated shared memory and exists
+  precisely so a checkpoint never allocates; BM_CHECKPOINT_NEEDED is bit 30; and
+  ScheduleBufferTagForWriteback / WritebackContext / WRITEBACK_MAX_PENDING_FLUSHES were named in 09
+  and never explained.
 - FOR LESSON 29: unchanged -- lesson 07's cold-update WAL run emitted 74 Btree/DELETE records.
 - FOR LESSON 31: unchanged -- pg_class.relallvisible's cost formula, and whether costsize.c models
-  HOT at all.
+  HOT at all. NEW FROM 09: whether the planner knows anything about shared_buffers at all (the
+  effective_cache_size / seq_page_cost relationship) is a fair question for 31, given that lesson
+  09 showed the SAME query's cache effect depends entirely on which node reads the heap.
 - UNOBSERVED, for whoever gets there first: MaxHeapTuplesPerPage = 291 has been DERIVED three times
   (05, 07) and never reached.
 - UNOBSERVED BRANCH, for whichever lesson runs with checksums on first: every measurement in
-  lessons 03-08 was taken with data_checksums OFF. Still unexercised:
+  lessons 03-09 was taken with data_checksums OFF. Still unexercised:
   visibilitymap_prepare_truncate's XLogHintBitIsNeeded() -> log_newpage_buffer (06), and
   heap_page_prune's MarkBufferDirtyHint branch under XLogHintBitIsNeeded() (07).
-- UNEXERCISED CODE PATHS: heap_prune_chain's outcome (4), the orphaned-redirect self-heal (07); and
-  NEW FROM 08, register_dirty_segment's queue-full local-fsync fallback, plus
-  ExtendBufferedRelShared's `existing_id >= 0` branch with its
-  errhint("This has been seen to occur with buggy kernels") -- both read, neither reached.
+- UNEXERCISED CODE PATHS: heap_prune_chain's outcome (4), the orphaned-redirect self-heal (07);
+  register_dirty_segment's queue-full local-fsync fallback and ExtendBufferedRelShared's
+  `existing_id >= 0` branch with its errhint("This has been seen to occur with buggy kernels")
+  (08); and NEW FROM 09, StrategyGetBuffer's `elog(ERROR, "no unpinned buffers available")` -- an
+  attempt to force it at shared_buffers=128kB (16 buffers) with a nested-loop join and a large
+  prewarm did NOT trigger it, because trycounter resets on every decrement. It needs NBuffers
+  SIMULTANEOUS pins, which means a query whose concurrent pin set exceeds the whole pool.
 - NOT MEASURED, carried from 07: the SUMMARIZING-INDEX (BRIN) HOT path.
-- NEW FROM 08, worth one cheap run: truncate a relation to an exact multiple of RELSEG_SIZE and
-  check whether segment K+1 is kept at length 0, as mdtruncate's comment promises.
+- NEW FROM 08, still worth one cheap run: truncate a relation to an exact multiple of RELSEG_SIZE
+  and check whether segment K+1 is kept at length 0, as mdtruncate's comment promises.
 - A DOCUMENTATION PATCH WORTH PROPOSING UPSTREAM, unchanged from 06: visibilitymap.c's LOCKING
   section still says "only VACUUM currently sets visibility map bits", which heap_multi_insert's
   all_frozen_set contradicts.
 
-NOTE-BLOCK ROTATION DONE THIS RUN: lesson 05's note was dropped and TRACK-ARCHIVE.md gained the row
-"PG 05" pointing at commit 5d3a81e3c7b92c6679f964fb9354092862b4c6a3 / blob
-54c92e672c6081eec9935d5f6f8514ad8520a7ed, which is the last state of TRACK.md carrying it. This
-block now holds 06, 07 and 08 -- exactly the three the policy allows. WHEN LESSON 09 SHIPS IT MUST
-DROP THE LESSON 06 BLOCK, and before dropping it MUST add its TRACK-ARCHIVE.md row first.
+NOTE-BLOCK ROTATION DONE THIS RUN: lesson 06's note was dropped and TRACK-ARCHIVE.md gained the row
+"PG 06" pointing at commit 01878f9bb5d3979a81c03925c2ae8219292b7dc6 / blob
+df40aec01bc9a115a92e1d609bce79b1b8901e25, which is the last state of TRACK.md carrying it. This
+block now holds 07, 08 and 09 -- exactly the three the policy allows. WHEN LESSON 10 SHIPS IT MUST
+DROP THE LESSON 07 BLOCK, and before dropping it MUST add its TRACK-ARCHIVE.md row first.
 
 Known environment facts for a fresh session (verify, do not assume):
 - Block size 8 KB and segment size 1 GB are compile-time (BLCKSZ, RELSEG_SIZE) and exposed as the
@@ -821,35 +867,52 @@ Known environment facts for a fresh session (verify, do not assume):
   heap_tuple_infomask_flags, tuple_data_split, bt_page_items, bt_metap, fsm_page_contents). All
   of it is SUPERUSER-ONLY. pg_freespacemap covered lesson 05; pg_visibility covers 06.
   Lesson 01's hands-on installs all three; lesson 02's needs only pageinspect; lesson 05's needs
-  pageinspect and pg_freespacemap; lesson 07's needs pageinspect and pgstattuple. Lesson 08 needed
-  only pageinspect (and barely that -- its instrument was strace).
-- CONFIRMED 2026-10-22 THROUGH 2026-10-27 (six runs): the cloud sandbox CAN run a cluster.
-  *** TWO RECIPES, BOTH WORKING, AND THE SECOND IS SIMPLER. ***
+  pageinspect and pg_freespacemap; lesson 07's needs pageinspect and pgstattuple; lesson 08 needed
+  only pageinspect (and barely that -- its instrument was strace); LESSON 09 NEEDED NEITHER, only
+  pg_buffercache 1.4 and pg_prewarm 1.2, both of which are now CONFIRMED PRESENT AND WORKING.
+- CONFIRMED 2026-10-22 THROUGH 2026-10-28 (seven runs): the cloud sandbox CAN run a cluster.
+  *** THREE RECIPES NOW, AND THE THIRD IS THE SHORTEST. CHECK pg_lsclusters FIRST. ***
   (A) Lessons 03-07's: create a non-root user, initdb -D /var/tmp/pgdata --no-sync as that user,
       pg_ctl with -o '-p 5455 -k /var/tmp'. TWO TRAPS: initdb refuses to run as root, and it
       refuses a data directory under the scratchpad path -- /var/tmp works.
-  (B) Lesson 08's, fewer steps: `apt-get install postgresql postgresql-contrib`, then
-      `pg_ctlcluster 16 main start`, then run everything as `su postgres -c "psql ..."`. The data
-      dir is /var/lib/postgresql/16/main, the log is /var/log/postgresql/postgresql-16-main.log,
-      ALTER SYSTEM + `pg_ctlcluster 16 main restart` applies PGC_POSTMASTER settings, and
-      `ALTER SYSTEM SET log_min_messages='debug1'; SELECT pg_reload_conf();` is how you get
-      checkpoint-sync and other DEBUG1 lines into that log. Remember to set it back to 'warning'.
-  BOTH recipes keep the world-readable-script trap: psql -f cannot read a file under the scratchpad
-  path as the pg user, so put scratch SQL in /tmp/<dir> with chmod 777 (or /var/tmp).
-  The cluster is per-run and does not persist, so table names from earlier runs are gone.
+  (B) Lesson 08's: `apt-get install postgresql postgresql-contrib`, then
+      `pg_ctlcluster 16 main start`, then run everything as `su postgres -c "psql ..."`.
+  (C) LESSON 09'S, AND TRY THIS FIRST: postgresql-16 was ALREADY INSTALLED in the sandbox image,
+      with psql 16.15 on PATH and the cluster "16 main" present but down. `pg_lsclusters` shows it.
+      Then `pg_ctlcluster 16 main start` and `sudo -u postgres psql -X -q -d DB -c "..."` -- no
+      su quoting, no initdb, no world-readable-script dance for -c work. ALTER SYSTEM +
+      `pg_ctlcluster 16 main restart` applies PGC_POSTMASTER settings (shared_buffers,
+      max_connections). The contrib extensions were already in
+      /usr/share/postgresql/16/extension/ even though postgresql-contrib reported as not installed
+      -- CHECK THE DIRECTORY BEFORE INSTALLING.
+      TWO TRAPS NEW THIS RUN: ALTER SYSTEM cannot run inside an implicit transaction block, so
+      `psql -c "ALTER SYSTEM SET a; ALTER SYSTEM SET b;"` FAILS -- one -c per statement. Same for
+      VACUUM. And `/usr/bin/time` does NOT exist; use psql's `\timing on` instead.
+  ALL recipes keep the world-readable-script trap for psql -f: put scratch SQL in /tmp/<dir> with
+  chmod 777 (or /var/tmp). The cluster is per-run and does not persist, so table names from earlier
+  runs are gone.
 - *** strace IS AVAILABLE AND IT IS THE RIGHT INSTRUMENT FOR ANYTHING BELOW THE BUFFER MANAGER.
-  gdb is installed too (no debug symbols, so it cannot read shared-memory structs). THE HARNESS
-  LESSON 08 BUILT AND LATER LESSONS SHOULD COPY: mkfifo a pipe, start
+  gdb is installed BUT THERE ARE NO DEBUG SYMBOLS -- postgresql-16-dbgsym IS NOT IN THE UBUNTU
+  24.04 ARCHIVE (confirmed lesson 09: apt-cache policy returns nothing). SO gdb CANNOT READ
+  SHARED-MEMORY STRUCTS OR FILE-STATIC VARIABLES. THE HARNESS LESSON 08 BUILT AND LATER LESSONS
+  SHOULD COPY: mkfifo a pipe, start
   `su postgres -c "psql -d DB -At -q < fifo > out"` in the background, write
   "SELECT pg_backend_pid();" into the fifo, read the pid out of the output file, then
   `strace -f -tt -p <pid> -e trace=<syscalls> -o trace.txt &`, then feed the real SQL into the fifo
   and poll for a DONE marker. That gives a clean per-statement syscall trace of a NAMED backend.
   Note that parallel workers are NOT children of that backend, so -f does not follow them; disable
   parallelism or trace the postmaster if you need them. ***
+- *** WHEN A SHARED-MEMORY COUNTER IS NOT EXPOSED IN SQL, LESSON 09'S TECHNIQUE IS THE FALLBACK:
+  drive the structure to a known state, apply an exactly-counted number of operations, and read the
+  CONSEQUENCE out of a view that does exist. Locating nextVictimBuffer as a contiguous arc of
+  pg_buffercache.bufferid values is the worked example, and it predicted the next arc's start to
+  the buffer. pg_shmem_allocations is the other under-used view: every ShmemInitStruct name is
+  queryable with its size, so a per-element struct size can be read back by division. ***
 - Table names used so far, for avoiding collisions within a run: seg_demo (01), pg2_fill /
   pg2_big (02), pg3_* and w8 / w9 / w16 / w72 / w73 (03), pg4_* (04), pg5_* (05), pg6_* (06),
-  pg7_* (07), and 08's unprefixed set (seg, ext_*, tiny_copy, q1..q4, dedup, b, io_t, iostat_t --
-  a lapse; go back to pgNN_*). Keep the pgNN_ prefix convention.
+  pg7_* (07), 08's unprefixed set (seg, ext_*, tiny_copy, q1..q4, dedup, b, io_t, iostat_t) and
+  09's unprefixed set (t_small, t_mid, t_big, t_copy, t_tiny, in database `bufdemo`) -- two lapses
+  in a row. GO BACK TO THE pgNN_ PREFIX CONVENTION.
 - pg_waldump lives at /usr/lib/postgresql/16/bin/pg_waldump, works on the live cluster's segments,
   and `--stats=record` prints a per-record-type record/FPI byte breakdown. Lesson 06 used it to
   price XLOG_HEAP2_VISIBLE and lesson 07 to price XLOG_HEAP2_PRUNE against Btree/INSERT_LEAF.
@@ -858,21 +921,28 @@ Known environment facts for a fresh session (verify, do not assume):
   LSN again, then `pg_waldump -s <lsn1> -e <lsn2> --stats=record` for the table and
   `-r <rmgr>` for verbatim records. That isolates one workload's WAL exactly.
 - *** GETTING THE SOURCE: `apt-get source postgresql-16` IS THE RIGHT ROUTE IN THIS SANDBOX AND
-  LESSONS 07 AND 08 BOTH USED IT. *** Ubuntu 24.04 ships deb-src DISABLED in
-  /etc/apt/sources.list.d/ubuntu.sources (a deb822 file with `Types: deb`); the fix that worked in
-  lesson 08 is `sed -i 's/^Types: deb$/Types: deb deb-src/'` on that file, then `apt-get update`,
-  then `apt-get source postgresql-16` into a world-readable dir. ~33 MB, a few seconds, and it
-  unpacks postgresql-16-16.15/ WITH debian/patches/ applied -- so CHECK WHICH FILES THE PATCH SERIES
+  LESSONS 07, 08 AND 09 ALL USED IT. *** Ubuntu 24.04 ships deb-src DISABLED in
+  /etc/apt/sources.list.d/ubuntu.sources (a deb822 file with `Types: deb`); the fix is
+  `sed -i 's/^Types: deb$/Types: deb deb-src/'` on that file, then `apt-get update`, then
+  `apt-get source postgresql-16` into a world-readable dir. ~33 MB, a few seconds, and it unpacks
+  postgresql-16-16.15/ WITH debian/patches/ applied -- so CHECK WHICH FILES THE PATCH SERIES
   TOUCHES BEFORE QUOTING ANYTHING, per file and not in bulk: as of 16.15 there are 15 patches and
   one of them DOES touch src/backend/storage/buffer/bufmgr.c (at LockBufferForCleanup only).
   Extract the +++/--- paths and check the hunk offsets. This is strictly better than WebFetching
   files one at a time: it is the exact build the cluster runs, it allows reading a file IN FULL, and
   WebFetch on postgresql.org summarises rather than reproducing. The Sources section must still
   cite only URLs actually seen that run; the local tree is evidence, not a citation.
-- pg_buffercache is needed from lesson 09 and has NOT been installed in any run yet (present in
-  /usr/share/postgresql/16/extension/); pgstattuple was used by lesson 07 and is needed again by
-  19; amcheck for lessons 28-29 (it is the closest thing PostgreSQL has to SQLite's
-  integrity_check, and the comparison is worth making explicitly when lesson 28 arrives).
+- pg_buffercache 1.4 (pg_buffercache_pages, pg_buffercache_summary, pg_buffercache_usage_counts)
+  and pg_prewarm 1.2 are INSTALLED AND MEASURED AS OF LESSON 09 and are the right tools for
+  anything about the pool; pgstattuple was used by lesson 07 and is needed again by 19; amcheck for
+  lessons 28-29 (it is the closest thing PostgreSQL has to SQLite's integrity_check, and the
+  comparison is worth making explicitly when lesson 28 arrives).
+- *** MEASUREMENT HYGIENE ESTABLISHED BY LESSON 09 AND WORTH REPEATING: set
+  max_parallel_workers_per_gather = 0 for anything that counts buffers or I/O, because
+  backend-local structures (BufferAccessStrategy rings, and presumably more) are per participant
+  and parallel workers are a separate backend_type in pg_stat_io. And `pg_stat_reset_shared('io')`
+  immediately before each measurement -- pg_stat_io accumulates across the whole cluster lifetime
+  and its column is `context`, not `io_context`. ***
 -->
 
 ## Completed Subjects
