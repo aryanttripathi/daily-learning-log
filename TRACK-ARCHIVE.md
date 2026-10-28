@@ -46,6 +46,7 @@ commit you reach them through.
 | **PG 03** | **PostgreSQL Internals** | commit `610357515b8e64cde4cb22cfaa3a34dd019456c4` (2026-10-25, the last commit before the tenth trim) | `91f09a63f3a86af94a3d519f09c62e5d69272be5` |
 | **PG 04** | **PostgreSQL Internals** | commit `fffcd6bafd24c05eb83f0e2e46d0efab0597d880` (2026-10-26, the last commit before the eleventh trim) | `9fb0a858ff439a121aa72abf94e642c6fb06bc4b` |
 | **PG 05** | **PostgreSQL Internals** | commit `5d3a81e3c7b92c6679f964fb9354092862b4c6a3` (2026-10-26, the last commit before the twelfth trim) | `54c92e672c6081eec9935d5f6f8514ad8520a7ed` |
+| **PG 06** | **PostgreSQL Internals** | commit `01878f9bb5d3979a81c03925c2ae8219292b7dc6` (2026-10-28, the last commit before the thirteenth trim) | `df40aec01bc9a115a92e1d609bce79b1b8901e25` |
 
 Notes on the rows:
 
@@ -173,12 +174,40 @@ Notes on the rows:
   FSM fork" holds only *pre-*`VACUUM`, and lesson 08 answered its open question about whether the
   three-block FSM floor is a consequence of extension (it is `fsm_logical_to_physical`'s
   interleaving, not `smgrextend`).
+- The **PG 06** blob carries the notes for PostgreSQL lessons **06, 07 and 08** together with the
+  handover that was written *to* lesson 09. It is therefore the right place to read lesson 06's
+  note — the one on the visibility map: all of `visibilitymapdefs.h` (`BITS_PER_HEAPBLOCK` 2,
+  `VISIBILITYMAP_ALL_VISIBLE` `0x01`, `ALL_FROZEN` `0x02`, `VALID_BITS` `0x03`, and the `0b10` code
+  point that is **unreachable by assertion at both ends**), the flat-array geometry (`MAPSIZE`
+  8168, `HEAPBLOCKS_PER_BYTE` 4, `HEAPBLOCKS_PER_PAGE` **32672** = 255.25 MiB of heap per VM page,
+  with no tree and therefore no ragged remainder, unlike lesson 05's 4069), the reusable address
+  formula (VM page `b / 32672`, byte `24 + (b % 32672)/4`, bit shift `(b % 4) * 2`) **measured at
+  the first VM page boundary crossed in this track** — heap block 32,671 landing on page offset
+  **8191**, the last byte of the page, and block 32,672 on byte 24 of the next, on a 35,000-block
+  table whose FSM fork independently confirmed lesson 05's arithmetic at 11 blocks; the
+  two-places-one-truth argument for `PD_ALL_VISIBLE` and the pin-before-lock dance it forces; the
+  five `visibilitymap_clear` call sites in `heapam.c` with their four `XLH_*_ALL_VISIBLE_CLEARED`
+  flags and `MarkBufferDirty` rather than `MarkBufferDirtyHint`; **PG 16's own quoted argument for
+  why setting a VM bit must be WAL-logged while the FSM pays nothing**, priced with `pg_waldump` at
+  **59 bytes per heap page marked** (978 of 980 records at exactly 59 bytes, 5.65% of one 16 MB
+  segment); `COPY FREEZE` setting both bits at load time with no `VACUUM`; the byte sequence
+  `85 → 255 → 243` (`0x55` = `VISIBLE_MASK8`, then `0xff`, then `0xf3`) that proves the addressing
+  scheme in three `get_byte` calls; and the **blind spot**: with the map truncated to nothing and
+  861 heap pages still claiming `PD_ALL_VISIBLE`, `pg_check_visible` returned **zero rows**,
+  because the checks detect over-claiming only. It also carries the seven-point 16-versus-master
+  divergence table for `visibilitymap_set` (who locks, who logs, and the return value).
+  **Read this one with lesson 07's note in hand:** lesson 06's headline "one cold update costs
+  **59** heap fetches" was corrected by lesson 07 to **58** on a one-row-narrower table — the
+  figure is `rows-on-the-dirtied-block + 1`, not a constant. Lesson 06's refinement of lesson 05
+  stands: a one-block heap *does* get an FSM fork, but only after its first `VACUUM`.
+  **And read it with lesson 09's note in hand** for the layer underneath: lesson 06's `RBM_ZERO_ON_ERROR`
+  and `vm_extend` treated the buffer manager as a black box, which lesson 09 (2026-10-28) opened.
 - Lessons 01–12 of the SQLite track predate the note block; those lessons have no handover notes,
   only their documents.
 
 After the 2026-10-19 run, `TRACK.md` describes a **new track — PostgreSQL Internals, 35 lessons** —
-and after the 2026-10-27 run its note block holds the notes for PostgreSQL lessons **06, 07 and
-08** plus the handover to lesson 09. Every SQLite note, and now PostgreSQL lessons 01–05's, lives
+and after the 2026-10-28 run its note block holds the notes for PostgreSQL lessons **07, 08 and
+09** plus the handover to lesson 10. Every SQLite note, and now PostgreSQL lessons 01–06's, lives
 in git history, indexed by the table above.
 
 ## Procedure for the next trim
@@ -211,7 +240,8 @@ lesson 06's "59 heap fetches after one cold update" turned out not to be a const
 an archived or live note as *what that run believed*, not as established fact: it is working memory,
 and one header fetch (or one re-measurement) is usually enough to check a specific claim before
 building on it. When a later lesson overturns an earlier note, record the correction in the new note
-**and** annotate the archived row, as the `PG 02`, `PG 03`, `PG 04` and `PG 05` rows above now are.
+**and** annotate the archived row, as the `PG 02`, `PG 03`, `PG 04`, `PG 05` and `PG 06` rows above
+now are.
 
 ## What this file is not
 
