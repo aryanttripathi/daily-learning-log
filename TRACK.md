@@ -3,15 +3,15 @@ track-state
 subject: PostgreSQL
 started: 2026-10-19
 lessons-total: 35
-lessons-done: 9
+lessons-done: 10
 -->
 
 # Current Track: PostgreSQL Internals
 
 Sequential deep dive. One lesson per day, each building on the last.
 
-**STATUS: in progress — lesson 09 shipped 2026-10-28.** The syllabus was written on 2026-10-19, the
-day the SQLite track's capstone shipped. The next run takes **lesson 10**.
+**STATUS: in progress — lesson 10 shipped 2026-10-29.** The syllabus was written on 2026-10-19, the
+day the SQLite track's capstone shipped. The next run takes **lesson 11**.
 
 The order follows PostgreSQL's actual source layout rather than a textbook outline. It was built
 from two pieces of primary evidence read on 2026-10-19: the chapter list of
@@ -58,7 +58,7 @@ readable as the other answer to a question SQLite already answered.
 ### Part II — Shared memory: buffers and locks (`storage/buffer`, `storage/lmgr`)
 
 - [x] 09 — The buffer manager: `BufferDesc`, the clock-sweep victim search, and the strategy ring
-- [ ] 10 — Buffer pins versus content locks, and the LWLock implementation
+- [x] 10 — Buffer pins versus content locks, and the LWLock implementation
 - [ ] 11 — The heavyweight lock manager: `LOCKTAG`, lock partitions, and the deadlock detector
 - [ ] 12 — Tuple locks: the four strengths, the conflict table, and the `LockTuple`/`XactLockTableWait` protocol
 
