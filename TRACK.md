@@ -965,3 +965,4 @@ types. The commit point is a filesystem operation (`unlink("-journal")` in rollb
 header with a nonzero commit counter in WAL mode). The planner's cost channel is 10 bits wide.
 And `quick_check` is a *weaker* check at nearly the same I/O as `integrity_check`, blind to index
 key order — the single most useful operational fact the track produced.
+
