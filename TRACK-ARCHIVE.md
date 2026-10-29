@@ -214,8 +214,8 @@ Notes on the rows:
   only their documents.
 
 After the 2026-10-19 run, `TRACK.md` describes a **new track — PostgreSQL Internals, 35 lessons** —
-and after the 2026-10-28 run its note block holds the notes for PostgreSQL lessons **07, 08 and
-09** plus the handover to lesson 10. Every SQLite note, and now PostgreSQL lessons 01–06's, lives
+and after the 2026-10-29 run its note block holds the notes for PostgreSQL lessons **08, 09 and
+10** plus the handover to lesson 11. Every SQLite note, and now PostgreSQL lessons 01–07's, lives
 in git history, indexed by the table above.
 
 ## Procedure for the next trim
@@ -258,3 +258,4 @@ root [`README.md`](README.md). These notes are working memory between runs: a fr
 them to avoid re-teaching something or contradicting an earlier day. If you want to know what
 lesson 18 covered, read lesson 18; read its note only if you need to know what lesson 18 decided
 *not* to cover and why.
+
