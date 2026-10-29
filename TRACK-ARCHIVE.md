@@ -258,4 +258,3 @@ root [`README.md`](README.md). These notes are working memory between runs: a fr
 them to avoid re-teaching something or contradicting an earlier day. If you want to know what
 lesson 18 covered, read lesson 18; read its note only if you need to know what lesson 18 decided
 *not* to cover and why.
-
