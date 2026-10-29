@@ -47,6 +47,7 @@ commit you reach them through.
 | **PG 04** | **PostgreSQL Internals** | commit `fffcd6bafd24c05eb83f0e2e46d0efab0597d880` (2026-10-26, the last commit before the eleventh trim) | `9fb0a858ff439a121aa72abf94e642c6fb06bc4b` |
 | **PG 05** | **PostgreSQL Internals** | commit `5d3a81e3c7b92c6679f964fb9354092862b4c6a3` (2026-10-26, the last commit before the twelfth trim) | `54c92e672c6081eec9935d5f6f8514ad8520a7ed` |
 | **PG 06** | **PostgreSQL Internals** | commit `01878f9bb5d3979a81c03925c2ae8219292b7dc6` (2026-10-28, the last commit before the thirteenth trim) | `df40aec01bc9a115a92e1d609bce79b1b8901e25` |
+| **PG 07** | **PostgreSQL Internals** | commit `99a7b3b7eab710319907cbd11d5c311ebe61d4fa` (2026-10-29, the last commit before the fourteenth trim) | `937bfd19f68fdc42eebe5c83f1f636869629a59e` |
 
 Notes on the rows:
 
@@ -202,6 +203,13 @@ Notes on the rows:
   stands: a one-block heap *does* get an FSM fork, but only after its first `VACUUM`.
   **And read it with lesson 09's note in hand** for the layer underneath: lesson 06's `RBM_ZERO_ON_ERROR`
   and `vm_extend` treated the buffer manager as a black box, which lesson 09 (2026-10-28) opened.
+- The **PG 07** blob carries the notes for PostgreSQL lessons **07, 08 and 09** together with the
+  handover that was written *to* lesson 10, and is the version of `TRACK.md` that still contains
+  all three of those note sections. It is therefore the right place to read lesson 07's note — the
+  one on HOT updates and page pruning: `LP_REDIRECT` and the line-pointer state machine, the
+  819-byte prune heuristic located to within one row, the HOT-blocking matrix, the zero-growth
+  steady state, the WAL comparison (166 vs 247 bytes/update), and the one-idle-transaction
+  finding. Archived on **2026-10-29 by the lesson 10 run**.
 - Lessons 01–12 of the SQLite track predate the note block; those lessons have no handover notes,
   only their documents.
 
