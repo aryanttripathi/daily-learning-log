@@ -113,213 +113,6 @@ The SQLite track's lessons 31-33 notes were archived on that run; see TRACK-ARCH
 and records which items were deliberately left unread. None of these carry forward into the
 PostgreSQL track. Do not hand them to a PostgreSQL lesson.
 
--- LESSON 07 (2026-10-26) AS TAUGHT ------------------------------------------------------------
-Document: 2026/10/2026-10-26-postgres-hot-updates-page-pruning/README.md (single README, not split
--- one mechanism; the prune heuristic and the chain walk are the same story told from two ends).
-
-*** SOURCE PROVENANCE IS DIFFERENT THIS RUN AND THE NEXT RUN SHOULD KNOW WHY. *** No git tree was
-fetched. The source read is the Debian/Ubuntu source package postgresql-16 version
-16.15-0ubuntu0.24.04.1, obtained with `apt-get source postgresql-16` after adding deb-src lines for
-noble to /etc/apt/sources.list.d/. THAT IS THE SAME BUILD THE CLUSTER RUNS, so code and
-measurements cannot drift. Verified rather than assumed: none of the 14 patches in
-debian/patches/ touches pruneheap.c, heapam.c, itemid.h, bufpage.h, htup_details.h or
-heapam_xlog.h (checked by extracting every +++/--- path out of the patch series), so the quoted
-files are upstream REL_16_15 verbatim. Trees/releases so far: 01 @ddd468ca, 02 @3cde90ec,
-03 @f2edf5dd, 04 @f52d4051, 05 @126976a8, 06 @0019a1ec, 07 = release 16.15 (no SHA; said so in the
-document rather than inventing one). THE apt-get source ROUTE IS FASTER AND MORE FAITHFUL THAN
-WEB-FETCHING FILES ONE AT A TIME AND LATER LESSONS SHOULD USE IT; WebFetch on
-postgresql.org/docs summarises rather than reproducing, and cannot be quoted verbatim.
-Files read IN FULL: access/heap/README.HOT (520 lines), access/heap/pruneheap.c (1238 lines),
-storage/itemid.h (184 lines). Read in part: heapam.c (the use_hot_update block ~3800-3885 and
-HeapDetermineColumnsInfo), bufpage.h (PD_PAGE_FULL, PageSetPrunable/PageClearPrunable,
-PageIsFull/SetFull/ClearFull), htup_details.h (the HOT t_infomask2 macros), heapam_xlog.h
-(xl_heap_prune, SizeOfHeapPrune, the XLH_UPDATE_* flags).
-
-*** THIS RUN HAD A CLUSTER and EVERY number in the lesson is measured. Same recipe as 03/04/05/06,
-both traps still apply (initdb not as root; data dir not under the scratchpad path -- /var/tmp
-works; psql -f scripts must live somewhere world-readable such as /var/tmp). ***
-PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1), x86_64, gcc 13.3.0, block_size 8192,
-segment_size 1GB, data_checksums OFF, pageinspect 1.12, pgstattuple 1.5, pg_visibility 1.2,
-pg_freespacemap 1.2. pg_waldump at /usr/lib/postgresql/16/bin/pg_waldump, used again, works.
-
-TOOK, and must not be re-taught:
-- LP_REDIRECT CLOSED (lesson 02's deferred fourth state). The whole itemid.h enum with its
-  parenthetical invariants, the no-storage convention quoted ("By convention, lp_len == 0 in every
-  line pointer that does not have storage, independently of its lp_flags state"), and
-  ItemIdGetRedirect's comment quoted. *** THE CENTRAL FACT, TAUGHT AND MEASURED: lp_off CHANGES
-  UNITS. Byte offset in LP_NORMAL, OffsetNumber in LP_REDIRECT, with lp_flags the only
-  discriminator. MEASURED lp_off = 19 on a redirect, and 19 is inside the 24-byte page header, so
-  it CANNOT be a byte offset -- that impossibility is the proof and it is reusable. ***
-- THE FULL LINE-POINTER STATE MACHINE, every transition MEASURED on one page (pg7_chain, 18 rows,
-  396-byte tuples -> MAXALIGN 400, lower 96 = 24+18*4, upper 992 = 8192-18*400, both exact):
-    NORMAL -> REDIRECT  root dead, later member live    (heap_prune_record_redirect)
-    NORMAL -> DEAD      tuple dead, no surviving chain  (heap_prune_record_dead)
-    NORMAL -> UNUSED    heap-only tuple dead            (heap_prune_record_unused)
-    REDIRECT -> REDIRECT retarget; REDIRECT -> DEAD whole chain dead
-    DEAD -> UNUSED      VACUUM ONLY, after the index entry goes
-  THE ASYMMETRY IS THE DESIGN and heap_page_prune_execute says it: "A heap-only tuple can never
-  become LP_DEAD; an LP_REDIRECT item or a regular heap tuple can." Keep that sentence.
-- THE INFOMASK2 BITS CLOSED (lesson 03 assigned them here). HEAP_HOT_UPDATED 0x4000,
-  HEAP_ONLY_TUPLE 0x8000, and MEASURED t_infomask2 values that decode exactly:
-  16387 = 0x4003 (root, HOT_UPDATED + 3 natts), 32771 = 0x8003 (heap-only tail),
-  *** 49155 = 0xC003 = BOTH FLAGS on a mid-chain tuple ***, which is the observation that makes the
-  two flags visibly orthogonal. heap_tuple_infomask_flags() agreed. ALSO: HeapTupleHeaderIsHotUpdated
-  is NOT a bare bit test -- it is the bit AND !XMAX_INVALID AND !XminInvalid.
-- pd_prune_xid AND PD_PAGE_FULL CLOSED (both lesson 02 deferrals). PageSetPrunable quoted whole and
-  taught as a MONOTONE MINIMUM, not an assignment. heap_update sets it on the OLD tuple's page only,
-  with its XXX quoted ("Should we set hint on newbuf as well? ... for now we choose not to optimize
-  for aborts"). PD_PAGE_FULL 0x0002 is set by heap_update's `else` branch (newbuf != buffer), i.e.
-  it is a record that an UPDATE already failed, and bufpage.h's "Again, this is just a hint."
-- *** THE PRUNE HEURISTIC, LOCATED EXPERIMENTALLY TO WITHIN ONE ROW. minfree =
-  Max(RelationGetTargetPageFreeSpace(rel, HEAP_DEFAULT_FILLFACTOR), BLCKSZ/10) = 819 at
-  fillfactor 100. MEASURED BOTH SIDES on pg7_dead: 888 bytes free (10.84%) with a known-prunable
-  dead tuple and pd_prune_xid set survived THREE consecutive full table scans unchanged; one extra
-  INSERT took free space to 484 (5.9%) and the VERY NEXT scan pruned. PRUNING IS A SPACE-PRESSURE
-  RESPONSE, NOT CLEANUP. That pair of numbers is the lesson's best single experiment. ***
-- heap_page_prune_opt's early-exit ladder in cost order (RecoveryInProgress -> pd_prune_xid==0 ->
-  GlobalVisTestIsRemovableXid -> free-space gate -> ConditionalLockBufferForCleanup -> RECHECK
-  under the lock). THE UNLOCKED FREE-SPACE READ IS DELIBERATE and its comment is quoted
-  ("Avoiding taking a lock seems more important than sometimes getting a wrong answer in what is
-  after all just a heuristic estimate"). IT NEVER BLOCKS; README.HOT prices the failure
-  ("The worst-case consequence of this is only that an UPDATE cannot be made HOT").
-- THE THREE CALL SITES, tabulated: heapam_handler.c:138 (heapam_index_fetch_tuple),
-  heapam_handler.c:2157 (bitmap heap scan), heapam.c:465 (heapgetpage / seqscan). NO INSERT PATH,
-  with README.HOT's reason quoted. So a plain SELECT is a writer. MEASURED: the prune in the lesson
-  was triggered by `select count(*)`, and separately pg7_hot's block 0 was already pruned BY THE
-  INDEX-ONLY SCAN ITSELF before heap_page_items was ever called.
-- THE FSM IS DELIBERATELY NOT UPDATED AFTER A PRUNE, comment quoted ("The free space should be
-  reused by UPDATEs to *this* page"). THIS IS A DIRECT POLICY CONSTRAINT ON LESSON 05's FSM and
-  lesson 19 will meet the other half of it (VACUUM does update the FSM).
-- heap_page_prune's PLAN-THEN-EXECUTE structure with its reason quoted ("ensures that WAL replay
-  will work the same as the normal case"), AND PASS 0: HTSV is computed for every tuple up front
-  into prstate.htsv[] because "running HTSV twice could result in different results" -- THE HORIZON
-  CAN MOVE DURING THE SCAN. The backwards loop (maxoff down to FirstOffsetNumber) and its
-  microarchitectural reason quoted (line pointers ascend, tuples descend, so descending the array
-  ascends through memory -> "increases prefetching efficiency significantly").
-- *** MarkBufferDirty vs MarkBufferDirtyHint APPEAR IN ONE FUNCTION, selected by whether real work
-  was done: the prune branch uses MarkBufferDirty + XLogInsert, the no-op-but-hint-changed branch
-  uses MarkBufferDirtyHint(buffer, true) with "This is treated as a non-WAL-logged hint." Lesson 06
-  drew this contrast ACROSS two forks; 07 found it inside one function. Lessons 15 and 22 own the
-  machinery; do not re-teach it, but this is the clearest example in the tree. ***
-- heap_prune_chain's SEVEN termination conditions listed, and lesson 03's chain rule
-  (xmin(next) == xmax(this)) shown load-bearing, with README.HOT's abort race quoted IN FULL
-  including the parenthetical history: "(Early versions of the HOT code assumed that holding pin on
-  the page buffer while following a HOT link would prevent this type of problem, but checking
-  XMIN/XMAX matching is a much more robust solution.)" The walk advances past DEAD *and*
-  RECENTLY_DEAD "just in case there's a DEAD one after them" and stops at anything else.
-- THE FOUR OUTCOMES of heap_prune_chain, quoted as code: (1) intermediates -> unused, (2) i>=nchain
-  -> record_dead, (3) else -> record_redirect, (4) the SELF-HEALING orphaned-redirect branch
-  (nchain < 2 && ItemIdIsRedirected) whose comment admits the forward scan can reach a chain out of
-  order. Plus the PRE-LOOP special case: a DEAD heap-only tuple that is not HotUpdated is reaped on
-  sight, for aborted HOT updates (XMIN_INVALID heap-only tuples with no chain pointing at them).
-  ALSO the counting subtlety: "changing a redirect (even to DEAD state) doesn't count" toward
-  ndeleted, and prune_opt reports ndeleted - nnewlpdead to pgstats.
-- THE HOT-ELIGIBILITY TEST, both gates in order: (1) newbuf == buffer, already settled by
-  RelationGetBufferForTuple; (2) !bms_overlap(modified_attrs, hot_attrs) where hot_attrs is
-  RelationGetIndexAttrBitmap(rel, INDEX_ATTR_BITMAP_HOT_BLOCKING). summarized_update via sum_attrs.
-  HeapDetermineColumnsInfo + heap_attr_equals = BITWISE equality, with README.HOT's reason quoted
-  ("there might be multiple notions of equality for a datatype"), plus its two unconditional
-  "not equal" shortcuts (whole-row reference attrnum==0; any system attribute except tableoid).
-- *** THE HOT-BLOCKING MATRIX, MEASURED at fillfactor=50 so space was NEVER the constraint, using
-  the DELTA of n_tup_hot_upd per transaction: v unindexed -> HOT. btree(v) -> COLD.
-  btree(id) WHERE v > 1000000 (v only in a PREDICATE) -> COLD. btree((v % 7)) (v only inside an
-  EXPRESSION) -> COLD. pad = pad -> HOT. So README.HOT's glossary definition of "indexed column"
-  is not pedantry, it is measurable. ESTABLISHED; do not re-derive. ***
-- *** ctid DOES NOT DISTINGUISH HOT FROM COLD, measured: a cold update landed at (0,30) -> (0,31),
-  same page. The reliable signals are n_tup_hot_upd and the HEAP_ONLY_TUPLE bit
-  (t_infomask2 & 32768). ALSO MEASURED, the chain-ending shape README.HOT describes: the old
-  version keeps HEAP_ONLY_TUPLE but LOSES HEAP_HOT_UPDATED, and the new version has neither. ***
-- *** LESSON 06'S 59 RE-DERIVED, AND IT IS 58 ON THIS TABLE. pg7_ios (fillfactor=100, 50,000 rows
-  of pad=repeat('x',100)) reproduced lesson 06's GEOMETRY EXACTLY -- 863 heap blocks, shared hit=57
-  on the clean index-only scan, Heap Fetches 0 after VACUUM, new version at (862,5) on a different
-  block, exactly blocks 0 and 862 cleared in the VM. BUT Heap Fetches was 58, not 59, because this
-  table has 57 rows on block 0 (measured directly) where lesson 06's had 58. 57 + 1 = 58. NOT a
-  contradiction, a one-row-per-page width difference. *** DO NOT CITE 59 AS A CONSTANT. *** Cite
-  "one cold update costs (rows on the old block) + 1 fetches, two VM bits, one index entry and one
-  dead tuple" and give the measured instance. ***
-- THE HOT SIDE, pg7_hot (fillfactor=85, same rows): 1021 heap blocks (18.3% more disk for the same
-  data -- the permanent fillfactor tax, measured), new version at (0,50) SAME BLOCK, ONE VM bit
-  cleared (block 0 only), n_tup_hot_upd 1, n_dead_tup 0, Heap Fetches 49 = exactly the 49 index
-  entries pointing at block 0 (counted). lp 7 was ALREADY LP_REDIRECT, max(lp) 50, 49 LP_NORMAL.
-- *** THE STEADY STATE, THE LESSON'S HEADLINE. pg7_steady, fillfactor=70, 5000 rows, 125 heap
-  blocks, 16 index blocks, 40 rows/page. 2000 AUTOCOMMITTED single-row updates:
-  2000/2000 HOT (100%), heap 125 -> 125 blocks, index 16 -> 16 blocks, pgstattuple
-  dead_tuple_count 0, pd_prune_xid 0, row at (0,42), block 0 = 40 LP_NORMAL + 1 LP_REDIRECT +
-  1 LP_UNUSED, max_lp 42, AND NO VACUUM EVER RAN. ZERO BYTES OF GROWTH IN EITHER FORK. ***
-- THE ROW GEOMETRY ARITHMETIC, derived and then confirmed twice, reusable: pad=repeat('x',100) gives
-  lp_len 133 = 24 header + 4 + 4 + 101, where 101 is a ONE-BYTE varlena header + 100 data bytes
-  because 100 <= 126 (LESSON 04'S BOUNDARY STILL PAYING OFF). MAXALIGN(133) = 136, + 4 line pointer
-  = 140/row. 8160/140 = 58.3 rows/page at fillfactor 100 -- MEASURED 58. 8160*0.70/140 = 40.8 at
-  fillfactor 70 -- MEASURED 40. Both exact. Use this to predict HOT headroom: fillfactor F gives
-  (8160*(1-F)/rowbytes) free updates per page before the chain must leave.
-- *** WAL, MEASURED WITH pg_waldump --stats=record OVER A DEDICATED SEGMENT RANGE (pg_switch_wal
-  first, then record the LSN -- this worked cleanly and later lessons should copy the method).
-  3000 autocommitted updates each, fillfactor=70, zero FPI bytes in both runs:
-    HOT  (pg7_steady, v unindexed): TOTAL 497,948 B = 166 B/update.
-         Heap/HOT_UPDATE 3000 rec / 213,011 B (71.0 ea); Heap2/PRUNE 2999 rec / 182,937 B
-         (61.0 ea) = 36.74%; Transaction/COMMIT 3000 / 102,000 B (34.0 ea). NO btree records.
-    COLD (pg7_cold, btree(v)):      TOTAL 741,213 B = 247 B/update.
-         Heap/UPDATE 2990 / 212,301 B; Heap/UPDATE+INIT 10 / 1,830 B; Btree/INSERT_LEAF
-         *** 5992 rec / 383,488 B = 51.74% *** (~2 per update: PK + v); Btree/INSERT_UPPER 8,
-         SPLIT_R 8, DELETE 74 (16,598 B total); Heap/LOCK 10; Heap2/PRUNE only 336; COMMIT 3000.
-         Heap grew 125 -> 135 blocks.
-    SO HOT SAVES 1.49x THE WAL, NOT 10x, AND ITS OWN PRUNE RECORDS ARE 36.7% OF ITS BILL.
-    Btree/DELETE in the cold run is nbtree deletion keeping its leaves from bloating -> LESSON 29. ***
-- THE VERBATIM STEADY-STATE WAL CYCLE, recorded in the lesson and worth reusing:
-  HOT_UPDATE (71 B, old_off 11, new_off 41, flags 0x61) / COMMIT (34 B) /
-  PRUNE (59 B, tx: 0, nredirected 1, redirected [11->41], nunused 0) /
-  HOT_UPDATE (71 B, old_off 41, new_off 43, flags 0x60) / COMMIT /
-  PRUNE (61 B, redirected [11->43], unused [41]).
-  FOUR FACTS EXTRACTED: (1) *** tx: 0 ON EVERY PRUNE RECORD -- pruning is not part of any
-  transaction ***; (2) *** THE ROW OSCILLATES BETWEEN OFFSETS 41 AND 43 FOREVER, root lp 11 never
-  moves, two line pointers recycled indefinitely ***; (3) 59 vs 61 bytes is EXACTLY one
-  OffsetNumber, and xl_heap_prune is 9 B (SizeOfHeapPrune = offsetof(isCatalogRel)+sizeof(bool)
-  over {TransactionId, uint16, uint16, bool}) with the arrays riding in blkref 0's data via
-  XLogRegisterBufData, 2 B/offset and 4 B/redirect pair, comment quoted ("not actually in the
-  buffer, but we pretend that they are"); (4) flags 0x61 on the FIRST update and 0x60 after -- 0x60
-  is PREFIX_FROM_OLD|SUFFIX_FROM_OLD and the 0x01 is XLH_UPDATE_OLD_ALL_VISIBLE_CLEARED, LESSON
-  06'S FLAG, set only once because after that the VM bit is already clear. XLH_UPDATE_* values all
-  tabulated from heapam_xlog.h.
-- *** THE OPERATIONAL HEADLINE, AND THE BEST "WHERE THIS BREAKS DOWN" MEASUREMENT IN THE TRACK SO
-  FAR. ONE IDLE TRANSACTION TURNS HOT OFF. pg7_hold, fillfactor=70, 5000 rows, 125 blocks, with a
-  single `BEGIN ISOLATION LEVEL REPEATABLE READ; select count(*);` left sitting idle in another
-  session, then 2000 autocommitted updates:
-      1965/2000 HOT = 98.25%  BUT  heap 125 -> 160 blocks (+35), n_dead_tup 2000,
-      row ended at (159,10), block 0 = 58 LP_NORMAL / 0 LP_REDIRECT / max_lp 58.
-  THE ARITHMETIC CLOSES EXACTLY: block 0 started with 40 rows, holds 58 at 140 B/row, 40+18 = 58
-  MEASURED; each later page starts near-empty and absorbs ~57 (8160/140), so 18 + 35*57 = 2013 ~
-  2000. *** 35 COLD UPDATES PRODUCED EXACTLY 35 NEW BLOCKS. *** So a 98.25% HOT ratio coexisted
-  with a 28% larger table: THE HOT RATIO IS A MISLEADING HEALTH METRIC, TRUST THE TABLE SIZE.
-  SAME EFFECT WITHOUT A SECOND SESSION: 10,000 updates inside ONE `DO $$ ... $$` block on pg7_hot
-  gave 9828 HOT (98.3%), 173 cold, heap 1021 -> 1193 (173 cold updates, 172 new blocks). YOUR OWN
-  TRANSACTION IS THE OLD SNAPSHOT. ***
-- README.HOT's framing of the ORIGINAL problem, quoted and taught as the thesis: single-page
-  reclamation is blocked not by locking or WAL but by not being able to SAFELY RE-FIND the index
-  entries, because "an allegedly immutable function that in fact is not immutable might prevent us
-  from re-finding an index entry". HOT sidesteps it rather than solving it. And the one-way door
-  from Limitations: "It'll be tough to recompute the index keys for a root line pointer you don't
-  have data for anymore ..." QUOTE THESE TWO IF ANY LATER LESSON TOUCHES VACUUM STRATEGY.
-- The MaxHeapTuplesPerPage = 291 cap (lesson 05's number) CITED, with README.HOT's reason quoted:
-  the feature is a resurrection of an idea "proposed and rejected before because of fear of line
-  pointer bloat", and the cap limits the damage. NOT OBSERVED -- see open items.
-DELIBERATELY TREATED AS BLACK BOXES, as the handover asked: GlobalVisState / vistest (14),
-relation extension and RelationGetBufferForTuple (08), the buffer cleanup lock's implementation
-(09/10), HeapTupleSatisfiesVacuum's internals (14), VACUUM's two passes and index bulk deletion
-(19), nbtree's INSERT_LEAF/DELETE/SPLIT records (28/29).
-
-NO SYLLABUS REVISION THIS RUN. Lesson 07's title was taught exactly as written: redirect line
-pointers, heap_page_prune(), and the HOT chain were all three taken in full, plus the four
-lesson-02/03 deferrals the handover assigned (LP_REDIRECT, pd_prune_xid, PD_PAGE_FULL,
-HEAP_HOT_UPDATED/HEAP_ONLY_TUPLE). Lesson 06's handover asked for five measurements by name and all
-five were taken: (a) the fillfactor re-run of the pg6_ios experiment, (b) heap_page_items mid-chain
-showing lp_flags = 2 and lp_off as an OffsetNumber, (c) pd_prune_xid set and then cleared by a
-plain SELECT, (d) index tuple count across HOT updates (unchanged at 18, and 16 index blocks across
-2000 updates), (e) pgstattuple's dead_tuple_percent across prune and vacuum (4.83% -> 0).
-
-Throwaway tables left by this run (cluster does not persist; names listed only to avoid collisions
-within a future run): pg7_chain, pg7_dead, pg7_ios, pg7_hot, pg7_steady, pg7_cold, pg7_hold,
-pg7_idx, pg7_x. Keep the pgNN_ prefix convention.
-
 -- LESSON 08 (2026-10-27) AS TAUGHT ------------------------------------------------------------
 Document: 2026/10/2026-10-27-postgres-smgr-md-segments-fsync-queue/README.md (single README, not
 split -- the segment map, the extension batching and the fsync queue are three sections of one
@@ -943,6 +736,247 @@ Known environment facts for a fresh session (verify, do not assume):
   and parallel workers are a separate backend_type in pg_stat_io. And `pg_stat_reset_shared('io')`
   immediately before each measurement -- pg_stat_io accumulates across the whole cluster lifetime
   and its column is `context`, not `io_context`. ***
+
+-- LESSON 10 (2026-10-29) AS TAUGHT ------------------------------------------------------------
+Document: 2026/10/2026-10-29-postgres-pins-content-locks-lwlock/README.md (single README, not
+split -- pins, content locks and the cleanup lock are one access-control story, and the LWLock is
+the implementation of the middle one; splitting would have hidden that the cleanup lock is built
+out of the other two).
+
+SOURCE PROVENANCE: `apt-get source postgresql-16` for the fourth run in a row, version
+16.15-0ubuntu0.24.04.1, the same build the cluster runs. PATCH CHECK DONE PER FILE: lwlock.c,
+lwlock.h, lwlocknames.txt, buf_internals.h, pruneheap.c, vacuumlazy.c and proclist_types.h are
+UNTOUCHED. *** bufmgr.c's single hunk IS INSIDE THIS LESSON'S SUBJECT THIS TIME and was read
+directly: v8-0001-Fix-recovery-conflict-SIGUSR1-handling.patch changes TWO COMMENT LINES above
+HoldingBufferPinThatDelaysRecovery() at line 4923 ("Check called from RecoveryConflictInterrupt
+handler" -> "Check called from ProcessRecoveryConflictInterrupts()"). NO EXECUTABLE LINE of the pin
+or lock path differs from upstream. *** Trees/releases so far: 01 @ddd468ca, 02 @3cde90ec,
+03 @f2edf5dd, 04 @f52d4051, 05 @126976a8, 06 @0019a1ec, 07 = release 16.15, 08 = release 16.15,
+09 = release 16.15, 10 = release 16.15.
+Files read IN FULL: storage/lmgr/lwlock.c (1994 lines), include/storage/lwlock.h (222 lines),
+storage/lmgr/lwlocknames.txt (54 lines), storage/buffer/README (276 lines, re-read for the
+access-rules section). Read in part: storage/buffer/bufmgr.c (PinBuffer, UnpinBuffer,
+ReservePrivateRefCountEntry, NewPrivateRefCountEntry, GetPrivateRefCountEntry, LockBuffer,
+LockBufferForCleanup, ConditionalLockBufferForCleanup, CheckBufferIsPinnedOnce,
+HoldingBufferPinThatDelaysRecovery, the PrivateRefCount comment block at 175-205),
+access/heap/pruneheap.c (heap_page_prune_opt), access/heap/vacuumlazy.c (the cleanup-lock branch of
+lazy_scan_heap at 958-1001), include/postmaster/postmaster.h (MAX_BACKENDS and its note),
+include/storage/proclist_types.h, and the XLogReadBufferForRedoExtended(..., true, ...) call sites
+across src/backend/access/.
+
+*** THIS RUN HAD TWO CLUSTERS -- A PRIMARY AND A STREAMING STANDBY -- AND EVERY number is measured.
+*** PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1), x86_64, Linux 6.18, ext4, 2 vCPU / 8 GB RAM.
+shared_buffers 128 MB = 16,384 buffers, max_connections 100, block_size 8192, data_checksums OFF.
+pg_buffercache 1.4, pageinspect 1.12, pg_prewarm 1.2, pgbench 16.15.
+*** THREE NEW ENVIRONMENT FACTS, ALL REUSABLE:
+(a) postgresql-16 WAS ALREADY INSTALLED AGAIN (lesson 09's note holds); `pg_ctlcluster 16 main
+    start` was the only step. deb-src had to be re-enabled: `sed -i 's/^Types: deb$/Types: deb
+    deb-src/' /etc/apt/sources.list.d/ubuntu.sources` then `apt-get update`.
+(b) *** postgresql-server-dev-16 INSTALLS AND IS THE ANSWER TO LESSON 09'S "NO DEBUG SYMBOLS"
+    PROBLEM FOR ANYTHING THAT IS A COMPILE-TIME CONSTANT. A 30-line C program compiled with
+    `gcc -I $(pg_config --includedir-server)` prints sizeof/offsetof/macro values directly. TRAP:
+    postgres.h #defines printf to pg_printf, which is not in any library you link, so `#undef
+    printf` and use fprintf(stdout, ...). This does NOT help with runtime shared-memory statics
+    (StrategyControl, nextVictimBuffer) -- lesson 09's arc trick is still the way for those. ***
+(c) A STANDBY IS CHEAP AND WORTH BUILDING: `pg_basebackup -D /var/lib/postgresql/16/standby -R -C
+    -S lab_standby -X stream -c fast -h /var/run/postgresql -U postgres`, then start it with
+    pg_ctl and -o '-c port=5433 -c data_directory=... -c hot_standby=on -c
+    max_standby_streaming_delay=8s -c log_recovery_conflict_waits=on', pointing config_file/hba_file
+    at /etc/postgresql/16/main/. chmod 700 the data dir first. wal_level was already replica.
+    LESSONS 24-27 SHOULD DO THIS. ***
+Traps hit: VACUUM and ALTER SYSTEM still cannot share a `psql -c` with other statements -- put GUCs
+in PGOPTIONS instead (`PGOPTIONS='-c vacuum_freeze_min_age=0' psql -c 'VACUUM (FREEZE) t'`). And
+psql -f scripts AND any file a background psql writes must live somewhere world-readable
+(/var/tmp/lab, chmod a+w) -- the scratchpad path is not readable by the postgres user.
+
+TOOK, and must not be re-taught:
+- THE TWO MECHANISMS AND THEIR DIFFERENT PROPOSITIONS, from storage/buffer/README: a pin says THE
+  PAGE IS STILL HERE, a content lock says NOBODY IS EDITING IT. All five access rules tabulated.
+  *** RULE 2 IS WHY PINS EXIST AT ALL (drop the content lock, keep the pin, keep reading tuple
+  data) and it is the licence under which lesson 03 read a HeapTuple pointing into shared memory.
+  RULE 4 (hint bits need only a shared lock) IS LESSON 15'S and was deliberately left there. ***
+  Ordering is absolute: LockBuffer() opens with Assert(BufferIsPinned(buffer)), and UnpinBuffer
+  closes with Assert(!LWLockHeldByMe(content_lock)). Lock inside pin, always.
+- *** BUF_REFCOUNT_MASK == MAX_BACKENDS == 262143 == 2^18-1, AND THAT IS CAUSAL, NOT A COINCIDENCE.
+  postmaster.h: "MAX_BACKENDS is limited to 2^18-1 because that's the width reserved for buffer
+  references in buf_internals.h." The server's process ceiling IS the refcount field width.
+  Lesson 09 measured the field; this closes why it is that wide. ***
+- THE BACKEND-LOCAL PIN HALF: REFCOUNT_ARRAY_ENTRIES = 8, PrivateRefCountArray + PrivateRefCountHash
+  overflow, round-robin displacement via PrivateRefCountClock++ % 8, and the Reserve/New split whose
+  reason is quoted ("called with a spinlock held"). A repeat pin of a buffer you already hold is a
+  linear scan of 8 slots plus ref->refcount++ -- NO ATOMICS AT ALL on that path.
+  MEASURED: 12 cursors in one transaction on 12 one-page tables -> 12 pinned buffers,
+  pinning_backends=1 each, buffers_pinned=12, so FOUR entries were in the overflow hash.
+  PrivateRefCountOverflowed is not exposed in SQL -- the overflow is inferred from 12 > 8.
+- *** THE SAME BACKEND SHOWED TWELVE PINS AND ZERO pg_locks ROWS ABOUT THEM (only relation
+  AccessShareLocks). PINS ARE NOT LOCKS AND NO LOCK-MONITORING QUERY WILL EVER SEE THEM. ***
+- MEASURED: a 37,500-page seq scan held ~5 pins at the sampled instant, 0 before and after. A scan
+  pins one page at a time; that is what makes "pins may be held for long intervals" survivable.
+- *** THE STRUCT NUMBERS, PRINTED BY COMPILED PROBE, NOT DERIVED: sizeof(LWLock) = 16,
+  LWLOCK_PADDED_SIZE = PG_CACHE_LINE_SIZE = 128, sizeof(LWLockPadded) = 128;
+  sizeof(BufferDesc) = 52, BufferDescPadded = 64, offsetof(state) = 24,
+  offsetof(wait_backend_pgprocno) = 28, offsetof(content_lock) = 36.
+  NUM_INDIVIDUAL_LWLOCKS = 48 (45 named locks, 3 retired slots 0/10/45), NUM_BUFFER_PARTITIONS 128,
+  NUM_LOCK_PARTITIONS 16, NUM_PREDICATELOCK_PARTITIONS 16, NUM_FIXED_LWLOCKS = 208.
+  OFFSETS: individual 0, buffer-mapping 48, lock-manager 176, predicate-lock 192.
+  LWTRANCHE_BUFFER_CONTENT = 56, LWTRANCHE_FIRST_USER_DEFINED = 77, 29 builtin tranche names. ***
+- *** THE SIZE ASYMMETRY, THE LESSON'S BEST STRUCTURAL POINT: 208 named LWLocks = 26,624 bytes
+  (LWLockShmemSize adds sizeof(int)+128 = 26,756) for the WHOLE SERVER -- ProcArrayLock,
+  WALWriteLock, all 128 buffer-mapping partitions -- while 16,384 buffer content locks cost
+  16384*16 = 262,144 bytes, A QUARTER of the 1,048,576-byte "Buffer Descriptors" allocation lesson
+  09 measured. AND THE PADDING GOES THE "WRONG" WAY: the 208 rare locks are each padded to a full
+  128-byte cache line (112 bytes of padding apiece, lwlock.h's reason quoted), the 16,384 hot ones
+  are packed TWO PER CACHE LINE at 64 bytes per descriptor, so buffers i and i^1 false-share.
+  Padding them would cost 2 MB instead of 262 KB. NOT MEASURED -- see open items. ***
+  TRAP: the main array is allocated with ShmemAlloc(), not ShmemInitStruct(), so it has NO ROW in
+  pg_shmem_allocations -- it is inside the "<anonymous>" entry (4,730,240 B here).
+- THE 32-BIT LWLock STATE WORD, all bits: LW_FLAG_HAS_WAITERS 1<<30, LW_FLAG_RELEASE_OK 1<<29,
+  LW_FLAG_LOCKED 1<<28, LW_VAL_EXCLUSIVE 1<<24 = 16777216, LW_VAL_SHARED 1,
+  LW_SHARED_MASK (1<<24)-1, LW_LOCK_MASK (1<<25)-1. The exclusive sentinel is ADDED TO THE SAME
+  COUNTER the shared holders increment, guarded by StaticAssertDecl(LW_VAL_EXCLUSIVE >
+  MAX_BACKENDS).
+- *** A STALE COMMENT FOUND AND REPORTED: lwlock.c's comment above LW_SHARED_MASK says "Must be
+  greater than MAX_BACKENDS - which is 2^23-1, so we're fine." MAX_BACKENDS IS 0x3FFFF = 2^18-1 IN
+  THIS TREE. The assertion still holds (64x headroom, not 2x); postmaster.h mentions 2^23-1 as a
+  DIFFERENT ceiling (inval.c's 3-byte backend id). THE CODE IS RIGHT AND THE COMMENT IS STALE BY
+  ONE REFACTOR -- say so if any later lesson quotes it. ***
+- LWLockAttemptLock: ONE CAS LOOP, NO SPINLOCK, never blocks, returns true meaning "you must wait".
+  *** THE CAS IS ISSUED EVEN WHEN THE LOCK IS SEEN AS BUSY, swapping in the unchanged value,
+  because "this doubles as a memory barrier" (quoted). *** Shared acquisition of an uncontended
+  lock is a single successful CAS. HISTORY: commit ab5194e6f617a9a9e7aadb3dd1cee948a42d0755
+  "Improve LWLock scalability", Andres Freund, 2014-12-25, reviewed by Amit Kapila and Robert Haas,
+  +653/-302 across lwlock.c and lwlock.h, fetched from the pgsql-committers archive and quoted.
+- THE FOUR-PHASE ACQUIRE and the race it closes (header quoted: "by the time we have finished
+  queuing, the former locker very well might have already finished it's work"). Attempt, queue,
+  attempt again, sleep, loop back to attempt. *** BEING WOKEN DOES NOT MEAN OWNING THE LOCK, and
+  the refusal to hand off is argued from a 29-Dec-2001 discussion, quoted ("a process swap for
+  every lock acquisition"). *** LWLockDequeueSelf is the cost of winning phase 3. extraWaits
+  re-posts unrelated semaphore signals. *** LWLockReportWaitStart() IN PHASE 4 IS THE ONLY REASON
+  ANY OF THIS IS SQL-VISIBLE: a lock taken in phase 1 or 3 is reported NOWHERE. ***
+- THE WAIT-LIST MUTEX IS BIT 28 OF THE WORD IT GUARDS. pg_atomic_fetch_or_u32 to take it, then
+  PLAIN NON-ATOMIC READS in the perform_spin_delay loop, then fetch_and to release. The fast paths
+  never touch it; comment quoted ("even though the wait list is locked, non-conflicting lock
+  operations may still happen concurrently").
+- LWLockWakeup's policy: EITHER one exclusive waiter OR a contiguous run of shared waiters up to the
+  first exclusive one, never both. LW_WS_PENDING_WAKEUP is set before the semaphore is posted so
+  LWLockDequeueSelf needs no rescan. LW_FLAG_RELEASE_OK is cleared to stop wakeup storms
+  ("Prevent additional wakeups until retryer gets to run"). LWLockQueueSelf puts
+  LW_WAIT_UNTIL_FREE waiters on the HEAD (proclist_push_head) and everyone else on the TAIL.
+  proclist_head is two ints holding head/tail PGPROCNO -- INDEXES, NOT POINTERS, which is why the
+  list works across processes mapping shmem at different addresses.
+- *** LWLOCKS HAVE NO DEADLOCK DETECTION, NO TIMEOUT, NO FAIRNESS COUNTER, NO ORDERING
+  ENFORCEMENT. That absence is lesson 11's entire reason to exist. The only protection is
+  convention in comments, e.g. the README's "they must be locked in partition-number order". ***
+- held_lwlocks[MAX_SIMUL_LWLOCKS=200] (3,200 B), searched BACKWARDS on release ("Usually, but not
+  always, it will be the latest-acquired lock"), overflow is elog(ERROR, "too many LWLocks taken")
+  checked BEFORE HOLD_INTERRUPTS(). *** HOLD_INTERRUPTS() SPANS THE WHOLE HELD PERIOD, SO A BACKEND
+  HOLDING AN LWLOCK CANNOT BE CANCELLED -- statement_timeout, pg_cancel_backend() and recovery
+  conflicts all queue behind it. Reason quoted. This is the premise the §13 standby measurement
+  depends on: what gets cancelled is the PIN, not the lock. *** LWLockReleaseAll() on the error path.
+- CALL-SITE COUNTS, grepped: LWLockAcquire 505, LWLockConditionalAcquire 14, LockBuffer 365,
+  LockBufferForCleanup 15, ConditionalLockBufferForCleanup 7, and *** LWLockAcquireOrWait = 3
+  (ONLY xlog.c:2593, WALWriteLock) and LWLockWaitForVar = 5 (ONLY xlog.c:1503, WALInsertLocks).
+  TWO ENTRY POINTS EXIST FOR ONE SUBSYSTEM EACH -- BOTH ARE LESSONS 22-23 AND WERE LEFT THERE. ***
+- THE CLEANUP LOCK AS A PROTOCOL, not a mode: exclusive content lock, then LockBufHdr, then
+  refcount == 1. *** THE WAITER QUEUE IS ONE int (wait_backend_pgprocno, offset 28) AND ONE FLAG
+  (BM_PIN_COUNT_WAITER, bit 29), with elog(ERROR, "multiple backends attempting to wait for
+  pincount 1") as the overflow handler. ITS SAFETY IS BORROWED FROM LESSON 11: the README argues
+  from the relation-level ShareUpdateExclusiveLock that stops two VACUUMs overlapping. ***
+  The handoff is in UnpinBuffer, signalled by THE LAST OTHER PIN-HOLDER, never by a timer, and the
+  waiter keeps its own pin throughout -- hence CheckBufferIsPinnedOnce's elog(ERROR, "incorrect
+  local pin count") if you hold two.
+- heap_page_prune_opt's ladder RE-READ and the gate NAMED: step 1 RecoveryInProgress() -> return
+  (SO A STANDBY NEVER PRUNES ON ITS OWN -- every cleanup lock there comes from replay), step 5 is
+  ConditionalLockBufferForCleanup. *** THIS CLOSES LESSON 07'S "OPPORTUNISTIC": one cursor on the
+  page and pruning is skipped with NO retry, NO queue and NO counter anywhere. *** Lesson 07's
+  819-byte minfree arithmetic was cited, not re-derived.
+- *** THE PRIMARY-SIDE HEADLINE. An aggressive VACUUM (FREEZE) of a ONE-PAGE, 40-TUPLE table spent
+  22.03 OF ITS 22.03 SECONDS blocked on one cursor's pin. pg_stat_activity: wait_event_type =
+  BufferPin, wait_event = BufferPin. pg_locks for that pid: TWO ROWS, BOTH GRANTED (virtualxid
+  ExclusiveLock, relation ShareUpdateExclusiveLock) -- NO ungranted row, NOTHING for
+  pg_blocking_pids() to find. VACUUM VERBOSE reported "1 page, 40 tuples, 30 hits, 0 misses,
+  elapsed: 22.03 s" and HAS NO LINE FOR A CLEANUP-LOCK WAIT. Recipe: vacuum_freeze_min_age=0 +
+  vacuum_freeze_table_age=0 forces aggressive, so lazy_scan_noprune returns false and
+  lazy_scan_heap falls through to LockBufferForCleanup under Assert(vacrel->aggressive).
+  NON-AGGRESSIVE VACUUM NEVER WAITS -- it takes a share lock, runs lazy_scan_noprune and leaves
+  relfrozenxid alone. The pin costs you latency OR freezing progress, decided by a GUC. ***
+- *** THE STANDBY HEADLINE, AND THE REASON THIS LESSON NEEDED TWO CLUSTERS. Only heap_xlog_prune
+  (heapam.c:9345), btree_xlog_vacuum (nbtxlog.c:614) and 8 hash_xlog.c sites pass
+  get_cleanup_lock = true to XLogReadBufferForRedoExtended. One FETCH 1 on the standby held
+  Heap2/PRUNE redo at 0/3C059830 for 8000.427 ms -- within HALF A MILLISECOND of
+  max_standby_streaming_delay = 8s -- logged verbatim as "recovery still waiting after 1000.161 ms"
+  (deadlock_timeout, LOG ONLY, no cancel) then "recovery finished waiting after 8000.427 ms", with
+  the CONTEXT line showing nredirected 20 / redirected [1->41 ... 20->60] / blk 0. The query died
+  with 'canceling statement due to conflict with recovery / User was holding shared buffer pin for
+  too long' and confl_bufferpin went 0 -> 1.
+  SETUP THAT MAKES IT WORK, AND THE CONFOUND TO AVOID: the pin holder must take its snapshot AFTER
+  the updates commit, or ResolveRecoveryConflictWithSnapshot fires first and you measure the
+  horizon instead of the pin. Recipe: open a long-lived snapshot ON THE PRIMARY, do the UPDATEs
+  under it (so nothing prunes early), COMMIT it, open the standby cursor, THEN VACUUM the primary.
+  ALSO: the primary's own reads prune opportunistically, so do not SELECT the table between the
+  commit and the VACUUM or there will be no prune record to replay. ***
+  set_ps_display_suffix("waiting") and LogRecoveryConflict are BOTH inside if (InHotStandby), so the
+  primary case has NO log line and NO ps suffix at any log_* setting -- confirmed by ps.
+- *** WHAT ACTUALLY WAITS, 8,785 pg_stat_activity SAMPLES AT ~50 ms OVER THREE WORKLOADS, AND THE
+  RESULT IS A NULL RESULT FOR THE LESSON'S OWN SUBJECT. 1,697 (19.3%) were on an LWLock, in only 7
+  of the 45+29 available tranches.
+    A) 16 clients, HOT UPDATEs on ONE heap page, 8,190 tps, 227,882 updates, 3,424 samples:
+       WALWrite 1525 (44.5%), Lock|transactionid 823, ClientRead 501, CPU 245, IO|WALSync 189,
+       Lock|tuple 111, LockManager 27, ProcArray 1. *** ZERO BufferContent. ***
+    B) 293 MB table / 128 MB shared_buffers, random UPDATE, synchronous_commit=off, 21,258 tps,
+       1,584 samples, 430,279 client-backend evictions + 403,185 writes in pg_stat_io:
+       ClientRead 1357, CPU 185, IO|DataFileWrite 27, ProcArrayGroupUpdate 10, BufferMapping 2,
+       IO|DataFileRead 2, ProcArray 1. *** STILL ZERO BufferContent. ***
+    C) 32 clients, monotonic INSERT into a bigserial PK (rightmost btree leaf), 31,744 tps,
+       3,777 samples: ClientRead 3444, CPU 185, *** BufferContent 100 *** (30% of non-idle,
+       non-CPU), XactBuffer 32, XidGen 6, XactGroupUpdate 6, ProcArray 2, LockManager 1,
+       IO|DataFileExtend 1.
+  CONCLUSION, AND IT IS THE LESSON'S THESIS: content locks are held for tens of instructions, so a
+  50 ms sampler cannot see them even with 16-way serialization on one page. THE LWLOCKS YOU CAN SEE
+  WAITING ARE THE ONES HELD ACROSS AN I/O (WALWriteLock, or FlushBuffer's SHARED content lock
+  during a write). A rightmost-page btree split is the one cheap way to make BufferContent appear.
+  SAMPLER: a bash loop of `psql -At -c "select wait_event_type, wait_event from pg_stat_activity
+  where backend_type='client backend'"` every 0.05 s into a world-readable file. ***
+DELIBERATELY TREATED AS BLACK BOXES, and the next lessons own them: the heavyweight lock manager,
+LOCKTAG, lock partitions and the deadlock detector (11); tuple locks and Lock|tuple /
+Lock|transactionid, which DOMINATED workload A and were left unexplained on purpose (12);
+pg_xact and XactBuffer (13); hint bits and rule 4 (15); freezing, relfrozenxid and why
+lazy_scan_noprune cannot finish an aggressive page (18); VACUUM's two passes (19); WALInsertLocks,
+XLogInsert, XLogFlush, group commit and the two exotic LWLock entry points (22-23);
+BufferSync and BM_CHECKPOINT_NEEDED (24); the startup process, redo and
+ResolveRecoveryConflictWithBufferPin's internals (25); walsender/walreceiver and the slot (26);
+btree leaf-page pins and xs_want_itup (28-30).
+
+NO SYLLABUS REVISION THIS RUN. Lesson 10's title was taught exactly as written -- buffer pins,
+content locks and the LWLock implementation were all three taken in full -- plus the two deferrals
+lesson 09's handover assigned (BM_PIN_COUNT_WAITER / wait_backend_pgprocno, and
+pg_buffercache.pinning_backends / buffers_pinned as pin instruments, which lesson 09's Next Steps
+item 6 asked for by name). Lesson 11's title needs no change: this lesson established exactly the
+gap it fills (no deadlock detection, no timeout, no ordering enforcement in LWLocks) and already
+borrowed ShareUpdateExclusiveLock from it, so the partitions/LOCKTAG/detector framing is right.
+
+OPEN ITEMS HANDED FORWARD, in priority order:
+(1) *** THE CONTENT-LOCK FALSE SHARING IS CLAIMED BUT NOT MEASURED. *** Two BufferDescs per
+    128-byte cache line is arithmetic, not an experiment. Pin two backends to different cores and
+    compare exclusive-content-lock throughput on buffers i / i^1 versus i / i+2.
+(2) The 50 ms sampling floor. -DLWLOCK_STATS (sh_acquire_count, ex_acquire_count, block_count,
+    dequeue_self_count, spin_delay_count, dumped at backend exit) or eBPF on the
+    TRACE_POSTGRESQL_LWLOCK_* tracepoints would turn workload A's zero into a real block count and
+    give the phase-3 win rate. Both need a rebuild; neither was attempted.
+(3) A SKIPPED CLEANUP LOCK IS COUNTED NOWHERE -- same gap lesson 09 found in GetVictimBuffer's
+    retry paths. Auditing all 14 LWLockConditionalAcquire sites for silent-failure accounting is a
+    bounded task with a patch at the end of it.
+(4) max_standby_streaming_delay = -1 plus hot_standby_feedback = on was NOT run: replay should
+    stall unboundedly with confl_bufferpin staying 0. A June 2026 pgsql-hackers thread ("[PATCH]
+    Prevent repeated deadlock-check signals in standby buffer pin waits") identifies that regime as
+    untested upstream and is worth reading before lessons 25-26.
+(5) Whether a btree INDEX-ONLY scan's leaf pin (kept when xs_want_itup is set) can stall
+    btree_xlog_vacuum replay the same way. Bring this to lesson 30.
+
+Throwaway tables left by this run (cluster does not persist; names listed only to avoid collisions
+within a future run): pintab1..pintab12, t_freeze, t_prune, t_std, t_std2, onepage, big1,
+rightmost. NOTE: like lesson 08, this run did NOT use the pgNN_ prefix convention. Lesson 11 should
+use pg11_*.
 -->
 
 ## Completed Subjects
@@ -965,4 +999,3 @@ types. The commit point is a filesystem operation (`unlink("-journal")` in rollb
 header with a nonzero commit counter in WAL mode). The planner's cost channel is 10 bits wide.
 And `quick_check` is a *weaker* check at nearly the same I/O as `integrity_check`, blind to index
 key order — the single most useful operational fact the track produced.
-
