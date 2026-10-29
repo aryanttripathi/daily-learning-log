@@ -647,11 +647,12 @@ OPEN ITEMS carried forward:
   section still says "only VACUUM currently sets visibility map bits", which heap_multi_insert's
   all_frozen_set contradicts.
 
-NOTE-BLOCK ROTATION DONE THIS RUN: lesson 06's note was dropped and TRACK-ARCHIVE.md gained the row
-"PG 06" pointing at commit 01878f9bb5d3979a81c03925c2ae8219292b7dc6 / blob
-df40aec01bc9a115a92e1d609bce79b1b8901e25, which is the last state of TRACK.md carrying it. This
-block now holds 07, 08 and 09 -- exactly the three the policy allows. WHEN LESSON 10 SHIPS IT MUST
-DROP THE LESSON 07 BLOCK, and before dropping it MUST add its TRACK-ARCHIVE.md row first.
+NOTE-BLOCK ROTATION DONE THIS RUN (2026-10-29, the lesson 10 run): lesson 07's note was dropped and
+lesson 10's was added. TRACK-ARCHIVE.md gained the row "PG 07" pointing at commit
+99a7b3b7eab710319907cbd11d5c311ebe61d4fa / blob 937bfd19f68fdc42eebe5c83f1f636869629a59e, which is
+the last state of TRACK.md carrying it, and that row was added FIRST, as the policy above requires.
+This block now holds 08, 09 and 10 -- exactly the three the policy allows. WHEN LESSON 11 SHIPS IT
+MUST DROP THE LESSON 08 BLOCK, and before dropping it MUST add its TRACK-ARCHIVE.md row first.
 
 Known environment facts for a fresh session (verify, do not assume):
 - Block size 8 KB and segment size 1 GB are compile-time (BLCKSZ, RELSEG_SIZE) and exposed as the
