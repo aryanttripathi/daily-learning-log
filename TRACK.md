@@ -4,7 +4,7 @@ subject: JanusGraph
 mode: contributor-reading
 started: 2026-10-30
 lessons-total: 28
-lessons-done: 0
+lessons-done: 1
 pinned-commit: a59ae8d8024207598eada34998d867617df51adf
 pinned-commit-date: 2026-10-28
 upstream: JanusGraph/janusgraph
@@ -35,11 +35,17 @@ are reference material rather than reading material (`GraphDatabaseConfiguration
 with `upstream` pointing at `JanusGraph/janusgraph`; Java 17 or 21, Maven 3.6.3+;
 `mvn clean install -pl janusgraph-inmemory -am -DskipTests` built once; project open in IntelliJ.
 
+## Session Log
+
+Newest first. The next run reads the most recent entry's `## My Notes` before writing.
+
+- **01 — 2026-10-30** · [`2026/10/2026-10-30-janusgraph-setup-and-data-model/README.md`](2026/10/2026-10-30-janusgraph-setup-and-data-model/README.md) · read `data-model.md`, `BUILDING.md`, `CONTRIBUTING.md`, `InMemoryStoreManager`, `StandardStoreManager` L28–33, `InMemoryGraphTest`. Six questions posed, none answered in the entry. Hands-on: `WholeRowDeletionOptimizationTest`. Radar: #3013, #225, #1573. **`My Notes` awaiting Aryant.**
+
 ## Syllabus
 
 ### Part I — Orientation and the storage contract (`diskstorage/`, `janusgraph-inmemory`)
 
-- [ ] 01 — Setup and the data model: fork, build `janusgraph-inmemory`, module map, and `docs/advanced-topics/data-model.md` (edgestore rows, relation columns)
+- [x] 01 — Setup and the data model: fork, build `janusgraph-inmemory`, module map, and `docs/advanced-topics/data-model.md` (edgestore rows, relation columns)
 - [ ] 02 — `KeyColumnValueStore`: `getSlice`, `mutate`, `acquireLock`, plus `StaticBuffer`, `Entry`, `SliceQuery`, `KeySliceQuery`
 - [ ] 03 — `KeyColumnValueStoreManager` and `StoreFeatures`: how a backend advertises ordered scans, locking, batch mutation, and where core branches on them
 - [ ] 04 — `InMemoryKeyColumnValueStore`: answering a slice query over a sorted in-memory structure
@@ -82,6 +88,20 @@ with `upstream` pointing at `JanusGraph/janusgraph`; Java 17 or 21, Maven 3.6.3+
 - [ ] 26 — Mixed indexes: the `IndexProvider` SPI and `ElasticSearchIndex`
 - [ ] 27 — The CQL backend: `CQLKeyColumnValueStore` compared line-for-line with the in-memory store
 - [ ] 28 — Transaction log, CDC, and stale-index repair: what happens when the edgestore and a mixed index disagree
+
+## Notes For The Next Run
+
+- **Session 01 confirmed the `StoreFeatures` builder chain is at `InMemoryStoreManager.java:64-72`** and the
+  `StandardStoreManager` shorthand→class enum at `StandardStoreManager.java:28-33`, both at the pinned commit.
+  Session 03 should read those lines rather than re-deriving them.
+- **Session 01 deliberately left `getSlice`/`mutate` semantics unexplained** — it handed out
+  `KeyColumnValueStore` as an opaque return type. Session 02 opens that, and should not assume the reader
+  already knows what a `SliceQuery`'s start/end columns mean.
+- **Only four issues carry `good first issue` repo-wide** as of 2026-10-30: #3013, #3126, #3127, #1573.
+  #3126 and #3127 are index-lifecycle work reserved for session 25's Contribution Radar. Re-run the search
+  each session rather than reusing this list.
+- `janusgraph-inmemory`'s paging machinery (`MultiPageEntryBuffer`, `BufferPage`, `BufferPageUtils`,
+  `SinglePageEntryBuffer`, `InMemoryColumnValueStore`) was explicitly deferred from session 01 to session 04.
 
 ## Paused Subjects
 
