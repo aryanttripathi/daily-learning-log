@@ -4,7 +4,7 @@ subject: JanusGraph
 mode: contributor-reading
 started: 2026-10-30
 lessons-total: 28
-lessons-done: 1
+lessons-done: 2
 pinned-commit: a59ae8d8024207598eada34998d867617df51adf
 pinned-commit-date: 2026-10-28
 upstream: JanusGraph/janusgraph
@@ -39,14 +39,15 @@ with `upstream` pointing at `JanusGraph/janusgraph`; Java 17 or 21, Maven 3.6.3+
 
 Newest first. The next run reads the most recent entry's `## My Notes` before writing.
 
-- **01 — 2026-10-30** · [`2026/10/2026-10-30-janusgraph-setup-and-data-model/README.md`](2026/10/2026-10-30-janusgraph-setup-and-data-model/README.md) · read `data-model.md`, `BUILDING.md`, `CONTRIBUTING.md`, `InMemoryStoreManager`, `StandardStoreManager` L28–33, `InMemoryGraphTest`. Six questions posed, none answered in the entry. Hands-on: `WholeRowDeletionOptimizationTest`. Radar: #3013, #225, #1573. **`My Notes` awaiting Aryant.**
+- **02 — 2026-10-31** · [`2026/10/2026-10-31-janusgraph-kcv-store-contract/README.md`](2026/10/2026-10-31-janusgraph-kcv-store-contract/README.md) · read `KeyColumnValueStore` (whole), `SliceQuery` L40–153, `KeySliceQuery` (whole), `Entry` L27–39, `StaticBuffer` L28–86, `BufferUtil` L189–217, plus `KeyColumnValueStoreTest` L862–938 and `InMemoryKeyColumnValueStoreTest`. Six questions posed, none answered in the entry. Hands-on: `InMemoryKeyColumnValueStoreTest#getSliceRespectsAllBoundsInclusionArguments` and `#getSliceRespectsColumnLimit`. Radar: #3864, #3816, PR #4086. **Session 01's `My Notes` were empty — one consecutive empty session; today's entry carries the one-line notice.** **`My Notes` awaiting Aryant.**
+- **01 — 2026-10-30** · [`2026/10/2026-10-30-janusgraph-setup-and-data-model/README.md`](2026/10/2026-10-30-janusgraph-setup-and-data-model/README.md) · read `data-model.md`, `BUILDING.md`, `CONTRIBUTING.md`, `InMemoryStoreManager`, `StandardStoreManager` L28–33, `InMemoryGraphTest`. Six questions posed, none answered in the entry. Hands-on: `WholeRowDeletionOptimizationTest`. Radar: #3013, #225, #1573. **`My Notes` left empty.**
 
 ## Syllabus
 
 ### Part I — Orientation and the storage contract (`diskstorage/`, `janusgraph-inmemory`)
 
 - [x] 01 — Setup and the data model: fork, build `janusgraph-inmemory`, module map, and `docs/advanced-topics/data-model.md` (edgestore rows, relation columns)
-- [ ] 02 — `KeyColumnValueStore`: `getSlice`, `mutate`, `acquireLock`, plus `StaticBuffer`, `Entry`, `SliceQuery`, `KeySliceQuery`
+- [x] 02 — `KeyColumnValueStore`: `getSlice`, `mutate`, `acquireLock`, plus `StaticBuffer`, `Entry`, `SliceQuery`, `KeySliceQuery`
 - [ ] 03 — `KeyColumnValueStoreManager` and `StoreFeatures`: how a backend advertises ordered scans, locking, batch mutation, and where core branches on them
 - [ ] 04 — `InMemoryKeyColumnValueStore`: answering a slice query over a sorted in-memory structure
 - [ ] 05 — `OrderedKeyValueStoreManagerAdapter` and `BerkeleyJEKeyValueStore`: faking key-column-value on an ordered key-value store
@@ -91,17 +92,34 @@ Newest first. The next run reads the most recent entry's `## My Notes` before wr
 
 ## Notes For The Next Run
 
-- **Session 01 confirmed the `StoreFeatures` builder chain is at `InMemoryStoreManager.java:64-72`** and the
-  `StandardStoreManager` shorthand→class enum at `StandardStoreManager.java:28-33`, both at the pinned commit.
-  Session 03 should read those lines rather than re-deriving them.
-- **Session 01 deliberately left `getSlice`/`mutate` semantics unexplained** — it handed out
-  `KeyColumnValueStore` as an opaque return type. Session 02 opens that, and should not assume the reader
-  already knows what a `SliceQuery`'s start/end columns mean.
-- **Only four issues carry `good first issue` repo-wide** as of 2026-10-30: #3013, #3126, #3127, #1573.
-  #3126 and #3127 are index-lifecycle work reserved for session 25's Contribution Radar. Re-run the search
-  each session rather than reusing this list.
+**Syllabus unchanged this run.** No reordering, no splits. The 28 items stand as written on 2026-10-30.
+
+- **Session 02 confirmed, at the pinned commit:** the column interval is half-open, start inclusive
+  (`SliceQuery.java:64-68`) and end exclusive (`L73-L77`), encoded in `contains` at `L136-L138`;
+  `mutate`'s deletions-before-additions guarantee is `KeyColumnValueStore.java:107-110`; lock
+  verification is deferred to the first `mutate` of a transaction, `L139-L144`; `getMultiSlices`'
+  unoptimised default body is `L91-L101`. Sessions 04, 05 and 27 should cite these rather than
+  re-deriving them.
+- **`Entry extends StaticBuffer`** (`Entry.java:27`) with `getValuePosition()` (`L29`) is the fact
+  session 10 and 11 need: one entry is one byte buffer, column then value, split at that offset.
+  Session 02 left the *physical layout* as question 5 rather than stating it.
+- **Session 02 deliberately did not open** the four `getKeys` overloads, `KeyIterator`,
+  `KeyRangeQuery`, `MultiSlicesQuery` or `KeySlicesIterator` (`KeyColumnValueStore.java:185` down).
+  Session 03 owns those, alongside the `orderedScan`/`unorderedScan` flags that gate them.
+- **A real tiny-PR candidate was found and left for Aryant to verify:**
+  `janusgraph-backend-testutils/.../KeyColumnValueStoreTest.java:887-893` — a `for` loop over the
+  slice result whose entire body is `if (!src.equals(dst)) { int x = 1; }`, a leftover breakpoint
+  hook, immediately before the `assertEquals` that does the work. Deleting it is a two-line,
+  zero-risk, DCO-signed first commit. **Do not open it for him**; it is in his `My Notes` template
+  under *Possible issue / PR idea*.
+- **Issue search this run:** the two live issues on today's area are **#3864** (getMultiSlices for
+  HBase) and **#3816** (multi-range slice queries for CQL) — both open since June 2023, no assignee,
+  both `kind/performance`. Repo-wide `good first issue` is still exactly four: #3013, #3126, #3127,
+  #1573; #3126/#3127 stay reserved for session 25. Re-run the search each session.
 - `janusgraph-inmemory`'s paging machinery (`MultiPageEntryBuffer`, `BufferPage`, `BufferPageUtils`,
-  `SinglePageEntryBuffer`, `InMemoryColumnValueStore`) was explicitly deferred from session 01 to session 04.
+  `SinglePageEntryBuffer`, `InMemoryColumnValueStore`) remains deferred to session 04.
+- **Empty-notes streak: 1.** Session 01's `My Notes` were never filled. Session 03 must re-check
+  session 02's notes and increment or reset the count.
 
 ## Paused Subjects
 
