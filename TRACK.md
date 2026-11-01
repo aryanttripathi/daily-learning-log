@@ -4,7 +4,7 @@ subject: JanusGraph
 mode: contributor-reading
 started: 2026-10-30
 lessons-total: 28
-lessons-done: 2
+lessons-done: 3
 pinned-commit: a59ae8d8024207598eada34998d867617df51adf
 pinned-commit-date: 2026-10-28
 upstream: JanusGraph/janusgraph
@@ -39,7 +39,8 @@ with `upstream` pointing at `JanusGraph/janusgraph`; Java 17 or 21, Maven 3.6.3+
 
 Newest first. The next run reads the most recent entry's `## My Notes` before writing.
 
-- **02 — 2026-10-31** · [`2026/10/2026-10-31-janusgraph-kcv-store-contract/README.md`](2026/10/2026-10-31-janusgraph-kcv-store-contract/README.md) · read `KeyColumnValueStore` (whole), `SliceQuery` L40–153, `KeySliceQuery` (whole), `Entry` L27–39, `StaticBuffer` L28–86, `BufferUtil` L189–217, plus `KeyColumnValueStoreTest` L862–938 and `InMemoryKeyColumnValueStoreTest`. Six questions posed, none answered in the entry. Hands-on: `InMemoryKeyColumnValueStoreTest#getSliceRespectsAllBoundsInclusionArguments` and `#getSliceRespectsColumnLimit`. Radar: #3864, #3816, PR #4086. **Session 01's `My Notes` were empty — one consecutive empty session; today's entry carries the one-line notice.** **`My Notes` awaiting Aryant.**
+- **03 — 2026-11-01** · [`2026/11/2026-11-01-janusgraph-store-manager-features/README.md`](2026/11/2026-11-01-janusgraph-store-manager-features/README.md) · read `KeyColumnValueStoreManager` (whole), `StoreManager` (whole), `StoreFeatures` L31–257, `StandardStoreFeatures` (`hasScan` L54, `Builder` from L180, the private ctor), `KeyColumnValueStore` L185–227 (the four `getKeys` overloads session 02 deferred), `Backend` L249–287 + L339–343, `InMemoryStoreManager` L64–72 + L134–135, plus `InMemoryStoreManagerTest` and `FeatureRequirementCondition`. Six questions posed, none answered in the entry. Hands-on: `InMemoryStoreManagerTest#testStoreCycle`, a throwaway `dumpFeatures()` with every value predicted first, and breakpoints on `Backend.java:261`/`:271` under `InMemoryGraphTest`. Radar: #2268, #3390, #1128. **Sessions 01 and 02 both left `My Notes` empty — streak 2; today's entry carries the one-line notice and has no `From Your Last Notes`.** **`My Notes` awaiting Aryant.**
+- **02 — 2026-10-31** · [`2026/10/2026-10-31-janusgraph-kcv-store-contract/README.md`](2026/10/2026-10-31-janusgraph-kcv-store-contract/README.md) · read `KeyColumnValueStore` (whole), `SliceQuery` L40–153, `KeySliceQuery` (whole), `Entry` L27–39, `StaticBuffer` L28–86, `BufferUtil` L189–217, plus `KeyColumnValueStoreTest` L862–938 and `InMemoryKeyColumnValueStoreTest`. Six questions posed, none answered in the entry. Hands-on: `InMemoryKeyColumnValueStoreTest#getSliceRespectsAllBoundsInclusionArguments` and `#getSliceRespectsColumnLimit`. Radar: #3864, #3816, PR #4086. **Session 01's `My Notes` were empty — one consecutive empty session; today's entry carries the one-line notice.** **`My Notes` never filled.**
 - **01 — 2026-10-30** · [`2026/10/2026-10-30-janusgraph-setup-and-data-model/README.md`](2026/10/2026-10-30-janusgraph-setup-and-data-model/README.md) · read `data-model.md`, `BUILDING.md`, `CONTRIBUTING.md`, `InMemoryStoreManager`, `StandardStoreManager` L28–33, `InMemoryGraphTest`. Six questions posed, none answered in the entry. Hands-on: `WholeRowDeletionOptimizationTest`. Radar: #3013, #225, #1573. **`My Notes` left empty.**
 
 ## Syllabus
@@ -48,7 +49,7 @@ Newest first. The next run reads the most recent entry's `## My Notes` before wr
 
 - [x] 01 — Setup and the data model: fork, build `janusgraph-inmemory`, module map, and `docs/advanced-topics/data-model.md` (edgestore rows, relation columns)
 - [x] 02 — `KeyColumnValueStore`: `getSlice`, `mutate`, `acquireLock`, plus `StaticBuffer`, `Entry`, `SliceQuery`, `KeySliceQuery`
-- [ ] 03 — `KeyColumnValueStoreManager` and `StoreFeatures`: how a backend advertises ordered scans, locking, batch mutation, and where core branches on them
+- [x] 03 — `KeyColumnValueStoreManager` and `StoreFeatures`: how a backend advertises ordered scans, locking, batch mutation, and where core branches on them
 - [ ] 04 — `InMemoryKeyColumnValueStore`: answering a slice query over a sorted in-memory structure
 - [ ] 05 — `OrderedKeyValueStoreManagerAdapter` and `BerkeleyJEKeyValueStore`: faking key-column-value on an ordered key-value store
 - [ ] 06 — The test harness: `JanusGraphTest`, `InMemoryGraphTest`, backend test suites, and how a PR's test is expected to look
@@ -94,32 +95,60 @@ Newest first. The next run reads the most recent entry's `## My Notes` before wr
 
 **Syllabus unchanged this run.** No reordering, no splits. The 28 items stand as written on 2026-10-30.
 
-- **Session 02 confirmed, at the pinned commit:** the column interval is half-open, start inclusive
-  (`SliceQuery.java:64-68`) and end exclusive (`L73-L77`), encoded in `contains` at `L136-L138`;
-  `mutate`'s deletions-before-additions guarantee is `KeyColumnValueStore.java:107-110`; lock
-  verification is deferred to the first `mutate` of a transaction, `L139-L144`; `getMultiSlices`'
-  unoptimised default body is `L91-L101`. Sessions 04, 05 and 27 should cite these rather than
-  re-deriving them.
-- **`Entry extends StaticBuffer`** (`Entry.java:27`) with `getValuePosition()` (`L29`) is the fact
-  session 10 and 11 need: one entry is one byte buffer, column then value, split at that offset.
-  Session 02 left the *physical layout* as question 5 rather than stating it.
-- **Session 02 deliberately did not open** the four `getKeys` overloads, `KeyIterator`,
-  `KeyRangeQuery`, `MultiSlicesQuery` or `KeySlicesIterator` (`KeyColumnValueStore.java:185` down).
-  Session 03 owns those, alongside the `orderedScan`/`unorderedScan` flags that gate them.
-- **A real tiny-PR candidate was found and left for Aryant to verify:**
-  `janusgraph-backend-testutils/.../KeyColumnValueStoreTest.java:887-893` — a `for` loop over the
-  slice result whose entire body is `if (!src.equals(dst)) { int x = 1; }`, a leftover breakpoint
-  hook, immediately before the `assertEquals` that does the work. Deleting it is a two-line,
-  zero-risk, DCO-signed first commit. **Do not open it for him**; it is in his `My Notes` template
-  under *Possible issue / PR idea*.
-- **Issue search this run:** the two live issues on today's area are **#3864** (getMultiSlices for
-  HBase) and **#3816** (multi-range slice queries for CQL) — both open since June 2023, no assignee,
-  both `kind/performance`. Repo-wide `good first issue` is still exactly four: #3013, #3126, #3127,
-  #1573; #3126/#3127 stay reserved for session 25. Re-run the search each session.
-- `janusgraph-inmemory`'s paging machinery (`MultiPageEntryBuffer`, `BufferPage`, `BufferPageUtils`,
-  `SinglePageEntryBuffer`, `InMemoryColumnValueStore`) remains deferred to session 04.
-- **Empty-notes streak: 1.** Session 01's `My Notes` were never filled. Session 03 must re-check
-  session 02's notes and increment or reset the count.
+- **Empty-notes streak: 2.** Sessions 01 *and* 02 left `My Notes` as the untouched template. Session 03's entry
+  carries the one-line notice and has no `From Your Last Notes` section, because there was nothing to answer.
+  **Session 04 must re-check session 03's notes and increment to 3 or reset to 0.** Three consecutive empty sessions
+  is the point at which the track's premise — that the reader's half is where the learning happens — stops being
+  true, and session 04 should say so plainly rather than repeating the same sentence a third time.
+- **Session 03 confirmed, at the pinned commit:** `KeyColumnValueStore.java` is **245 lines, not 221** — session 02's
+  entry said 221. Its *line anchors* were all correct (`acquireLock` really is `L183`); only the total was wrong. The
+  four `getKeys` overloads are `L185-L187` (a `default` throwing `NotImplementedException`), `L200` (`KeyRangeQuery`,
+  "only supported by stores which keep keys in byte-order"), `L213` (`SliceQuery`, "stores which do **not**"), and
+  `L227` (`MultiSlicesQuery`, "mandatory for stores which do not guaranty key orders while running parallel scans").
+- **`StoreFeatures` declaration lines**, for sessions 04, 05, 07, 18 and 27 to cite rather than re-derive: `hasScan`
+  37, `hasUnorderedScan` 43, `hasConsistentScan` 51, `hasOrderedScan` 57, `hasMultiQuery` 64, `hasLocking` 71,
+  `hasBatchMutation` 78, `isKeyOrdered` 85, `getScanKeyOrder` 103-105 (`default`, returns null),
+  `hasLocalKeyPartition` 127, `isKeyConsistent` 138, `hasCellTTL` 171, `supportsPersistence` 195,
+  `hasOptimisticLocking` 247, `hasOptimizedWholeRowDeletion` 257.
+- **Every feature consumer in `Backend.java` lives in two windows** — the fact session 07 needs: `L249`
+  (`storeFeatures = storeManager.getFeatures()`), `L261-263` (`!hasBatchMutation()` → `bufferSize =
+  Integer.MAX_VALUE`, consumed by the `CacheTransaction` built at `L619`), `L271-276` (`!hasLocking()` → wrap in
+  `ExpectedValueCheckingStoreManager`, with `L272` asserting `isKeyConsistent()`), `L278-287` (`hasMultiQuery()` →
+  skip the `PARALLEL_BACKEND_OPS` thread pool), and `L339-343` (`isKeyConsistent()` → `ConsistentKeyIDAuthority`,
+  else `IllegalStateException`). Nothing else in those 775 lines reads a flag. Session 18 owns
+  `ExpectedValueCheckingStoreManager`; session 09 owns `ConsistentKeyIDAuthority`.
+- **`StandardStoreFeatures.Builder` defaults are not all false**, contrary to its own javadoc at `L208`
+  ("everything disabled/unsupported/false/null"): `consistentScan = true` (`L182`), `supportsPersist = true`
+  (`L198`), `supportsInterruption = true` (`L203`). The private constructor takes **24 positional parameters**, 18 of
+  them `boolean`. If a lightweight PR candidate is ever wanted, correcting that javadoc sentence is a one-line
+  documentation fix — but do **not** open it for him.
+- **Session 03's six questions, left unanswered on purpose**, so a later session knows what is still open: (1)
+  in-memory declares both `orderedScan` and `unorderedScan` though the two `getKeys` javadocs are mutually exclusive;
+  (2) `hasBatchMutation()` is false while `mutateMany` is fully implemented (`InMemoryStoreManager.java:117-131`); (3)
+  `hasLocking()` vs `hasOptimisticLocking()`, and which branch the in-memory backend takes at `Backend.java:271`; (4)
+  `InMemoryStoreManager.java:71` uses the **single-arg** `keyConsistent(Configuration)`, so
+  `localKeyConsistentTxConfig` stays null; (5) `getLocalKeyPartition()` throws unconditionally at `L134-135` while
+  `hasLocalKeyPartition()` is false — is the javadoc promise at `StoreFeatures.java:118-127` enforced or only
+  documented; (6) what `getScanKeyOrder()` returning null costs a backend that *is* ordered. **Sessions 04 and 05
+  answer 1 and 4 almost incidentally** — do not pre-empt them in the entry text; answer them in
+  `From Your Last Notes` only if Aryant raises them.
+- **`FeatureRequirementCondition.java:37-59`** is the test-skip mechanism: `@FeatureFlag` → `TestAbortedException`.
+  Only four flags are wired (`CellTtl`, `Scan`, `OrderedScan`, `UnorderedScan`); the `default` arm throws
+  `UnsupportedOperationException`. Session 06 (the test harness) owns this properly.
+- **Issue search this run:** nothing open is *about* `StoreFeatures` — both the issue and the PR searches returned
+  zero. Adjacent and used: **#2268** (LockEntry TTL, `area/core`, unassigned), **#3390** (CQLPagingIterator for
+  Amazon Keyspace, `kind/bug/confirmed`, unassigned), **#1128** (berkeleyje in-memory, assigned to `amcp`, untouched
+  since 2018). Repo-wide `good first issue` is **still exactly four**: #3013, #3126, #3127, #1573 — unchanged for
+  three runs; #3126/#3127 stay reserved for session 25. Re-run the search each session, but stop re-listing the four
+  in full.
+- **Still deferred:** `janusgraph-inmemory`'s paging machinery (`MultiPageEntryBuffer`, `BufferPage`,
+  `BufferPageUtils`, `SinglePageEntryBuffer`, `InMemoryColumnValueStore`) → session 04. The
+  `KeyColumnValueStoreTest.java:887-893` dead-loop PR candidate from session 02 is **still unverified by Aryant** and
+  still must not be opened for him.
+- **Entry size.** Session 03's generated part came in at ~15 KB against the mode's 5–9 KB budget, after two
+  deliberate trimming passes that cut explanation and kept specifics. The overage is structural: six reading rows, a
+  nine-flag table, six questions and eleven pinned permalinks. If session 04 wants to come in under budget, the lever
+  is **fewer files** (three, not six), not shorter sentences.
 
 ## Paused Subjects
 
