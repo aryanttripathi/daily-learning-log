@@ -5,7 +5,7 @@ mode: lesson
 mode-history: contributor-reading 2026-10-30 .. 2026-11-02 (sessions 01-04); lesson from 2026-11-03 (lesson 05 on)
 started: 2026-10-30
 lessons-total: 28
-lessons-done: 7
+lessons-done: 8
 pinned-commit: a59ae8d8024207598eada34998d867617df51adf
 pinned-commit-date: 2026-10-28
 upstream: JanusGraph/janusgraph
@@ -50,6 +50,7 @@ From lesson 05, `janusgraph-berkeleyje` is also needed:
 
 Newest first.
 
+- **08 — 2026-11-06** · [`2026/11/2026-11-06-janusgraph-id-bit-layout/README.md`](2026/11/2026-11-06-janusgraph-id-bit-layout/README.md) · **Part II opens; stayed on `a59ae8d8` deliberately** so Part II's byte offsets stay comparable with lessons 02-07. Read `IDManager` (whole, 754 lines), `BufferUtil` (whole), `NumberUtil` (whole), `VertexIDAssigner` (whole; cited L104-107/L112/L123/L130-133), `ManagementSystem` (whole; L561-568 used), `IDManagementTest` (whole), `JanusGraphPartitionGraphTest` (whole; L87/L97-99/L113-119/L391/L396/L493), `InMemoryPartitionGraphTest` (whole, 51 lines), `docs/advanced-topics/data-model.md` and `docs/advanced-topics/custom-vertex-id.md`; plus the complete caller sets of `new IDManager(`, `IDManager()` and `fromVertexId` by code search. **THE finding: the vertex id and the edgestore row key are two different 64-bit words.** `constructId:450` builds `[0 | count | partition | suffix]`; `getKey:502` rebuilds it as `(partition << partitionOffset) | addPadding(count)` with `partitionOffset = Long.SIZE - partitionBits` — the partition rotates from the middle of the word to the **top**, count stays in the low bits and is never shifted by `partitionBits`. So at the production default id `104` has row key `0xa000000000000008`, and with `partitionBits > 0` the key's **sign bit can be set** (partition 17 at pb=5 → `0x8800000000000008`), which is why `getKeyID` is `>>>` throughout. Second finding: **every default graph runs at `partitionBits = 5`, not 0** — `cluster.max-partitions` is `FIXED`, default **32**, validator demands `>1` and a power of 2, `NumberUtil.getPowerOf2(32) = 5`; `DEFAULT_PARTITION_BITS = 0` and the no-arg `IDManager()` have **no caller in the tree**. Third: **`fromVertexId` accepts a temporary (negative) id and returns garbage** — clause 1 of its precondition uses `>>>`, clause 2 compares signed against a positive bound, the body uses `>>`; verified at pb ∈ {0,3,5,16}, now PR candidate 8. **Closed lesson 07's open question:** `EDGESTORE_MAX_KEY` (eight `0xFF`) is unreachable because no proper `VertexIDType` suffix is `111` and no schema id ends in `11`; `EDGESTORE_MIN_KEY` needs `count == 0`, which `addPadding:347` forbids. Also: the one always-zero gap bit at position `63-partitionBits` of every row key; the XOR fold in `getPartitionHashForId:566-577` is the **identity** for counts below `2^partitionBits`; `getPartitionedVertexRepresentatives:601-609` allocates 512 KB per call at pb=16. Hands-on: `ManagementSystem.getVertexKey`/`getVertexId` as a public window onto the rotation, a jshell reproduction of the `fromVertexId` gap, and `InMemoryPartitionGraphTest` — which **empties three inherited tests** (`testPartitionSpreadFlushBatch`, `testPartitionSpreadFlushNoBatch`, `testKeyBasedGraphPartitioning`) and reports them passing, a third site for the empty-override anti-pattern. Daily Diff: **no 2026-11-06 edition**; front page served 2026-11-04 while `/archive/` listed **2026-11-05** as latest, so the 2026-11-05 edition (62 stories) was digested and said so — deep dive on GitHub's new Git storage architecture ("Rubicon") and its immutable-objects/mutable-refs split.
 - **07 — 2026-11-05** · [`2026/11/2026-11-05-janusgraph-backend-store-wiring/README.md`](2026/11/2026-11-05-janusgraph-backend-store-wiring/README.md) · **Part I complete.** Read `Backend` (whole, 775 lines), `BackendTransaction` (whole, 568), `BackendOperation` (whole, 148), `CacheTransaction` (whole, 248), `KCVSCache` (whole, 96), `NoKCVSCache` (whole, 44), `KCVSProxy` (whole, 94), `ExpectedValueCheckingStoreManager` (whole, 108), `ExpirationKCVSCache` (L40-190 + L215-359 of 359), `ExpirationCacheTest` (L41-160), and `GraphDatabaseConfiguration` L628-656 / L780-814 / L982-984 / L1054-1057 / L1607-1609 / L1946-1962. Taught the constructor-decides / `initialize`-opens split, the six store names and which of the two managers opens each (three of six through the locking manager, nine physical stores on a locking-emulated backend), the four-level transaction stack and the one level `unwrapTx` strips, `CacheTransaction`'s buffer and its monotonic `numMutations`, the invalidation-does-not-evict semantics and the `CountDownLatch(5)` back-pressure cleaner, and the `hasLocking()`-means-two-things consequence of reading features at `L249`. **THE finding: the retry backoff is a coin flip, not a ±20% jitter** — `(int)(2.0 / (1 + (rand*2-1)*0.2))` truncates to 1 or 2, so `pertubTime(d)` ∈ {d, d/2}; reproduced verbatim under OpenJDK 21 (`{1=500803, 2=499197}` over 1,000,000 draws) and measured at a median of **14** attempts (max 38) against the 10 s read budget and **21** (max 48) against the 100 s write budget, against documentation that says "backoff exponentially". Second finding: **`KCVSProxy.java:67` omits `unwrapTx`** where its seven siblings apply it — latent, one token, now PR candidate 1. Hands-on: a jshell reproduction of the divisor distribution, and `ExpirationCacheTest#testGracePeriod`, which asserts the cache-bypass semantics directly (`getSliceCalls` 0 → 2 → 4 on two identical reads) and needs exactly `PENALTY_THRESHOLD` = 5 reads to wake the cleanup thread. Daily Diff: the **2026-11-04** edition, 56 stories, front page one ahead of `/archive/` — deep dive on PostgreSQL 19's `REPACK CONCURRENTLY` and its not-MVCC-safe final swap.
 - **06 — 2026-11-04** · [`2026/11/2026-11-04-janusgraph-test-harness/README.md`](2026/11/2026-11-04-janusgraph-test-harness/README.md) · read the harness: `JanusGraphBaseTest` (whole; lifecycle L151-199, `clearGraph`/`getBackend` L132-145, `setupConfig`/`clopen` L213-242, `evaluateQuery` ×7 L589-750, `executeScanJob` L752-762), `JanusGraphTest` (whole file analysed — 12,258 lines, class at L312, 222 `@Test` + 7 `@ParameterizedTest` + 5 `@Tag(BRITTLE_TESTS)` at L3098/L3179/L10156/L10192/L10272, ten banner sections, `simpleLogTest` L8270-8282), `KeyColumnValueStoreTest` (whole; lifecycle L94-141, abstract hook L102, fixture constants L82-92, the seven `@FeatureFlag` sites, `scanTest` L445-462, `testOrderedGetKeysRespectsKeyLimit` L491-513), `AbstractKCVSTest`, `JanusGraphBaseStoreFeaturesTest`, `TestCategory`, `StorageSetup`, `TestGraphConfigs`, `FeatureFlag`, `FeatureRequirementCondition`, `JanusGraphFeature`, `RetryingTestExecutionExtension`, `InMemoryGraphTest`, `InMemoryStoreManager` L64-70, `BerkeleyFixedLengthKCVSTest`, `BerkeleyVariableLengthKCVSTest`, `BerkeleyKeyValueTest`, `BerkeleyGraphConcurrentTest`, `CQLGraphTest` L239-290/L390/L481, root `pom.xml` (surefire L404-461, `test.excluded.groups` L102, profiles L1900-1972), `janusgraph-test/pom.xml`, `CONTRIBUTING.md`, `.github/PULL_REQUEST_TEMPLATE.md`. Taught the src/main-not-src/test inversion, the one-abstract-hook-per-level contract, the **four** opt-out idioms and their four different reporting semantics, `@FeatureFlag`'s 4-of-24 coverage and its post-`@BeforeEach` ordering, `evaluateQuery`'s profiler assertions, and the build-level exclusions. Hands-on: read the Surefire XML rather than the console — 31 bare `<skipped/>` on `InMemoryGraphTest`, zero trace of the 5 `BRITTLE` methods, `testConcurrentGetSlice` as a 0 ms **pass**, and `<skipped message="Database doesn't support unordered scan."/>` on BerkeleyJE. Daily Diff: the **2026-11-03** edition, 52 stories, front page and archive agreed and were current — deep dive on Spiral's *Statistics are aggregates* plus the Vortex `FileStatistics` layout.
 - **05 — 2026-11-03** · [`2026/11/2026-11-03-janusgraph-okvs-adapter-berkeleyje/README.md`](2026/11/2026-11-03-janusgraph-okvs-adapter-berkeleyje/README.md) · **first entry in `lesson` mode.** Read `OrderedKeyValueStoreManagerAdapter` (whole), `OrderedKeyValueStoreAdapter` (whole, with exact lines for `concatenate` L250-264, `convertQuery` L231-240, the decode block L215-297, `KeyIteratorImpl` L299+), `BerkeleyJEKeyValueStore` (whole; `getSlice` L212-281, locking L146-208), `BerkeleyJEStoreManager` L120-145 / L200-262 / L265-300, `Backend` L518-546 and L258-263, `KVQuery`, `KeySelector`, `BaseKeyColumnValueAdapter`, `StandardStoreFeatures` L183-187, `Query` L24, plus both `BerkeleyFixedLengthKCVSTest` and `BerkeleyVariableLengthKCVSTest`. Taught the fixed-vs-variable key-length split, why fixed needs no post-filter and variable does, the three byte layouts, the cursor walk, the batch that isn't, and BerkeleyJE's own two-tier locking. Daily Diff: the 2026-11-02 edition, 49 stories — deep dive on Neumann's *The Benchmarking Crisis*.
@@ -72,7 +73,7 @@ Newest first.
 
 ### Part II — Graph ⇄ bytes (`graphdb/idmanagement`, `graphdb/database`)
 
-- [ ] 08 — `IDManager`: vertex ID bit layout, partition bits, vertex-type suffixes, and how row keys are derived
+- [x] 08 — `IDManager`: vertex ID bit layout, partition bits, vertex-type suffixes, and how row keys are derived
 - [ ] 09 — `VertexIDAssigner` and the ID authority: block allocation from the ids store without per-insert coordination
 - [ ] 10 — `EdgeSerializer.writeRelation`: the column layout for edges and properties, direction, sort keys
 - [ ] 11 — `EdgeSerializer.parseRelation` and `RelationCache`: decoding columns back into relations
@@ -108,8 +109,13 @@ Newest first.
 
 ## Notes For The Next Run
 
-**Syllabus unchanged this run, with one reassignment.** No items added, split, merged or reordered; the 28
-stand as written on 2026-10-30. Lesson 07 handed the deferred `InMemoryKeyColumnValueStore.RowIterator` /
+**Syllabus unchanged this run. No items added, split, merged or reordered; the 28 stand as written on
+2026-10-30.** Lesson 08 made one explicit decision the Part boundary allowed and declined the other:
+it **stayed pinned on `a59ae8d8`** rather than re-pinning, because every line number in lessons 08-13
+is cross-referenced against lessons 02-07 and Part II is the layer where byte offsets matter most.
+Re-pin at the **Part II/III boundary** (after lesson 13) instead, and record the new commit here.
+
+Lesson 07 handed the deferred `InMemoryKeyColumnValueStore.RowIterator` /
 `OrderedKeyValueStoreAdapter.KeyIteratorImpl` reading on to **lesson 22** (query processing and limits)
 rather than keeping it in Part I: the per-key limit at `OrderedKeyValueStoreAdapter.java:381` is the point
 of that code, and lesson 07's scan material turned out to be about `hasScan`/`hasOrderedScan` branching in
@@ -122,14 +128,89 @@ of that code, and lesson 07's scan material turned out to be about `hasScan`/`ha
 - **Never touch an earlier entry's `## My Notes`.** Sessions 01–04 keep their templates. They are his
   to fill at any time; if a future run finds content in any of them, answer those questions in that
   run's entry regardless of mode.
-- **Part I is complete.** Lessons 01–07 cover the storage contract, two store implementations, the
-  adapter, the harness, and the wiring. Re-pinning the commit is allowed at this Part boundary
-  (`a59ae8d8`, 2026-10-28, is now eight days old); lesson 08 should either re-pin and record the new
-  commit here, or state explicitly that it is staying on `a59ae8d8` so Part II's byte layouts stay
-  comparable with Part I's. **Prefer staying pinned** — Part II is the ID and serialization layer, and
-  every line number in lessons 08–13 will be cross-referenced against lessons 02–07.
+- **Part I is complete; Part II is under way.** Lessons 01–07 cover the storage contract, two store
+  implementations, the adapter, the harness, and the wiring; lesson 08 opened Part II. **The re-pin
+  decision at the Part I/II boundary was taken and recorded: stay on `a59ae8d8`.** Do not revisit it
+  mid-Part. The next boundary where re-pinning is allowed is **Part II/III, after lesson 13**; at that
+  point either re-pin and record the new commit in the front-matter and here, or state explicitly that
+  it is staying, as lesson 08 did.
 
-### Verified this run, for Part II and the write/read path lessons to cite rather than re-derive
+### Verified by lesson 08, for lessons 09-13 and the read path to cite rather than re-derive
+
+- **An id is not a row key, and `getKey:502` is the whole difference.** `constructId:450-459` builds
+  `[0 | count | partition | suffix]`; `getKey:489-510` rebuilds it as
+  `(partition << partitionOffset) | type.addPadding(count)` with `partitionOffset = Long.SIZE - partitionBits`
+  (`:431`, **64 not `TOTAL_BITS`**). Count is **not** shifted by `partitionBits` in the key. Verified
+  examples at pb=3: `(count=1, part=5)` → id `104` / key `0xa000000000000008`; `(count=2, part=5)` → id
+  `168` / key `0xa000000000000010`. At **pb=0 the two words are identical**, which is why the distinction
+  is invisible in most tests. Round trip `getKeyID(getKey(id)) == id` re-verified against
+  `IDManagementTest.EntityIDTest`'s own five parameter sets, 0 mismatches over ~9,000 counts × 3 proper
+  user-vertex types.
+- **`partitionBits = 5` is the production default and 0 is not configurable.** `CLUSTER_MAX_PARTITIONS`
+  (`cluster.max-partitions`) is `ConfigOption.Type.FIXED`, default **32**, validator
+  `integer>1 && NumberUtil.isPowerOf2(integer)`. `VertexIDAssigner.java:104` is
+  `NumberUtil.getPowerOf2(config.get(CLUSTER_MAX_PARTITIONS))`, and `getPowerOf2` is
+  `Long.SIZE-(numberOfLeadingZeros(value)+1)` → **5**. `ConsistentKeyIDAuthority` re-derives the same
+  number independently and re-checks `0..16`. **`DEFAULT_PARTITION_BITS = 0` (`:396`) and the no-arg
+  `IDManager()` (`:434-436`) have no caller anywhere in the tree** — code-searched at the pinned commit:
+  `new IDManager(` matches exactly `VertexIDAssigner.java:105` and `IDManagementTest`, both with an
+  explicit width. Do not build mental models on pb=0.
+- **The bounds table, exact** (`vertexCountBound = 1L << (63 - pb - 3)`, `:429`):
+  pb=0 → 2^60; pb=3 → 2^57 (the test default, `JanusGraphPartitionGraphTest:87` sets
+  `cluster.max-partitions = 8`); **pb=5 → 2^55 = 36,028,797,018,963,968**; pb=8 → 2^52; pb=12 → 2^48;
+  pb=16 (`MAX_PARTITION_BITS`, `:392`) → 2^44 = 17,592,186,044,416. One partition bit costs one bit of
+  vertex count, and the choice is `FIXED` at graph creation. `relationCountBound` is special-cased to
+  `Long.MAX_VALUE` at pb=0 (`:427`) because `1L << 63` would overflow.
+  `SCHEMA_COUNT_BOUND = 1 << 54` (`:410`) uses `MAX_PADDING_BITWIDTH = 6` and `TYPE_LEN_RESERVE = 3`
+  and does **not** depend on `partitionBits` — schema ids have no partition field (`:678-681`).
+- **One always-zero gap bit per row key.** Since `count < 2^(60-pb)`, `count<<3` occupies bits
+  `0..62-pb` while the partition starts at bit `64-pb`: **bit `63-pb` of every user-vertex row key is
+  always 0**. At pb=0 that bit is the sign bit the `TOTAL_BITS` comment (`:382-387`) is about. At pb>0
+  the key's **sign bit belongs to the partition and can be set** — pb=5, partition 17 →
+  `0x8800000000000008`. Ordering is still correct because `StaticBuffer` compares unsigned byte-wise;
+  arithmetic after `getLong(0)` is not, which is what `getKeyID`'s javadoc (`:523-529`) warns about and
+  why it uses `>>>` exclusively. `:543`'s `partitionOffset<Long.SIZE ? ... : 0` ternary is **required**,
+  not defensive: Java masks long shift distances to 6 bits, so `value >>> 64` is `value >>> 0`.
+- **`VertexIDType` is a variable-length suffix code, not a stored tag.** 17 members,
+  `offset()`/`suffix()`/`isProper()`. Proper user vertices: `NormalVertex` `000`, `PartitionedVertex`
+  `010`, `UnmodifiableVertex` `100` — **all three have `offset() == 3`**, asserted at `getKey:498` and
+  guarded for the whole enum by `IDManagementTest.testUserVertexBitWidth` (whose first clause is a bare
+  `assert`, so a no-op without `-ea`). Schema side: `Schema` `01`, `SchemaType` `101`, `RelationType`
+  `0101`, `PropertyKey` `00101`, `UserPropertyKey` `000101`, `SystemPropertyKey` `100101`, `EdgeLabel`
+  `10101`, `UserEdgeLabel` `010101`, `SystemEdgeLabel` `110101`, `VertexLabel` `01101`,
+  `GenericSchemaType` `1001`; `Invisible` `1`, `InvisibleVertex` `11`. `is()` (`:355-362`) is a masked
+  compare, so the hierarchy costs nothing — and **on a non-`Number` it returns `suffix() == 0`**, which
+  is the custom-string-id path: a string id is a `NormalVertex` by definition and can never be schema or
+  partitioned. `UserPropertyKey` count=1 → id `69` = `0b1000101`; `UserEdgeLabel` count=1 → `85`.
+- **`EDGESTORE_MAX_KEY` and `EDGESTORE_MIN_KEY` are both unreachable — lesson 07's question, closed.**
+  `oneBuffer(8)` ends in `111`; no proper `VertexIDType` suffix is `111` (only `000`/`010`/`100`), and
+  `getUserVertexIDType:461-470` throws `InvalidIDException` for anything else. The schema branch has
+  key == id and requires low 2 bits `01`, but `0xFF & 3 == 3`. String ids can't collide: `getStringIdBuffer`
+  forces `length != 8`, and the ordered-scan branch is gated on `!allowCustomVertexIdType` anyway.
+  `zeroBuffer(8)` needs `count == 0`, forbidden by `addPadding:347` and asserted at `getKey:501`. The
+  half-open interval is therefore safe here — **by accident of the suffix encoding, documented nowhere**.
+  See PR candidate 9.
+- **Partitioned vertices: one id, up to `2^pb` row keys, and the hash is the identity for small counts.**
+  `getVertexID:555-564` checks `partition == PARTITIONED_VERTEX_PARTITION (1)` then **discards it**,
+  calling `getCanonicalVertexIdFromCount`. Placement is the XOR fold `getPartitionHashForId:566-577`,
+  guarded by `checkState(partitionBits>0)` because the loop never advances at pb=0. **Every count below
+  `2^pb` folds to itself** (verified: at pb=16, counts 1..10 → partitions 1..10 in order), so the first
+  handful of partitioned vertices get exactly the sequential placement the fold exists to prevent;
+  `testPartitionHashes` (`JanusGraphPartitionGraphTest:113-119`) only asserts `> bound/2` distinct over
+  `1..2*bound`. `getPartitionedVertexRepresentatives:601-609` allocates `long[getPartitionBound()]`
+  fresh per call — 32 longs at pb=5, **65,536 longs / 512 KB at pb=16**, with only a bare `assert` at
+  `:603` between that and an `int` overflow (the real guard is `VertexIDAssigner:106`).
+- **Temporary ids preserve the bit pattern.** `makeTemporary:665-668` is `(1L<<63) | id` with
+  `checkArgument(id>0)`; `isTemporary` is `id<0`. Every `VertexIDType.is()` check still works on a
+  temporary, which `IDManagementTest` asserts for `NormalVertex`, `UserEdgeLabel` and `Invisible`.
+  Temporaries carry no partition (`:650-654`). This is what PR candidate 8 trips over.
+- **Three invariants are `assert`, not `Preconditions`:** `getKey:498`, `getKey:501`,
+  `getPartitionedVertexRepresentatives:603`. No-ops under a normal JVM, all on cold paths.
+- **`relationCountBound` and `constructId` disagree at pb=0.** `getRelationID:549-552` admits
+  `count < Long.MAX_VALUE`; `constructId:453-454` then requires
+  `unsignedBitLength(count)+pb+offset <= 63`. Unreachable in practice because pb=0 is not configurable.
+
+### Verified by lesson 07, for Part II and the write/read path lessons to cite rather than re-derive
 
 - **`Backend` is two-phase and the phases are different kinds of work.** Constructor
   (`Backend.java:239-306`) turns capability into configuration; `initialize` (`L333-417`) opens stores.
@@ -310,8 +391,11 @@ of that code, and lesson 07's scan material turned out to be about `hasScan`/`ha
 
 ### PR candidates, all verified at the pinned commit
 
-Ordered smallest-first. Candidates 1 and 5 are new this run; 2–4 and 6 carry forward from lessons 05–06
-and were **not** re-verified this run (they were verified at the same pinned commit on 2026-11-04).
+Numbering is **stable** — earlier entries reference these numbers, so new candidates are appended rather
+than inserted in size order. **Candidates 8–10 are new this run** (lesson 08) and 8 is now the smallest
+the track has found after the `KCVSProxy` one-token fix. Candidates 1–7 carry forward and were **not**
+re-verified this run: 1 and 7 were verified at this pinned commit on 2026-11-05, 2–4 and 6 on 2026-11-04,
+and 5 still needs its experiment run.
 
 1. **NEW, and the smallest the track has found: `KCVSProxy.java:67`** passes `txh` where every sibling
    method passes `unwrapTx(txh)`. One token. Fix the same omission in the test double at
@@ -345,9 +429,53 @@ and were **not** re-verified this run (they were verified at the same pinned com
    intended behaviour is jitter around an exponential base or the current coin flip. **Check
    `git log -p --follow BackendOperation.java` first** — the `(int)` cast may predate `java.time.Duration`
    and have been harmless in a `long`-milliseconds version.
+8. **NEW, smallest after candidate 1: `IDManager.fromVertexId`, `IDManager.java:632-636`** is missing
+   `toVertexId`'s positivity check, so it accepts a temporary (negative) id and returns a negative
+   "user id" instead of throwing. Precondition clause 1 uses `>>>` (a negative id's sign bit becomes
+   magnitude, result comfortably positive); clause 2 compares the **signed** negative id against a
+   positive bound (trivially true); the body uses `>>`, sign-extending. Verified at pb ∈ {0, 3, 5, 16}.
+   At the production pb=5, `fromVertexId(getTemporaryVertexID(NormalVertex, 1))` returns
+   **-36,028,797,018,963,968**; the legitimate round trip `fromVertexId(toVertexId(7)) == 7` is
+   unaffected. `fromVertexId` is public, user-facing API (`docs/advanced-topics/custom-vertex-id.md`).
+   The fix is one `checkArgument(id > 0, ...)` plus a `VertexIDAssignerTest` case — that test currently
+   probes out-of-range with exactly `new long[] {0, idManager.getVertexCountBound()}`, never a negative.
+   **File as an issue first**, not a PR: tightening a public method's input validation can break a
+   caller relying on the current leniency. Attach lesson 08 §8's table.
+9. **A comment, not code: `BackendTransaction`'s `EDGESTORE_MIN_KEY`/`EDGESTORE_MAX_KEY`.** Lesson 08 §9
+   proves both bounds lie strictly outside the assignable key space (no proper `VertexIDType` suffix is
+   `111`, no schema id ends in `11`, `count > 0` is enforced at `addPadding:347`). That proof is what
+   makes the half-open scan interval safe and it exists nowhere in the tree. Smallest possible
+   contribution; pairs naturally with candidate 10.
+10. **Two documentation bugs, one trivial PR each.** (a) `docs/advanced-topics/data-model.md` states the
+    64-bit vertex id *"is the key which points to the row containing the vertex's adjacency list"* and
+    describes no transformation — true only at `partitionBits = 0`, which **no real graph uses** (see the
+    `partitionBits = 5` finding above). One paragraph, plus a sentence about the partition rotation.
+    (b) `docs/advanced-topics/custom-vertex-id.md`'s two groovy samples call
+    `graph.getIDManager().toVertexID(123L)` and `graph.getIDManager().fromVertexID(long)` — capital-D
+    `ID`, while the actual methods are `toVertexId` and `fromVertexId`. The surrounding prose in the same
+    file spells `toVertexId(long)` correctly. The samples as written do not compile.
 
 ### Still open, and who owns it
 
+- **Closed by lesson 08:** the id/key distinction and the full bit layout every Part II lesson needs;
+  lesson 07's `EDGESTORE_MAX_KEY` question (unreachable, PR candidate 9); and the real value of
+  `partitionBits` (5, not 0), which lessons 09-13 must assume rather than re-derive.
+- **Owed to lesson 10 by lesson 08:** `TYPE_LEN_RESERVE = 3` and `MAX_PADDING_BITWIDTH = 6` are accounted
+  for but not spent — `EdgeSerializer.writeRelation` spends them, with `SCHEMA_COUNT_BOUND = 1 << 54` as
+  the budget. `IDHandler`'s **different** first-bit convention (per `getKeyID`'s javadoc at `:523-529`)
+  must be reconciled there, and `IDManagementTest.edgeTypeIDTest`'s 1,000,000-trial `IDHandler` loop is
+  the starting point. `BufferUtil.nextBiggerBuffer` / `padBuffer` also go to lesson 10.
+- **Owed to lesson 19 by lesson 08:** the partitioned-vertex read cost — one logical vertex, up to
+  `2^partitionBits` representative rows, one slice query each.
+- **Owed to lesson 09 by lesson 08, in addition to the items below:** `StandardIDPool` per partition plus
+  the dedicated schema and partitioned-vertex pools (`VertexIDAssigner:130-133`), `IDPlacementStrategy`
+  injection at `:112`, and the `renewalThreads = 3 * partitionIdBound + 2` sizing at `:123` — three id
+  kinds per partition plus schema plus partitioned vertices, a direct consequence of the ID layout.
+- **A third site for the empty-override anti-pattern (candidate 3's family).**
+  `InMemoryPartitionGraphTest` overrides `testPartitionSpreadFlushBatch`,
+  `testPartitionSpreadFlushNoBatch` and `testKeyBasedGraphPartitioning` with empty bodies and reports
+  them **passing** — the three tests that check partition spread are the three that don't run on the
+  in-memory backend. Fold into candidate 3 when it is written, or send separately.
 - **Closed by lesson 07:** the `Backend`/`BackendTransaction` wiring, the cache and locker wrapper stacks,
   and the retry semantics every later lesson inherits. Lesson 06's three questions about scan tests are
   answered by `BackendTransaction`'s `hasScan`/`hasOrderedScan` branches rather than by the iterators.
@@ -379,6 +507,16 @@ and were **not** re-verified this run (they were verified at the same pinned com
 - **Entry size.** Lesson 05 ≈35 KB, lesson 06 ≈63 KB, lesson 07 ≈78 KB (a large share of that is
   permalink URLs, which are not prose). In line with the SQLite and PostgreSQL lessons. The old 5–9 KB
   budget was a `contributor-reading` constraint and does not apply.
+- **tdd.cat, 2026-11-06: the archive led the front page, and the resolution rule's exception fired.**
+  At 09:00 IST the front page served **2026-11-04** (56 stories) while `/archive/` listed **2026-11-05**
+  (62 stories) as latest with the 2026-11-06 cell unlinked — the archive *ahead* by one, the opposite of
+  2026-11-05. `https://tdd.cat/2026-11-05/` fetched cleanly from the archive's own href, so lesson 08
+  digested 2026-11-05 and said so in a blockquote at the top of the document. **The rule stands as
+  written** (front page authoritative for "newest available", glance at `/archive/` only to notice a
+  *larger* maximum) — today was exactly the case the exception clause covers, and it cost one extra
+  fetch. Keep naming the edition in the document. Also: the 2026-11-05 page's filter bar rendered
+  "No stories match the selected filters" while the header counted 62, the same glitch as 2026-11-04, so
+  Must-Read/Recommended tags were unavailable again — worth one line and nothing more.
 - **tdd.cat: the cheap endpoints are reliable but not always in agreement.** On 2026-11-05 the front page
   served **2026-11-04** (56 stories, source URLs intact on the first fetch) while `/archive/` reported a
   maximum of **2026-11-03** across 128 editions — the archive one *behind* the front page, the reverse of
