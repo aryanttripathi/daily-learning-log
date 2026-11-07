@@ -5,7 +5,7 @@ mode: lesson
 mode-history: contributor-reading 2026-10-30 .. 2026-11-02 (sessions 01-04); lesson from 2026-11-03 (lesson 05 on)
 started: 2026-10-30
 lessons-total: 28
-lessons-done: 8
+lessons-done: 9
 pinned-commit: a59ae8d8024207598eada34998d867617df51adf
 pinned-commit-date: 2026-10-28
 upstream: JanusGraph/janusgraph
@@ -50,13 +50,14 @@ From lesson 05, `janusgraph-berkeleyje` is also needed:
 
 Newest first.
 
-- **08 — 2026-11-06** · [`2026/11/2026-11-06-janusgraph-id-bit-layout/README.md`](2026/11/2026-11-06-janusgraph-id-bit-layout/README.md) · **Part II opens; stayed on `a59ae8d8` deliberately** so Part II's byte offsets stay comparable with lessons 02-07. Read `IDManager` (whole, 754 lines), `BufferUtil` (whole), `NumberUtil` (whole), `VertexIDAssigner` (whole; cited L104-107/L112/L123/L130-133), `ManagementSystem` (whole; L561-568 used), `IDManagementTest` (whole), `JanusGraphPartitionGraphTest` (whole; L87/L97-99/L113-119/L391/L396/L493), `InMemoryPartitionGraphTest` (whole, 51 lines), `docs/advanced-topics/data-model.md` and `docs/advanced-topics/custom-vertex-id.md`; plus the complete caller sets of `new IDManager(`, `IDManager()` and `fromVertexId` by code search. **THE finding: the vertex id and the edgestore row key are two different 64-bit words.** `constructId:450` builds `[0 | count | partition | suffix]`; `getKey:502` rebuilds it as `(partition << partitionOffset) | addPadding(count)` with `partitionOffset = Long.SIZE - partitionBits` — the partition rotates from the middle of the word to the **top**, count stays in the low bits and is never shifted by `partitionBits`. So at the production default id `104` has row key `0xa000000000000008`, and with `partitionBits > 0` the key's **sign bit can be set** (partition 17 at pb=5 → `0x8800000000000008`), which is why `getKeyID` is `>>>` throughout. Second finding: **every default graph runs at `partitionBits = 5`, not 0** — `cluster.max-partitions` is `FIXED`, default **32**, validator demands `>1` and a power of 2, `NumberUtil.getPowerOf2(32) = 5`; `DEFAULT_PARTITION_BITS = 0` and the no-arg `IDManager()` have **no caller in the tree**. Third: **`fromVertexId` accepts a temporary (negative) id and returns garbage** — clause 1 of its precondition uses `>>>`, clause 2 compares signed against a positive bound, the body uses `>>`; verified at pb ∈ {0,3,5,16}, now PR candidate 8. **Closed lesson 07's open question:** `EDGESTORE_MAX_KEY` (eight `0xFF`) is unreachable because no proper `VertexIDType` suffix is `111` and no schema id ends in `11`; `EDGESTORE_MIN_KEY` needs `count == 0`, which `addPadding:347` forbids. Also: the one always-zero gap bit at position `63-partitionBits` of every row key; the XOR fold in `getPartitionHashForId:566-577` is the **identity** for counts below `2^partitionBits`; `getPartitionedVertexRepresentatives:601-609` allocates 512 KB per call at pb=16. Hands-on: `ManagementSystem.getVertexKey`/`getVertexId` as a public window onto the rotation, a jshell reproduction of the `fromVertexId` gap, and `InMemoryPartitionGraphTest` — which **empties three inherited tests** (`testPartitionSpreadFlushBatch`, `testPartitionSpreadFlushNoBatch`, `testKeyBasedGraphPartitioning`) and reports them passing, a third site for the empty-override anti-pattern. Daily Diff: **no 2026-11-06 edition**; front page served 2026-11-04 while `/archive/` listed **2026-11-05** as latest, so the 2026-11-05 edition (62 stories) was digested and said so — deep dive on GitHub's new Git storage architecture ("Rubicon") and its immutable-objects/mutable-refs split.
-- **07 — 2026-11-05** · [`2026/11/2026-11-05-janusgraph-backend-store-wiring/README.md`](2026/11/2026-11-05-janusgraph-backend-store-wiring/README.md) · **Part I complete.** Read `Backend` (whole, 775 lines), `BackendTransaction` (whole, 568), `BackendOperation` (whole, 148), `CacheTransaction` (whole, 248), `KCVSCache` (whole, 96), `NoKCVSCache` (whole, 44), `KCVSProxy` (whole, 94), `ExpectedValueCheckingStoreManager` (whole, 108), `ExpirationKCVSCache` (L40-190 + L215-359 of 359), `ExpirationCacheTest` (L41-160), and `GraphDatabaseConfiguration` L628-656 / L780-814 / L982-984 / L1054-1057 / L1607-1609 / L1946-1962. Taught the constructor-decides / `initialize`-opens split, the six store names and which of the two managers opens each (three of six through the locking manager, nine physical stores on a locking-emulated backend), the four-level transaction stack and the one level `unwrapTx` strips, `CacheTransaction`'s buffer and its monotonic `numMutations`, the invalidation-does-not-evict semantics and the `CountDownLatch(5)` back-pressure cleaner, and the `hasLocking()`-means-two-things consequence of reading features at `L249`. **THE finding: the retry backoff is a coin flip, not a ±20% jitter** — `(int)(2.0 / (1 + (rand*2-1)*0.2))` truncates to 1 or 2, so `pertubTime(d)` ∈ {d, d/2}; reproduced verbatim under OpenJDK 21 (`{1=500803, 2=499197}` over 1,000,000 draws) and measured at a median of **14** attempts (max 38) against the 10 s read budget and **21** (max 48) against the 100 s write budget, against documentation that says "backoff exponentially". Second finding: **`KCVSProxy.java:67` omits `unwrapTx`** where its seven siblings apply it — latent, one token, now PR candidate 1. Hands-on: a jshell reproduction of the divisor distribution, and `ExpirationCacheTest#testGracePeriod`, which asserts the cache-bypass semantics directly (`getSliceCalls` 0 → 2 → 4 on two identical reads) and needs exactly `PENALTY_THRESHOLD` = 5 reads to wake the cleanup thread. Daily Diff: the **2026-11-04** edition, 56 stories, front page one ahead of `/archive/` — deep dive on PostgreSQL 19's `REPACK CONCURRENTLY` and its not-MVCC-safe final swap.
-- **06 — 2026-11-04** · [`2026/11/2026-11-04-janusgraph-test-harness/README.md`](2026/11/2026-11-04-janusgraph-test-harness/README.md) · read the harness: `JanusGraphBaseTest` (whole; lifecycle L151-199, `clearGraph`/`getBackend` L132-145, `setupConfig`/`clopen` L213-242, `evaluateQuery` ×7 L589-750, `executeScanJob` L752-762), `JanusGraphTest` (whole file analysed — 12,258 lines, class at L312, 222 `@Test` + 7 `@ParameterizedTest` + 5 `@Tag(BRITTLE_TESTS)` at L3098/L3179/L10156/L10192/L10272, ten banner sections, `simpleLogTest` L8270-8282), `KeyColumnValueStoreTest` (whole; lifecycle L94-141, abstract hook L102, fixture constants L82-92, the seven `@FeatureFlag` sites, `scanTest` L445-462, `testOrderedGetKeysRespectsKeyLimit` L491-513), `AbstractKCVSTest`, `JanusGraphBaseStoreFeaturesTest`, `TestCategory`, `StorageSetup`, `TestGraphConfigs`, `FeatureFlag`, `FeatureRequirementCondition`, `JanusGraphFeature`, `RetryingTestExecutionExtension`, `InMemoryGraphTest`, `InMemoryStoreManager` L64-70, `BerkeleyFixedLengthKCVSTest`, `BerkeleyVariableLengthKCVSTest`, `BerkeleyKeyValueTest`, `BerkeleyGraphConcurrentTest`, `CQLGraphTest` L239-290/L390/L481, root `pom.xml` (surefire L404-461, `test.excluded.groups` L102, profiles L1900-1972), `janusgraph-test/pom.xml`, `CONTRIBUTING.md`, `.github/PULL_REQUEST_TEMPLATE.md`. Taught the src/main-not-src/test inversion, the one-abstract-hook-per-level contract, the **four** opt-out idioms and their four different reporting semantics, `@FeatureFlag`'s 4-of-24 coverage and its post-`@BeforeEach` ordering, `evaluateQuery`'s profiler assertions, and the build-level exclusions. Hands-on: read the Surefire XML rather than the console — 31 bare `<skipped/>` on `InMemoryGraphTest`, zero trace of the 5 `BRITTLE` methods, `testConcurrentGetSlice` as a 0 ms **pass**, and `<skipped message="Database doesn't support unordered scan."/>` on BerkeleyJE. Daily Diff: the **2026-11-03** edition, 52 stories, front page and archive agreed and were current — deep dive on Spiral's *Statistics are aggregates* plus the Vortex `FileStatistics` layout.
-- **05 — 2026-11-03** · [`2026/11/2026-11-03-janusgraph-okvs-adapter-berkeleyje/README.md`](2026/11/2026-11-03-janusgraph-okvs-adapter-berkeleyje/README.md) · **first entry in `lesson` mode.** Read `OrderedKeyValueStoreManagerAdapter` (whole), `OrderedKeyValueStoreAdapter` (whole, with exact lines for `concatenate` L250-264, `convertQuery` L231-240, the decode block L215-297, `KeyIteratorImpl` L299+), `BerkeleyJEKeyValueStore` (whole; `getSlice` L212-281, locking L146-208), `BerkeleyJEStoreManager` L120-145 / L200-262 / L265-300, `Backend` L518-546 and L258-263, `KVQuery`, `KeySelector`, `BaseKeyColumnValueAdapter`, `StandardStoreFeatures` L183-187, `Query` L24, plus both `BerkeleyFixedLengthKCVSTest` and `BerkeleyVariableLengthKCVSTest`. Taught the fixed-vs-variable key-length split, why fixed needs no post-filter and variable does, the three byte layouts, the cursor walk, the batch that isn't, and BerkeleyJE's own two-tier locking. Daily Diff: the 2026-11-02 edition, 49 stories — deep dive on Neumann's *The Benchmarking Crisis*.
+- **09 — 2026-11-07** · [`2026/11/2026-11-07-janusgraph-id-authority-block-allocation/README.md`](2026/11/2026-11-07-janusgraph-id-authority-block-allocation/README.md) · **stayed on `a59ae8d8`** (mid-Part, no decision available). Read `VertexIDAssigner` (whole, 545 lines), `StandardIDPool` (whole), `IDBlockSizer` (whole), `ConsistentKeyIDAuthority` (whole, 500 lines), `AbstractIDAuthority` (whole), `ConflictAvoidanceMode` (whole), `IDBlock` (whole), `SimpleBulkPlacementStrategy` (whole), `IDManager` L60-130 / L370-430 / L450-460 / L545-565 / L610-650 / L715-725, `GraphDatabaseConfiguration` L1040-1180, `VariableLong` L77-92, `IDAuthorityTest` L75-295, plus the test inventories of `IDPoolTest`, `VertexIDAssignerTest`, `InMemoryIDAuthorityTest`, `CQLIDAuthorityTest`, `HBaseIDAuthorityTest`, `PropertyPlacementStrategy` L95-110, `docs/changelog.md` L2041-2058, `docs/configs/janusgraph-cfg.md` L88-113, `docs/operations/bulk-loading.md` L78-91. **THE finding: `ids.authority.conflict-avoidance-tag-bits` defaults to 4, is `ConfigOption.Type.FIXED`, and its tag defaults to 0 with mode `NONE` — so `ConsistentKeyIDBlock.getId:486-491` returns `count << 4` with a zero tag and every count JanusGraph assigns is a multiple of 16.** The first `NormalVertex` id in a fresh default graph is **4096** at partition 0 (count 16), not 256; the stride between consecutive vertices in one partition is 128, not 8; and `maxAvailableBits = unsignedBitLength(idUpperBound)-1-uniqueIdBitWidth` takes the four bits straight off every namespace's ceiling, so **2^51 of 2^55 vertex counts, 2^54 of 2^58 relation counts and 2^50 of 2^54 schema counts are reachable — 15/16 of each space is not**, on every graph created with the defaults, unchangeably. Second finding: the give-up message at `:420-421` prints `timeout.getNano()`, which is **0** for any whole-second `Duration`, including the 120 s `ids.renew-timeout` default — "Reached timeout 0" on every default deployment (PR candidate 11). Third: the rollback path's anonymous `TransactionalProvider` (`:392-399`) is commented "Use normal consistency level" and builds a transaction config **character-for-character identical** to `openTx()` at `:223-225` (PR candidate 12). Fourth: `IDAuthorityTest`'s two contiguity assertions (`checkBlock:207-209`, `testSimpleIDAcquisition:247-251`) are gated on `hasEmptyUid` and **none of the three `configs()` parameterizations sets tag-bits to 0**, so neither has ever executed (PR candidate 13). Fifth: `accessed()` writes a `volatile long` via `System.currentTimeMillis()` on every element id (`:378`) for a `getLastAccess()` that has **no caller in the tree** — measured **33.0 ns/op** against 0.30 ns for an empty loop under OpenJDK 21 (PR candidate 14, bundled with the `SimpleBulkPlacementStrategy` items). **Closed lesson 08's `count == 0` question properly:** `BASE_ID = 1` (`AbstractIDAuthority:45`), so no count 0 is ever offered — `addPadding`'s refusal was never the thing protecting it. Also: five pools with `getIDNamespace() == ordinal()`, three per partition (`hasOnePerPartition()`); `renewBlockIndex = 0` for `SCHEMA` (block 50) and `PARTITIONED_VERTEX` (block 100) because `RENEW_ID_COUNT = 100` exceeds both, so those two namespaces permanently double-buffer; the negated-counter column order that makes `getCurrentID`'s `setLimit(5)` correct; the 330 ms claim and the ~9,090 vertices/s/pool it implies; and `renewalThreads = 3*partitionIdBound+2` = 98 at defaults against a live-pool ceiling of 32 (`ids.num-partitions = 10`). Daily Diff: the **2026-11-06** edition (52 stories), found via `/archive/` while the front page still served 2026-11-05 — deep dive on Infino's coordinator-free 128-bit ids, whose 40-bit random writer id is JanusGraph's 4-bit conflict-avoidance tag with 36 more bits of budget.
+- **08 — 2026-11-06** · [`2026/11/2026-11-06-janusgraph-id-bit-layout/README.md`](2026/11/2026-11-06-janusgraph-id-bit-layout/README.md) · **Part II opens; stayed on `a59ae8d8` deliberately** so Part II's byte offsets stay comparable with lessons 02-07. Read `IDManager` (whole, 754 lines), `BufferUtil`, `NumberUtil`, `VertexIDAssigner`, `ManagementSystem`, `IDManagementTest`, `JanusGraphPartitionGraphTest`, `InMemoryPartitionGraphTest`, `docs/advanced-topics/data-model.md`, `docs/advanced-topics/custom-vertex-id.md`. **THE finding: the vertex id and the edgestore row key are two different 64-bit words** — `constructId:450` builds `[0 | count | partition | suffix]`, `getKey:502` rebuilds it as `(partition << partitionOffset) | addPadding(count)`, rotating the partition to the **top**. Second: **every default graph runs at `partitionBits = 5`, not 0.** Third: **`fromVertexId` accepts a temporary (negative) id and returns garbage** (PR candidate 8). Closed lesson 07's `EDGESTORE_MAX_KEY` question (PR candidate 9). Daily Diff: no 2026-11-06 edition at the time; digested **2026-11-05** (62 stories) — GitHub's "Rubicon" Git storage architecture.
+- **07 — 2026-11-05** · [`2026/11/2026-11-05-janusgraph-backend-store-wiring/README.md`](2026/11/2026-11-05-janusgraph-backend-store-wiring/README.md) · **Part I complete.** Read `Backend` (775 lines), `BackendTransaction` (568), `BackendOperation`, `CacheTransaction`, `KCVSCache`, `NoKCVSCache`, `KCVSProxy`, `ExpectedValueCheckingStoreManager`, `ExpirationKCVSCache`, `ExpirationCacheTest`, and slices of `GraphDatabaseConfiguration`. **THE finding: the retry backoff is a coin flip, not a ±20% jitter** — `(int)(2.0 / (1 + (rand*2-1)*0.2))` truncates to 1 or 2, measured median **14** attempts (max 38) against the 10 s read budget and **21** (max 48) against the 100 s write budget. Second: **`KCVSProxy.java:67` omits `unwrapTx`** (PR candidate 1). Daily Diff: the **2026-11-04** edition, 56 stories — PostgreSQL 19's `REPACK CONCURRENTLY`.
+- **06 — 2026-11-04** · [`2026/11/2026-11-04-janusgraph-test-harness/README.md`](2026/11/2026-11-04-janusgraph-test-harness/README.md) · read the harness: `JanusGraphBaseTest`, `JanusGraphTest` (12,258 lines), `KeyColumnValueStoreTest`, the `@FeatureFlag` machinery, the BerkeleyJE suites, root `pom.xml`, `CONTRIBUTING.md`. Taught the src/main-not-src/test inversion, the one-abstract-hook-per-level contract, the **four** opt-out idioms and their four different reporting semantics, `@FeatureFlag`'s 4-of-24 coverage and its post-`@BeforeEach` ordering. Hands-on: read the Surefire XML rather than the console — 31 bare `<skipped/>` on `InMemoryGraphTest`, `testConcurrentGetSlice` as a 0 ms **pass**. Daily Diff: the **2026-11-03** edition, 52 stories — Spiral's *Statistics are aggregates*.
+- **05 — 2026-11-03** · [`2026/11/2026-11-03-janusgraph-okvs-adapter-berkeleyje/README.md`](2026/11/2026-11-03-janusgraph-okvs-adapter-berkeleyje/README.md) · **first entry in `lesson` mode.** Read `OrderedKeyValueStoreManagerAdapter`, `OrderedKeyValueStoreAdapter`, `BerkeleyJEKeyValueStore`, `BerkeleyJEStoreManager`, `KVQuery`, `KeySelector`, `BaseKeyColumnValueAdapter`, both BerkeleyJE KCVS suites. Taught the fixed-vs-variable key-length split, why fixed needs no post-filter and variable does, the three byte layouts, the cursor walk, the batch that isn't, and BerkeleyJE's own two-tier locking. Daily Diff: the 2026-11-02 edition, 49 stories — Neumann's *The Benchmarking Crisis*.
 - **04 — 2026-11-02** · [`2026/11/2026-11-02-janusgraph-inmemory-slice-path/README.md`](2026/11/2026-11-02-janusgraph-inmemory-slice-path/README.md) · read `InMemoryKeyColumnValueStore` L85–149, `InMemoryColumnValueStore` (whole), `SinglePageEntryBuffer` L36–101, `BufferPage` L39–175, plus `MemoryEntryList` and `BufferPageTest`. Six questions posed, none answered in the entry. Radar: PR #5018, #3864, #1128. **`My Notes` never filled — the fourth consecutive empty session, which triggered the mode switch.**
-- **03 — 2026-11-01** · [`2026/11/2026-11-01-janusgraph-store-manager-features/README.md`](2026/11/2026-11-01-janusgraph-store-manager-features/README.md) · read `KeyColumnValueStoreManager` (whole), `StoreManager` (whole), `StoreFeatures` L31–257, `StandardStoreFeatures`, `KeyColumnValueStore` L185–227, `Backend` L249–287 + L339–343, `InMemoryStoreManager` L64–72 + L134–135, plus `InMemoryStoreManagerTest` and `FeatureRequirementCondition`. Six questions posed, none answered. Radar: #2268, #3390, #1128. **`My Notes` never filled.**
-- **02 — 2026-10-31** · [`2026/10/2026-10-31-janusgraph-kcv-store-contract/README.md`](2026/10/2026-10-31-janusgraph-kcv-store-contract/README.md) · read `KeyColumnValueStore` (whole), `SliceQuery` L40–153, `KeySliceQuery` (whole), `Entry` L27–39, `StaticBuffer` L28–86, `BufferUtil` L189–217, plus `KeyColumnValueStoreTest` L862–938 and `InMemoryKeyColumnValueStoreTest`. Six questions posed, none answered. Radar: #3864, #3816, PR #4086. **`My Notes` never filled.**
+- **03 — 2026-11-01** · [`2026/11/2026-11-01-janusgraph-store-manager-features/README.md`](2026/11/2026-11-01-janusgraph-store-manager-features/README.md) · read `KeyColumnValueStoreManager`, `StoreManager`, `StoreFeatures` L31–257, `StandardStoreFeatures`, `KeyColumnValueStore` L185–227, `Backend` L249–287 + L339–343, `InMemoryStoreManager`, `InMemoryStoreManagerTest`, `FeatureRequirementCondition`. Six questions posed, none answered. Radar: #2268, #3390, #1128. **`My Notes` never filled.**
+- **02 — 2026-10-31** · [`2026/10/2026-10-31-janusgraph-kcv-store-contract/README.md`](2026/10/2026-10-31-janusgraph-kcv-store-contract/README.md) · read `KeyColumnValueStore` (whole), `SliceQuery` L40–153, `KeySliceQuery`, `Entry` L27–39, `StaticBuffer` L28–86, `BufferUtil` L189–217, `KeyColumnValueStoreTest` L862–938, `InMemoryKeyColumnValueStoreTest`. Six questions posed, none answered. Radar: #3864, #3816, PR #4086. **`My Notes` never filled.**
 - **01 — 2026-10-30** · [`2026/10/2026-10-30-janusgraph-setup-and-data-model/README.md`](2026/10/2026-10-30-janusgraph-setup-and-data-model/README.md) · read `data-model.md`, `BUILDING.md`, `CONTRIBUTING.md`, `InMemoryStoreManager`, `StandardStoreManager` L28–33, `InMemoryGraphTest`. Six questions posed, none answered. Radar: #3013, #225, #1573. **`My Notes` left empty.**
 
 ## Syllabus
@@ -74,7 +75,7 @@ Newest first.
 ### Part II — Graph ⇄ bytes (`graphdb/idmanagement`, `graphdb/database`)
 
 - [x] 08 — `IDManager`: vertex ID bit layout, partition bits, vertex-type suffixes, and how row keys are derived
-- [ ] 09 — `VertexIDAssigner` and the ID authority: block allocation from the ids store without per-insert coordination
+- [x] 09 — `VertexIDAssigner` and the ID authority: block allocation from the ids store without per-insert coordination
 - [ ] 10 — `EdgeSerializer.writeRelation`: the column layout for edges and properties, direction, sort keys
 - [ ] 11 — `EdgeSerializer.parseRelation` and `RelationCache`: decoding columns back into relations
 - [ ] 12 — `StandardSerializer`: attribute encodings, order-preserving serializers, and custom types
@@ -110,16 +111,18 @@ Newest first.
 ## Notes For The Next Run
 
 **Syllabus unchanged this run. No items added, split, merged or reordered; the 28 stand as written on
-2026-10-30.** Lesson 08 made one explicit decision the Part boundary allowed and declined the other:
-it **stayed pinned on `a59ae8d8`** rather than re-pinning, because every line number in lessons 08-13
-is cross-referenced against lessons 02-07 and Part II is the layer where byte offsets matter most.
-Re-pin at the **Part II/III boundary** (after lesson 13) instead, and record the new commit here.
+2026-10-30.** Lesson 09 is mid-Part, so the re-pin question was not available and was not raised:
+**stay on `a59ae8d8`**. The next boundary where re-pinning is allowed is **Part II/III, after lesson
+13**; at that point either re-pin and record the new commit in the front-matter and here, or state
+explicitly that it is staying, as lesson 08 did.
 
-Lesson 07 handed the deferred `InMemoryKeyColumnValueStore.RowIterator` /
-`OrderedKeyValueStoreAdapter.KeyIteratorImpl` reading on to **lesson 22** (query processing and limits)
-rather than keeping it in Part I: the per-key limit at `OrderedKeyValueStoreAdapter.java:381` is the point
-of that code, and lesson 07's scan material turned out to be about `hasScan`/`hasOrderedScan` branching in
-`BackendTransaction`, not about iterator mechanics. `SimpleScanJob` goes with it.
+**One structural revision this run, applied under this file's own roll-off rule** (the root README
+states that `TRACK.md` keeps the notes for the three most recent lessons and older ones roll off into
+git history). Lesson 07's `Verified by lesson 07` block is now **compressed to the facts later lessons
+were promised**; the full block, with every line number and measurement, is preserved verbatim in git
+history at commit `513a317b2650b49e6069eb35e3bdfb70441a913a`. Lessons 08 and 09 keep their blocks in
+full because Part II lessons 10–13 cite them directly. Next run, lesson 08's block becomes the oldest
+of the three and the same rule applies to it.
 
 - **The mode question is closed. Do not reopen it unprompted.** Four consecutive empty `My Notes`
   triggered the switch recorded in the front-matter. Entries from lesson 05 on write in `lesson` mode
@@ -128,14 +131,168 @@ of that code, and lesson 07's scan material turned out to be about `hasScan`/`ha
 - **Never touch an earlier entry's `## My Notes`.** Sessions 01–04 keep their templates. They are his
   to fill at any time; if a future run finds content in any of them, answer those questions in that
   run's entry regardless of mode.
-- **Part I is complete; Part II is under way.** Lessons 01–07 cover the storage contract, two store
-  implementations, the adapter, the harness, and the wiring; lesson 08 opened Part II. **The re-pin
-  decision at the Part I/II boundary was taken and recorded: stay on `a59ae8d8`.** Do not revisit it
-  mid-Part. The next boundary where re-pinning is allowed is **Part II/III, after lesson 13**; at that
-  point either re-pin and record the new commit in the front-matter and here, or state explicitly that
-  it is staying, as lesson 08 did.
+- **Part I is complete; Part II is half done.** Lessons 01–07 cover the storage contract, two store
+  implementations, the adapter, the harness, and the wiring; lessons 08 and 09 cover the id layout and
+  the id supply. Lessons 10–13 are serialization: `EdgeSerializer` out, `EdgeSerializer` back in,
+  `StandardSerializer`, and schema persistence.
+- **Entry size.** Lesson 05 ≈35 KB, 06 ≈63 KB, 07 ≈78 KB, 08 ≈67 KB, 09 ≈61 KB (a large share of each
+  is permalink URLs, which are not prose). In line with the SQLite and PostgreSQL lessons. The old
+  5–9 KB budget was a `contributor-reading` constraint and does not apply.
 
-### Verified by lesson 08, for lessons 09-13 and the read path to cite rather than re-derive
+### Verified by lesson 09, for lessons 10, 16, 18 and 27 to cite rather than re-derive
+
+- **The default conflict-avoidance tag is 4 bits wide, `FIXED`, and always zero.**
+  `ids.authority.conflict-avoidance-tag-bits` = **4** (`ConfigOption.Type.FIXED`),
+  `conflict-avoidance-mode` = `NONE` (`GLOBAL_OFFLINE`), `conflict-avoidance-tag` = **0** (`LOCAL`),
+  `ids.authority.wait-time` = **300 ms** (`GLOBAL_OFFLINE`), `randomized-conflict-avoidance-retries` = 5.
+  `ConsistentKeyIDAuthority:191/:200` therefore set `randomizeUniqueId = false`, `uniqueId = 0`, and
+  `ConsistentKeyIDBlock.getId:486-491` returns `((start+i) << 4) + 0`. **Every count is a multiple of
+  16.** Verified at pb=5 with `NormalVertex` (offset 3, suffix 0): count 16 → id **4096** at partition 0,
+  **4232** at partition 17; counts 32/48/64 → 8192/12288/16384. At tag-bits 0 the first id would be 256.
+  Consecutive vertices in one partition are **128 apart**, not 8. Lessons 10 and 27 must assume this
+  when reasoning about edgestore locality and key distribution.
+- **The reachable count space, exact.** `claimIDBlock:287-290`:
+  `maxAvailableBits = (VariableLong.unsignedBitLength(idUpperBound) - 1) - uniqueIdBitWidth`,
+  `idBlockUpperBound = 1L << maxAvailableBits`; `unsignedBitLength` is
+  `64 - numberOfLeadingZeros` (`VariableLong:85-87`). At pb=5, tag-bits 4:
+  `NORMAL_VERTEX`/`UNMODIFIABLE_VERTEX`/`PARTITIONED_VERTEX` **2^51** of 2^55;
+  `RELATION` **2^54** of 2^58; `SCHEMA` **2^50** of 2^54. **15/16 of every space is unreachable** and
+  the option is `FIXED`, so it cannot be reclaimed.
+- **Five namespaces, and the namespace byte is an enum ordinal.** `PoolType.getIDNamespace()` is
+  `ordinal()` (`VertexIDAssigner:458-460`): 0 `NORMAL_VERTEX`, 1 `UNMODIFIABLE_VERTEX`,
+  2 `PARTITIONED_VERTEX`, 3 `RELATION`, 4 `SCHEMA`. Reordering the enum reinterprets every existing
+  graph's id rows. `hasOnePerPartition()` is true for 0, 1 and 3 only — hence
+  `renewalThreads = 3 * partitionIdBound + 2` (`:123`) = **98** at `cluster.max-partitions = 32`, against
+  a live-pool ceiling of **32** because `ids.num-partitions` = 10; at `cluster.max-partitions = 65536`
+  the formula asks for **196,610** threads (lazily created, `allowCoreThreadTimeOut(true)`).
+- **Block sizes and renewal triggers, exact at `ids.block-size = 10000` and `ids.renew-percentage = 0.3`**
+  (`SimpleVertexIDBlockSizer:429-446`, `StandardIDPool:213`,
+  `renewBlockIndex = max(0, numIds - max(RENEW_ID_COUNT=100, round(numIds*0.3)))`):
+  `NORMAL_VERTEX` 10,000 → **7,000**; `UNMODIFIABLE_VERTEX` 1,000 → **700**;
+  `PARTITIONED_VERTEX` 100 → **0**; `RELATION` 80,000 (`base*8`) → **56,000**;
+  `SCHEMA` **50** (a literal, unaffected by `ids.block-size`) → **0**, clamped from −50.
+  **`SCHEMA` and `PARTITIONED_VERTEX` therefore fire a renewal on the first id of every block and
+  permanently hold one spare block in flight** — a side effect of `RENEW_ID_COUNT` exceeding their
+  block size, not a decision. Operational number: 3,000 ids of runway against a 330 ms claim is
+  **~9,090 vertices/s per pool**, ~90,000/s per instance at `ids.num-partitions = 10`.
+- **The claim protocol, and why it is safe over an eventually consistent store.**
+  Row key (`getPartitionKey:252-261`) is two big-endian ints:
+  `[(partition << (32 - partitionBitWidth)) | tag][idNamespace]` — **lesson 08's row-key rotation one
+  word narrower**, non-overlapping because `partitionBitWidth <= 16` (`:172`) and
+  `uniqueIdBitWidth <= 16` (`:175`) and `32-16 = 16`, exactly tight. Verified at pb=5: partition 0/ns 0
+  → `0x0000000000000000`; partition 17/ns 0 → `0x8800000000000000`; partition 17/ns 3 →
+  `0x8800000000000003`; partition 0/ns 4 → `0x0000000000000004`; partition 1/ns 2 →
+  `0x0800000000000002`; partition 17/ns 0/tag 9 → `0x8800000900000000`.
+  Column is `[8 bytes -(block end)][8 bytes timestamp][var uid]` with an **empty value**
+  (`StaticArrayEntry.of(target)`, `:333`). **The counter is negated, so the larger counter sorts
+  earlier** — verified: `nextEnd=20001` → `ffffffffffffb1df…` sorts before `nextEnd=10001` →
+  `ffffffffffffd8ef…`. That is what makes `getCurrentID`'s `setLimit(5)` (`:229`) correct: it reads the
+  five **newest** claims, so the `max` loop is defensive, not load-bearing, and a row may hold thousands
+  of historical claims at no read cost. Within one counter value the order is timestamp then uid, both
+  ascending, so **the earliest writer is `blocks.get(0)`** and that is the seniority rule.
+  Write is unconditional; the decision is a later read; losers delete their own column with
+  `ROLLBACK_ATTEMPTS = 5` and `rollbackWaitTime = 200 ms`. **A failed rollback or a crash between write
+  and delete burns ids permanently and never duplicates them** — that asymmetry is the whole safety
+  argument. Lesson 18 should compare this directly with `ConsistentKeyLocker`; the comment at `:90-92`
+  says the slice bounds mirror it.
+- **330 ms, and it only happens on distributed stores.** `waitGracePeriod = idApplicationWaitMS/10`
+  (`:165`), the sleep at `:353` is `wait + wait/10` = **330 ms** at the default, and both it and the
+  slow-write abort at `:340-341` are gated on `manager.getFeatures().isDistributed()` (`:338`, `:352`).
+  **So every in-memory and BerkeleyJE id test passes with the coordination latency removed**, and that
+  is a property of `isDistributed()`, not of lesson 06's `IDAUTHORITY_WAIT = Duration.ZERO` override.
+  `claimsOneAtATime = hasLocking() && !isDistributed()` (`:169`) collapses `blockClaimLocks` to the
+  single key `0L` — a third distinct meaning of `hasLocking()` after the two lesson 07 found.
+  `ClaimLock` (`:143-157`) is reference-counted inside `ConcurrentHashMap.compute` (`:273`, `:279`), so
+  the map holds exactly as many locks as there are claims in flight. Project-measured payoff
+  (`docs/changelog.md:2041-2058`): on Cassandra, 32 claims across 32 partitions **0.35 s instead of
+  11.2 s**; ten threads × 100 vertices on a fresh graph **1.4 s instead of 7.0 s**; a single thread's
+  first transaction still **6–7 s**, its ~20 claims genuinely sequential. **Any benchmark that opens a
+  graph and times the first write is measuring this, not the write path.**
+- **`BASE_ID = 1`, and it closes lesson 08's last arithmetic question.**
+  `AbstractIDAuthority:40-45`, with the comment that it cannot be changed without corrupting existing
+  allocations. `getCurrentID` starts there, the first block is `[1, 1+blockSize)`, `getId(0)` is
+  `1 << tagBits`, and `IDAuthorityTest.checkBlock:197-214` asserts `id > 0` on every id of every block.
+  **Count 0 is never offered by the authority** — `VertexIDType.addPadding`'s refusal was a second line
+  of defence, not the first.
+- **`IDBlock` is deliberately not a range.** `IDBlock:25-42` is `numIds()` + `getId(long index)` only,
+  documented as requiring complete thread safety. That indirection is what lets the authority return a
+  block whose ids are 16 apart. `StandardIDPool` uses two anonymous sentinel `IDBlock`s rather than
+  flags: `UNINITIALIZED_BLOCK` (`:65-73`, `numIds()==0`, so the first `nextID` falls into `nextBlock`
+  by construction) and `ID_POOL_EXHAUSTION` (`:53-63`, compared by reference at `:195`, used to carry an
+  `IDPoolExhaustedException` across the `Future` boundary as a value).
+- **Partition selection.** `assignID:193-272` → `SCHEMA_PARTITION = 0` for schema vertices,
+  `PARTITIONED_VERTEX_PARTITION = 1` for partitioned ones, `placementStrategy.getPartition` otherwise;
+  **a relation takes the partition of incident vertex `attempt` on the first `getLen()` attempts**
+  (`:206-219`), so edges are co-located with an endpoint — the fact lesson 20's vertex-centric queries
+  depend on. Custom **string** vertex ids route through
+  `Math.abs(incident.id().hashCode() % partitionIdBound)` (`:218`). `MAX_PARTITION_RENEW_ATTEMPTS = 1000`
+  and `IDPoolExhaustedException` means "try another partition" (`:226-228`). The re-homing block at
+  `:231-268` sends properties of partitioned vertices to the canonical representative, edges to the
+  non-partitioned endpoint, and both-partitioned edges to `getPartitionHashForId(relation.longId())` —
+  which lesson 08 showed is the identity below `2^partitionBits`.
+- **`ids.num-partitions` is 10 and `cluster.max-partitions` is 32, so 22 partitions are unused.**
+  `SimpleBulkPlacementStrategy.currentPartitions` is an `int[10]` filled once by
+  `setLocalPartitionBounds:112-119` and changed only on `exhaustedPartition:125-133`.
+- **`PartitionIDPool extends EnumMap<PoolType,IDPool>`** (`:499-541`), so the container inherits public
+  `put`/`remove`/`clear` and `close()` is `super.clear()`. `getPool:514-517` guards `!exhausted` with
+  `Preconditions.checkArgument`, i.e. `IllegalArgumentException`, which the retry loop at `:226` does
+  **not** catch — a real but practically unreachable race (it needs a partition's 2^51 counts actually
+  exhausted). Record it as a wrong exception type, not a bug anyone will hit.
+- **`AbstractIDAuthority.getPartitionKey(int)` (`:99-101`) has no caller.**
+  `ConsistentKeyIDAuthority` declares a three-argument private method of the same name and never
+  overrides or calls the inherited one. Also `getBlockSize:108-114` evaluates `getIdUpperBound` **twice**
+  per call because Guava's `checkArgument` message arguments are eager.
+- **`nextID`'s upper-bound check runs after the increment** (`StandardIDPool:230-233`), so the id that
+  trips `idUpperBound` is consumed and lost and the pool is never left repeatable. Harmless because the
+  caller treats the exception as "partition finished".
+- **The runaway-renewal path.** `waitForIDBlockGetter:150-183` cannot interrupt a renewal on a backend
+  without `supportsInterruption()` — an interrupt can break BerkeleyJE's whole `Environment`
+  (`VertexIDAssigner:174-178`) — so it parks the `Future` in a 4-element `closeBlockers` deque, swept one
+  element per append (`:165-171`), and `close()` waits on each. Thread names to grep in a stack dump:
+  `JanusGraphID-renewal-%d` for the shared executor (`:126`), `JanusGraphID(partition)(namespace)[%d]`
+  for a pool that fell back to its own thread (`StandardIDPool:131-137`). On a graph opened through
+  `JanusGraphFactory` the second count should be **0**.
+
+### Verified by lesson 07 — compressed; full block in git history at `513a317b`
+
+- **`Backend` is two-phase.** The constructor turns `StoreFeatures` into configuration; `initialize`
+  opens **six** named stores (`janusgraph_ids`, `edgestore`, `graphindex`, `system_properties`,
+  `systemlog`/`txlog`), and **three of the six** go through the locking manager, so a locking-emulated
+  backend really runs **nine** physical stores. **The ids store is opened through the *unwrapped*
+  manager with no cache and no lock wrapper** — which is why lesson 09 found no cache in that path.
+  The fixed-key-length map (`Backend.java:537-542`) gives `8` to `edgestore`, `edgestore_lock_` and the
+  ids store **by name**; everything else pays the variable-length cost.
+- **The transaction stack is four levels deep** (`BackendTransaction` → `CacheTransaction` →
+  `ExpectedValueCheckingTransaction` → two real backend transactions, opened unconditionally) and
+  `unwrapTx` strips exactly one level per wrapper. `KCVSProxy.java:67` omits it — PR candidate 1.
+- **THE finding: the retry backoff is a coin flip, not a ±20% jitter.** `BackendOperation`'s
+  `(int)(2.0 / (1 + (rand*2-1)*0.2))` truncates to 1 or 2, so `pertubTime(d)` ∈ {d, d/2}; reproduced
+  verbatim under OpenJDK 21 (`{1=500803, 2=499197}` over 1,000,000 draws) and measured at a median of
+  **14** attempts (max 38) against the 10 s read budget and **21** (max 48) against the 100 s write
+  budget, against documentation that says "backoff exponentially". PR candidate 7 (file as an issue).
+- **Cache invalidation does not evict** (`ExpirationKCVSCache.invalidate:266-270`): it marks the row so
+  reads bypass for at least `db-cache-clean-wait`, and the sweep is triggered by a `CountDownLatch(5)`
+  counted down by wasted reads. `cache.db-cache-size` default **0.3**. `NoKCVSCache` is 44 lines of
+  empty overrides passing `metricsName = null`.
+- **`CacheTransaction` is the write buffer**: `Map<KCVSCache, Map<StaticBuffer, KCVEntryMutation>>`
+  with a monotonic `numMutations`; `storage.buffer-size` default **1024**, a durability knob that some
+  backends ignore. `flushInternal` holds the caller's `Entry` objects across the whole flush and
+  invalidates only afterwards — which is why lesson 04's `getNoCopy` aliasing test must mutate through
+  a `CacheTransaction`.
+- **`GraphDatabaseConfiguration.getBackend()` is a factory, not an accessor** (`:1951-1956`): every
+  call builds a new `Backend`. Reachable from three call sites — PR candidate 5, which still needs its
+  experiment run. `close()`/`clearStorage()` share one `hasAttemptedClose` flag.
+- **`BackendTransaction` has five feature branches** against the raw features from `Backend.java:249`,
+  including the `hasScan`/`hasOrderedScan` pair that answers lesson 06's scan-test questions, and
+  `EDGESTORE_MIN_KEY`/`EDGESTORE_MAX_KEY`, whose safety lesson 08 proved and lesson 09's `BASE_ID = 1`
+  completes. `commit()` is storage-then-indexes; `StandardScanner` is built from the unwrapped manager
+  (`Backend.java:305`). **No non-key-consistent fallback exists**: `initialize` L339-343 throws
+  `IllegalStateException`.
+- **`ExpirationCacheTest` is the single concrete subclass of `KCVSCacheTest`**, and
+  `#testGracePeriod` asserts the cache-bypass semantics directly (`getSliceCalls` 0 → 2 → 4 on two
+  identical reads), needing exactly `PENALTY_THRESHOLD = 5` reads to wake the cleanup thread.
+
+### Verified by lesson 08, for lessons 10-13 and the read path to cite rather than re-derive
 
 - **An id is not a row key, and `getKey:502` is the whole difference.** `constructId:450-459` builds
   `[0 | count | partition | suffix]`; `getKey:489-510` rebuilds it as
@@ -163,6 +320,7 @@ of that code, and lesson 07's scan material turned out to be about `hasScan`/`ha
   `Long.MAX_VALUE` at pb=0 (`:427`) because `1L << 63` would overflow.
   `SCHEMA_COUNT_BOUND = 1 << 54` (`:410`) uses `MAX_PADDING_BITWIDTH = 6` and `TYPE_LEN_RESERVE = 3`
   and does **not** depend on `partitionBits` — schema ids have no partition field (`:678-681`).
+  **Lesson 09 narrows all of these by four bits in practice** — see its block above.
 - **One always-zero gap bit per row key.** Since `count < 2^(60-pb)`, `count<<3` occupies bits
   `0..62-pb` while the partition starts at bit `64-pb`: **bit `63-pb` of every user-vertex row key is
   always 0**. At pb=0 that bit is the sign bit the `TOTAL_BITS` comment (`:382-387`) is about. At pb>0
@@ -187,9 +345,9 @@ of that code, and lesson 07's scan material turned out to be about `hasScan`/`ha
   `getUserVertexIDType:461-470` throws `InvalidIDException` for anything else. The schema branch has
   key == id and requires low 2 bits `01`, but `0xFF & 3 == 3`. String ids can't collide: `getStringIdBuffer`
   forces `length != 8`, and the ordered-scan branch is gated on `!allowCustomVertexIdType` anyway.
-  `zeroBuffer(8)` needs `count == 0`, forbidden by `addPadding:347` and asserted at `getKey:501`. The
-  half-open interval is therefore safe here — **by accident of the suffix encoding, documented nowhere**.
-  See PR candidate 9.
+  `zeroBuffer(8)` needs `count == 0`, forbidden by `addPadding:347` and asserted at `getKey:501` — and
+  **lesson 09 showed the authority never offers count 0 at all** (`BASE_ID = 1`). The half-open interval
+  is therefore safe here — **by accident of the suffix encoding, documented nowhere**. See PR candidate 9.
 - **Partitioned vertices: one id, up to `2^pb` row keys, and the hash is the identity for small counts.**
   `getVertexID:555-564` checks `partition == PARTITIONED_VERTEX_PARTITION (1)` then **discards it**,
   calling `getCanonicalVertexIdFromCount`. Placement is the XOR fold `getPartitionHashForId:566-577`,
@@ -210,211 +368,36 @@ of that code, and lesson 07's scan material turned out to be about `hasScan`/`ha
   `count < Long.MAX_VALUE`; `constructId:453-454` then requires
   `unsignedBitLength(count)+pb+offset <= 63`. Unreachable in practice because pb=0 is not configurable.
 
-### Verified by lesson 07, for Part II and the write/read path lessons to cite rather than re-derive
-
-- **`Backend` is two-phase and the phases are different kinds of work.** Constructor
-  (`Backend.java:239-306`) turns capability into configuration; `initialize` (`L333-417`) opens stores.
-  `storeFeatures = storeManager.getFeatures()` is read at **`L249`**, *before* the locking wrapper is
-  built at `L271-276`, and nothing re-reads it. So `Backend.getStoreFeatures().hasLocking()` is **false**
-  on CQL/HBase/in-memory for the life of the graph while `storeManagerLocking.getFeatures().hasLocking()`
-  is **true** (`ExpectedValueCheckingStoreManager.java:60`, `:104-106`). `BackendTransaction` gets the
-  first one (`Backend.java:628`). Lesson 18 will need this distinction; do not re-derive it.
-- **The six store names and which manager opens each.** `janusgraph_ids` (`IDS_STORE_NAME`, GLOBAL_OFFLINE,
-  default `JanusGraphConstants.JANUSGRAPH_ID_STORE_NAME`) via `storeManager` → straight into
-  `ConsistentKeyIDAuthority`, **no cache, no lock wrapper** (`L336`, `L340`); `edgestore` (`L345`) and
-  `graphindex` (`L346`) via **`storeManagerLocking`** → `ExpirationKCVSCache` or `NoKCVSCache`;
-  `txlog` opened **twice** — once as a log (`txLogManager.openLog`, `L379`) and once raw into a
-  `NoKCVSCache` for `getTxLogPersistor()` (`L381`); `systemlog` via `KCVSLogManager` (`L380`);
-  `system_properties` via **`storeManagerLocking`**, opened **once** and shared by both the global and the
-  user `KCVSConfiguration` (`L385-412`). Three of six go through the locking manager, so on a
-  locking-emulated backend the real store count is **nine**: plus `edgestore_lock_`, `graphindex_lock_`
-  and `system_properties_lock_` (`LOCK_STORE_SUFFIX = "_lock_"` at `L157`, appended at
-  `ExpectedValueCheckingStoreManager.java:68`). On BerkeleyJE (`hasLocking()` true,
-  `storeManagerLocking == storeManager`) there are **no** `_lock_` stores at all.
-- **Lockers are lazy, keyed, and only ever exercised with one group.** `Backend.getLocker` (`L310-325`) is
-  a `ConcurrentHashMap` + `putIfAbsent`, fed by a two-entry registry (`consistentkey` → a
-  `ConsistentKeyLocker.Builder` on a store opened from the **unwrapped** `storeManager` at `L190`;
-  `test` → `TestLockerManager` by reflection, `L183`, `L726-745`). `LOCK_BACKEND` is `GLOBAL_OFFLINE`,
-  default `"consistentkey"` (`GraphDatabaseConfiguration.java:982-984`). Combined with lesson 06's finding
-  that `JanusGraphBaseTest.getBackend` pins `LOCK_LOCAL_MEDIATOR_GROUP` to `"tmp"`, **no test in the tree
-  exercises two mediator groups against one store.** Lesson 18 should take that as given.
-- **The fixed-key-length map, exactly** (`Backend.java:537-542`): `edgestore` → 8, `edgestore_lock_` → 8,
-  `<ids store name>` → 8. Everything else (`graphindex`, `system_properties`, `txlog`, `systemlog`) is
-  variable-length on an `OrderedKeyValueStoreManager` and pays lesson 05's length prefix and post-filter.
-  The `edgestore_lock_` entry is reachable only by an out-of-tree ordered-KV backend without innate
-  locking — forward-looking, not dead — and such a backend would get fixed keys for `edgestore_lock_` and
-  variable for `graphindex_lock_`. `ALLOW_CUSTOM_VERTEX_ID_TYPES` is rejected outright for ordered-KV
-  (`L526-536`), closing the manager first with a comment about BerkeleyJE's leaked environment.
-- **The transaction stack is four levels deep, and `unwrapTx` strips exactly one.**
-  `BackendTransaction` → `CacheTransaction` → `ExpectedValueCheckingTransaction` → {`inconsistentTx`,
-  `strongConsistentTx`}. `KCVSCache.unwrapTx` is `protected final` (`KCVSCache.java:80-83`) and returns
-  `((CacheTransaction) txh).getWrappedTransaction()`, so the store below a cache receives the
-  `ExpectedValueCheckingTransaction`. `ExpectedValueCheckingStoreManager.beginTransaction` (`:89-101`)
-  opens **two** real backend transactions per graph transaction **unconditionally**, and `mutateMany`
-  (`:75-86`) sends the whole flush to the consistent one if `prepareForMutations()` reports any lock held
-  — all-or-nothing per flush, never per key.
-- **`KCVSProxy` BUG, verified, latent, one token.** `KCVSProxy.java:66-68` —
-  `getKeys(MultiSlicesQuery queries, StoreTransaction txh)` returns `store.getKeys(queries, txh)` **without
-  `unwrapTx`**, while all seven other delegating methods in the file (`:52, :57, :62, :77, :82, :87, :92`)
-  apply it. Through a `KCVSCache` the backend store would receive a `CacheTransaction` and
-  `ClassCastException` on its own cast. Grepped the whole tree: the method is declared at
-  `KeyColumnValueStore.java:227`, implemented by `OrderedKeyValueStoreAdapter:157`,
-  `CQLKeyColumnValueStore:816`, `HBaseKeyColumnValueStore:155`, `InMemoryKeyColumnValueStore:147`,
-  `MetricInstrumentedStore:234` (not a `KCVSProxy`, so nothing to unwrap there), referenced in a
-  `StoreFeatures:49` javadoc — and **called by nothing** above the storage layer. The test double at
-  `KCVSCacheTest.java:241-242` reproduces the same omission, so no test would catch it either.
-  See PR candidate 1 below.
-- **`NoKCVSCache` is 44 lines of empty overrides** and passes `metricsName = null`, which `incActionBy`
-  checks (`KCVSCache.java:52-57`). "Cache off" is a subclass, not a read-path flag — `getSlice` is
-  `KCVSProxy`'s plain delegation. Cache metrics need **both** a non-null name from
-  `Backend.getMetricsCacheName` (`L494-497`: `null` without `basic-metrics`, `"stores"` with
-  `metrics.merge-stores`, else `edgestore.cache` / `graphindex.cache`) **and** a group name on the
-  transaction.
-- **Invalidation does not evict.** `ExpirationKCVSCache.invalidate` (`:266-270`) only does
-  `expiredKeys.put(key, now + cacheTimeMS)` plus a 1/1000 latch countdown; it never touches `cache`.
-  `getSlice`'s first branch (`:93-98`) sees `isExpired` and goes to the store **without caching the
-  result**, so between a mutation and the sweep every read of that row is a full round trip while the
-  stale entry still costs `maximumWeight`. The sweep is triggered by a **`CountDownLatch(PENALTY_THRESHOLD
-  = 5)`** counted down by every bypassing read (`:311`) and, with probability
-  `1/INVALIDATE_KEY_FRACTION_PENALTY = 1/1000`, by an invalidation (`:269`); the daemon `CleanupThread`
-  (`:329-357`) does nothing but `await()` then `clearExpiredCache(true)`. `clearExpiredCache` (`:277-295`)
-  is `synchronized`, only sweeps keys with `getAge >= invalidationGracePeriodMS`, and does a **full scan of
-  `cache.asMap().keySet()`** per sweep. `clearCache()` carries an eleven-line comment (`:253-259`)
-  explaining two orderings: sweep `expiredKeys` before `invalidateAll`, and only the cleanup thread may
-  reassign `penaltyCountdown` — which is what the `withNewPenaltyCountdown` boolean encodes.
-  **The cache key is the whole `KeySliceQuery`**, so one row read at limit 10 and limit 100 caches twice.
-- **Cache sizing, exact.** `cache.db-cache-size` default **0.3**
-  (`GraphDatabaseConfiguration.java:628-631`); below 1.0 it is a fraction of *currently free* heap,
-  `(maxMemory - (totalMemory - freeMemory)) * cacheSize` (`Backend.java:359-360`), so the budget depends on
-  when the graph is opened; above 1.0 it is absolute bytes and must exceed 1000. Split is fixed at
-  `EDGESTORE_CACHE_PERCENT = 0.8` / `INDEXSTORE_CACHE_PERCENT = 0.2` with a sum check (`L162-163`, `L367`).
-  `cache.db-cache-time` default **10000 ms** (`:651-656`), and **0 is remapped** to
-  `ETERNAL_CACHE_EXPIRATION` = 200 years in ms (`Backend.java:165`, `:352`) because the cache constructor
-  rejects zero. `cache.db-cache-clean-wait` default **50 ms** (`:639-643`).
-- **`CacheTransaction`, the write buffer.** `Map<KCVSCache, Map<StaticBuffer, KCVEntryMutation>>` keyed by
-  the **cache object**, name resolved only at flush (`:164`). `numMutations += m.getTotalMutations()` at
-  `:102` is added **before and regardless of the merge** at `:96-97` and is never reduced by `consolidate`,
-  so it is an upper bound and **both** thresholds it feeds fire early on repeated writes to the same keys.
-  The only automatic flush is `if (batchLoading && numMutations >= persistChunkSize)` (`:104`) — without
-  batch loading nothing flushes until `commit()` (`:232-235` = `flushInternal(); tx.commit();`).
-  `flushInternal` (`:148-201`): consolidate serially below `numMutationsParallelThreshold` else via
-  `parallelStream` (`:151-157`); chunk and `persist` (`:160-176`), where `private int persist(...)` always
-  `return 0` (`:124`) and the assignment `numSubMutations = persist(subMutations)` is a counter reset, and
-  a chunk boundary **can fall mid-store**; invalidate **after** persistence, per key (`:179-198`) — and
-  `hasValidateKeysOnly()` is `true` in the base class with **no override in the tree**, so the entry-list
-  branch at `:185-195` is **dead** and `ExpirationKCVSCache.invalidate:267` asserts it stays so; `clear()`
-  (`:203-208`) empties the inner maps but keeps the outer store keys. `logMutations` (`:211-224`) opens
-  with `checkArgument(!batchLoading, ...)` — that one precondition is why transaction logging and batch
-  loading are mutually exclusive (lesson 28).
-- **`storage.buffer-size` is a durability knob, and it is ignored on some backends.** Default **1024**
-  (`GraphDatabaseConfiguration.java:780-782`), but `Backend.java:261-263` replaces it with
-  `Integer.MAX_VALUE` when `!storeFeatures.hasBatchMutation()` — an *unbounded* buffer, not a buffer of
-  one. So a 5,000-mutation transaction becomes five `mutateMany` calls on CQL and one on a non-batching
-  backend, and multi-chunk atomicity is the backend transaction's problem.
-  `storage.num-mutations-parallel-threshold` default **100** (`:789-794`).
-- **`BackendOperation`, and the backoff that is not exponential — THE finding of the lesson.**
-  `BASE_REATTEMPT_TIME = 50 ms`, `PERTURBATION_PERCENTAGE = 0.2` (`BackendOperation.java:40-41`).
-  `pertubTime` (`:43-49`) computes `duration.dividedBy((int)(2.0 / (1 + (rand*2-1.0)*0.2)))`. The inner
-  expression lands in `(1.667, 2.5]` and `(int)` **truncates**, so the divisor is only ever **1 or 2** and
-  `pertubTime(d)` returns exactly `d` or `d/2`, a fair coin flip at `rand = 0.5` — not a ±20% jitter.
-  Verified under OpenJDK 21 with real `java.time.Duration`: `{1=500803, 2=499197}` over 1,000,000 draws;
-  `pertubTime(50ms)` yields exactly `{25 ms, 50 ms}` over 100,000 draws. Since `waitBase =
-  waitTime.multipliedBy(2)` (`:100`), the base either doubles or stands still, geometric mean **√2**.
-  Measured over 200,000 simulated runs: **10 s budget (`storage.read-time`, `:801-804`) → min 8, p50 14,
-  p99 24, max 38, mean 14.52 attempts; 100 s budget (`storage.write-time`, `:796-799`) → min 11, p50 21,
-  p99 33, max 48, mean 21.11.** Both options' own documentation says "backoff exponentially". Every retry
-  logs at **INFO with a full stack trace** (`:89`). The `assert !duration.isZero()` at `:47` sits **after**
-  the division it guards; the divisor's floor of 1 is what actually prevents `ArithmeticException`, and
-  nothing documents that. Exception triage (`:70-84`) keeps the **innermost** `BackendException`: temporary
-  → retry; a `BackendException` thrown directly → rethrown unretried; anything else → wrapped in
-  `PermanentBackendException("Permanent exception while executing backend operation " + exe.toString())`,
-  which is why every `Callable` overrides `toString()` with a bare label (`EdgeStoreQuery`,
-  `MultiEdgeStoreQuery`, `VertexIndexQuery`, `EdgeStoreKeys`, `IndexQuery`, `indexQueryAggregation`,
-  `RawQuery`, `Totals`, `CacheMutation`). Those strings are the only identification a permanent failure
-  carries.
-- **`BackendTransaction`'s five feature branches** (all against the raw features from `Backend.java:249`):
-  `hasMultiQuery()` at `:303` and `:322`; `hasScan()` at `:395` (else
-  `UnsupportedOperationException("… use Faunus instead")`); `isKeyOrdered() && !allowCustomVertexIdType` at
-  `:401`; `hasOrderedScan()` at `:415`. **`EDGESTORE_MIN_KEY = zeroBuffer(8)` / `EDGESTORE_MAX_KEY =
-  oneBuffer(8)`** (`:69-71`, comment *"Assumes 64 bit key length as specified in IDManager"*) — eight
-  `0xFF` bytes, and lesson 02's half-open interval means the maximal key is **excluded** from a full
-  ordered scan. Lesson 08 owns whether that key is assignable. `MIN_TASKS_TO_PARALLELIZE = 2` (`:67`), so a
-  single-key multi-query never touches the pool (`:357`). The parallel fan-out (`:355-392`) counts failures
-  in an `AtomicInteger`, `log.warn`s each, and throws `JanusGraphException("… N individual queries
-  failed.")` **with no cause attached**; `doneSignal.await()` has **no timeout**, and only `Exception` is
-  caught, so a task that throws an `Error` never reaches `countDown()` and hangs the caller.
-- **Commit/rollback asymmetry, deliberate.** `commit()` (`:165-168`) is storage-then-indexes and does
-  **not** catch index exceptions — the first throw leaves later indexes uncommitted. `rollback()`
-  (`:176-189`) is indexes-then-storage, catches per index, keeps only the **last** exception (no suppression
-  chaining) and rethrows after `storeTx.rollback()`. `commitIndexes()` (`:152-162`) collects into
-  `Map<String,Throwable>` and **returns** it; `StandardJanusGraph` uses the split pair for exactly that
-  (lesson 16). Storage-first is what makes the edgestore the source of truth and a mixed index a
-  repairable artefact — lesson 28's premise.
-- **`GraphDatabaseConfiguration.getBackend()` is a factory, not an accessor** (`:1951-1956`): every call
-  does `new Backend(configuration); backend.initialize(configuration);` and mutates the config's
-  `storeFeatures` field as a side effect. A new store manager, new index providers, new log managers, a new
-  `StandardScanner` and — with the cache on — two new `ExpirationKCVSCache`es each starting a new daemon
-  `CleanupThread`. `StandardJanusGraph:289` calls it once and exposes the result at `:533`. Three call
-  sites build a **second** `Backend` against a live graph: `JanusGraphIndexTest:4401`
-  (try-with-resources), `JanusGraphEventualGraphTest:67` (**never closed**, built only to read
-  `hasTxIsolation()` inside a `checkArgument`), and `JanusGraphFactory:228` in the drop path.
-  **Not verified:** whether the second one succeeds or fails on BerkeleyJE's environment lock. See
-  PR candidate 5.
-- **Shutdown.** `close()` (`L633-662`) and `clearStorage()` (`L671-704`) share **one** `hasAttemptedClose`
-  flag, each set **before** the work, so either makes the other a debug-logged no-op and a mid-way failure
-  leaves the `Backend` permanently un-closeable. Both use `ExceptionWrapper` + `executeWithCatching` so
-  every step runs and the first exception is rethrown with the rest suppressed. Order: logs → scanner →
-  stores → id authority → configs → **index providers** → store manager → thread pool, with a comment at
-  `L650-652` explaining it — closing the CQL store manager's executors can restore a swallowed interrupt
-  and break the I/O of anything closed after it. `close()` null-checks `edgeStore`/`indexStore`/
-  `idAuthority`/`systemConfig`/`userConfig` (`L645-649`); `clearStorage()` **does not** (`L684-688`), so it
-  NPEs on a constructed-but-uninitialized `Backend`.
-- **`StandardScanner` is built from the unwrapped `storeManager`** (`Backend.java:305`), so scan jobs
-  bypass **both** the cache and the locking wrapper. `buildStoreIndexScanJob` (`L452-463`) pins
-  `setNumProcessingThreads(1)` and `setWorkBlockSize(PAGE_SIZE)`, which lesson 06 found
-  `JanusGraphBaseTest.executeScanJob` overrides to `(2, 100)`. `ManagementSystem` has six call sites
-  (`:1034, :1063, :1114, :1116, :1366, :1617`) — lesson 25.
-- **No non-key-consistent fallback exists.** `initialize` `L339-343` throws `IllegalStateException` (not a
-  `BackendException`) if `!isKeyConsistent()`. The `idAuthority = null` on `L338` is dead. That is the hard
-  floor under every backend in the tree, and the reason lesson 03 found `keyConsistent(...)` to be the one
-  feature with no `@FeatureFlag` guarding it.
-- **`ExpirationCacheTest` is the single concrete subclass of `KCVSCacheTest`**
-  (`janusgraph-test/src/test/java/org/janusgraph/diskstorage/cache/ExpirationCacheTest.java:41`), and
-  `testGracePeriod` (`:108-148`) **asserts the bypass semantics directly**: after one
-  `cache.mutateEntries` + `commit`, two identical `verifyResults` calls take `store.getSliceCalls()`
-  0 → 2 → **4** (`:131`, `:134`); then `minCleanupTriggerCalls = 5` — the same number as
-  `PENALTY_THRESHOLD` — reads are needed to drive the latch to zero and wake `CleanupThread` (`:138-141`)
-  before two more reads finally give `0` store calls (`:143-147`). Both methods there are
-  `@RepeatedIfExceptionsTest(repeats = 3)` with comments naming issues **#2934** and **#3352** — lesson
-  06's flaky machinery applied to the two tests that depend on wall-clock sleeps and a daemon thread.
-  `CACHE_SIZE = 48 MB`, `METRICS_STRING = "metrics"` (`:43-44`).
-
 ### PR candidates, all verified at the pinned commit
 
 Numbering is **stable** — earlier entries reference these numbers, so new candidates are appended rather
-than inserted in size order. **Candidates 8–10 are new this run** (lesson 08) and 8 is now the smallest
-the track has found after the `KCVSProxy` one-token fix. Candidates 1–7 carry forward and were **not**
-re-verified this run: 1 and 7 were verified at this pinned commit on 2026-11-05, 2–4 and 6 on 2026-11-04,
+than inserted in size order. **Candidates 11–14 are new this run** (lesson 09), and **11 is now the
+smallest the track has found**. Candidates 1–10 carry forward and were **not** re-verified this run:
+8–10 were verified at this pinned commit on 2026-11-06, 1 and 7 on 2026-11-05, 2–4 and 6 on 2026-11-04,
 and 5 still needs its experiment run.
 
-1. **NEW, and the smallest the track has found: `KCVSProxy.java:67`** passes `txh` where every sibling
-   method passes `unwrapTx(txh)`. One token. Fix the same omission in the test double at
-   `KCVSCacheTest.java:242` and add a `KCVSCacheTest` case that calls `getKeys(MultiSlicesQuery, …)`
-   through a cache and asserts the store received the unwrapped transaction — nothing currently does.
-   Latent today (no caller above the storage layer), a `ClassCastException` the first time anything calls it.
+1. **`KCVSProxy.java:67`** passes `txh` where every sibling method passes `unwrapTx(txh)`. One token.
+   Fix the same omission in the test double at `KCVSCacheTest.java:242` and add a `KCVSCacheTest` case
+   that calls `getKeys(MultiSlicesQuery, …)` through a cache and asserts the store received the
+   unwrapped transaction — nothing currently does. Latent today (no caller above the storage layer), a
+   `ClassCastException` the first time anything calls it.
 2. **`RetryingTestExecutionExtension.java:77`** prints the wrong variable:
    `"Aborting test #" + minSuccess + " of " + maxInvocations` — `minSuccess` is the *required success
    count*, not the invocation index; `invocation` is in scope and used correctly in
    `evaluateExecutionCondition`'s messages. Also missing a space before `- still have retries left`.
 3. **Replace the four empty concurrency overrides with `@Disabled("…")`** —
    `BerkeleyFixedLengthKCVSTest.java:32-40` and `BerkeleyVariableLengthKCVSTest.java:45-53`. Turns four
-   reported passes into four reported skips with a stated reason.
+   reported passes into four reported skips with a stated reason. Fold in the third site lesson 08
+   found: `InMemoryPartitionGraphTest` overrides `testPartitionSpreadFlushBatch`,
+   `testPartitionSpreadFlushNoBatch` and `testKeyBasedGraphPartitioning` with empty bodies and reports
+   them **passing** — the three tests that check partition spread are the three that don't run on the
+   in-memory backend.
 4. **`BerkeleyVariableLengthKCVSTest.retrieveBackendAndGetKeyValue` cannot fail.** Body `L56-120`, outer
    `catch (BackendException e) { //generic failure }` at **`L113`** with no `fail`, no rethrow and no
    assertion; the inner try `L90-102` wraps the call its own comment at `L93` marks *"Errors out here
    without fix"* and catches the same exception with only `txh.rollback()`. Also imports JUnit 4
    `assertEquals` in a Jupiter suite and opens its own transactions instead of using `getTxConfig()`.
-5. **NEW, needs one experiment first: `GraphDatabaseConfiguration.getBackend()`.** Run lesson 07's
+5. **Needs one experiment first: `GraphDatabaseConfiguration.getBackend()`.** Run lesson 07's
    Hands-On §3 second half — call it on an already-open BerkeleyJE graph and record whether a second
    `Environment` opens, BDB's lock refuses it, or a silent second `Backend` appears
    (`jcmd <pid> Thread.print | grep ExpirationStoreCache` counts the cleanup threads). If it succeeds,
@@ -429,104 +412,137 @@ and 5 still needs its experiment run.
    intended behaviour is jitter around an exponential base or the current coin flip. **Check
    `git log -p --follow BackendOperation.java` first** — the `(int)` cast may predate `java.time.Duration`
    and have been harmless in a `long`-milliseconds version.
-8. **NEW, smallest after candidate 1: `IDManager.fromVertexId`, `IDManager.java:632-636`** is missing
-   `toVertexId`'s positivity check, so it accepts a temporary (negative) id and returns a negative
-   "user id" instead of throwing. Precondition clause 1 uses `>>>` (a negative id's sign bit becomes
-   magnitude, result comfortably positive); clause 2 compares the **signed** negative id against a
-   positive bound (trivially true); the body uses `>>`, sign-extending. Verified at pb ∈ {0, 3, 5, 16}.
-   At the production pb=5, `fromVertexId(getTemporaryVertexID(NormalVertex, 1))` returns
-   **-36,028,797,018,963,968**; the legitimate round trip `fromVertexId(toVertexId(7)) == 7` is
-   unaffected. `fromVertexId` is public, user-facing API (`docs/advanced-topics/custom-vertex-id.md`).
-   The fix is one `checkArgument(id > 0, ...)` plus a `VertexIDAssignerTest` case — that test currently
-   probes out-of-range with exactly `new long[] {0, idManager.getVertexCountBound()}`, never a negative.
+8. **`IDManager.fromVertexId`, `IDManager.java:632-636`** is missing `toVertexId`'s positivity check, so
+   it accepts a temporary (negative) id and returns a negative "user id" instead of throwing.
+   Precondition clause 1 uses `>>>`, clause 2 compares the **signed** negative id against a positive
+   bound, the body uses `>>`. Verified at pb ∈ {0, 3, 5, 16}. At the production pb=5,
+   `fromVertexId(getTemporaryVertexID(NormalVertex, 1))` returns **-36,028,797,018,963,968**; the
+   legitimate round trip `fromVertexId(toVertexId(7)) == 7` is unaffected. `fromVertexId` is public,
+   user-facing API (`docs/advanced-topics/custom-vertex-id.md`). The fix is one
+   `checkArgument(id > 0, ...)` plus a `VertexIDAssignerTest` case — that test currently probes
+   out-of-range with exactly `new long[] {0, idManager.getVertexCountBound()}`, never a negative.
    **File as an issue first**, not a PR: tightening a public method's input validation can break a
    caller relying on the current leniency. Attach lesson 08 §8's table.
 9. **A comment, not code: `BackendTransaction`'s `EDGESTORE_MIN_KEY`/`EDGESTORE_MAX_KEY`.** Lesson 08 §9
-   proves both bounds lie strictly outside the assignable key space (no proper `VertexIDType` suffix is
-   `111`, no schema id ends in `11`, `count > 0` is enforced at `addPadding:347`). That proof is what
-   makes the half-open scan interval safe and it exists nowhere in the tree. Smallest possible
-   contribution; pairs naturally with candidate 10.
+   proves both bounds lie strictly outside the assignable key space, and lesson 09 completes the
+   `MIN_KEY` half with `BASE_ID = 1`. That proof is what makes the half-open scan interval safe and it
+   exists nowhere in the tree. Smallest possible contribution; pairs naturally with candidate 10.
 10. **Two documentation bugs, one trivial PR each.** (a) `docs/advanced-topics/data-model.md` states the
     64-bit vertex id *"is the key which points to the row containing the vertex's adjacency list"* and
-    describes no transformation — true only at `partitionBits = 0`, which **no real graph uses** (see the
-    `partitionBits = 5` finding above). One paragraph, plus a sentence about the partition rotation.
-    (b) `docs/advanced-topics/custom-vertex-id.md`'s two groovy samples call
+    describes no transformation — true only at `partitionBits = 0`, which **no real graph uses**. One
+    paragraph, plus a sentence about the partition rotation. (b)
+    `docs/advanced-topics/custom-vertex-id.md`'s two groovy samples call
     `graph.getIDManager().toVertexID(123L)` and `graph.getIDManager().fromVertexID(long)` — capital-D
-    `ID`, while the actual methods are `toVertexId` and `fromVertexId`. The surrounding prose in the same
-    file spells `toVertexId(long)` correctly. The samples as written do not compile.
+    `ID`, while the actual methods are `toVertexId` and `fromVertexId`. The samples as written do not
+    compile.
+11. **NEW, and the smallest the track has found: `ConsistentKeyIDAuthority.java:420-421`** formats the
+    timeout with `timeout.getNano()`, the nanosecond-of-second component, not the total. The timeout
+    reaching `claimIDBlock` is `ids.renew-timeout`, default `Duration.ofMillis(120000)`, whose
+    `getNano()` is **0** — measured under OpenJDK 21, along with `PT2S` → 0, `PT0.3S` → 300000000,
+    `PT1.5S` → 500000000. So the one message emitted when ID allocation finally gives up, which per the
+    `IDS_RENEW_TIMEOUT` javadoc fails the entire database, reads *"Reached timeout 0"* on every
+    whole-second configuration including every default deployment. Fix is `timeout` or
+    `timeout.toMillis()` with the format specifier adjusted. Zero behavioural risk. **Send this one
+    first.**
+12. **`ConsistentKeyIDAuthority.java:392-399`: a comment that describes unimplemented intent.** The
+    rollback path builds an anonymous `BackendOperation.TransactionalProvider` commented *"Use normal
+    consistency level for these non-critical delete operations"*, whose `openTx()` body is
+    `manager.beginTransaction(storeTxConfigBuilder.build())` — character-for-character `openTx()` at
+    `:223-225`. `storeTxConfigBuilder` had the key-consistent custom options baked in at construction
+    (`:189`, `:196`, `:198`) and is never re-derived, so the "normal" consistency level is the critical
+    path's consistency level. The anonymous class differs from `this` only in a no-op `close()` that
+    `BackendOperation.execute` never calls. Either implement the intent (derive a non-key-consistent
+    config) or delete the comment and the anonymous class and pass `this`. **File as an issue** — which
+    of the two is right is a maintainer's call.
+13. **Two dead assertions in `IDAuthorityTest`, plus the parameterization that would make them live.**
+    `checkBlock:207-209` (a block's ids are evenly spaced) and `testSimpleIDAcquisition:247-251`
+    (consecutive blocks abut, with `previous` write-only as a result) are both gated on
+    `hasEmptyUid == (uidBitWidth == 0)`, and `configs():84-103` produces exactly three configurations
+    with tag-bits **4** (default), **9** and **7**. **Neither assertion has ever executed in any run of
+    any backend's `IDAuthorityTest`.** Nothing in the suite checks the two properties `getId`'s shift is
+    responsible for. The fix is a fourth `configs()` entry with `IDAUTHORITY_CAV_BITS = 0`; the
+    assertions then run as written and the commented-out `IDAUTHORITY_RANDOMIZE_UNIQUEID` lines at `:99`
+    and `:135` can go at the same time.
+14. **Two small things in the id-assignment hot path, one PR.** (a)
+    `VertexIDAssigner.PartitionIDPool.accessed()` (`:378`, `:533-535`) writes
+    `lastAccess = System.currentTimeMillis()` on a `volatile long` for **every element id assigned**, and
+    its only reader `getLastAccess():537-539` has **no caller in the tree** (code-searched at the pinned
+    commit). Measured **33.0 ns/op** against 0.30 ns for an empty loop, 50M iterations after warmup under
+    OpenJDK 21 — roughly 1.3 s on a 10M-vertex, 3-relations-each load, for a field nothing reads. Delete
+    the field, `accessed()` and `getLastAccess()`. (b) `SimpleBulkPlacementStrategy:58` uses one shared
+    `java.util.Random` for every placement decision on every thread (a contended CAS on its seed) while
+    `ConsistentKeyIDAuthority:246` uses `ThreadLocalRandom` for the same kind of draw; and the class
+    javadoc (`:37-45`) claims the strategy "assigns all vertices created in a transaction to the same
+    partition id", which is true of `getPartitions(Map):100-105` and **false** of
+    `getPartition(element):95-97`, which re-rolls per call and is the path every relation takes. Fix the
+    `Random`, fix the javadoc. `currentPartitions` being a non-volatile `int[]` written from any thread
+    is worth a sentence in the PR body but not a change — a stale read is still a valid partition.
 
 ### Still open, and who owns it
 
-- **Closed by lesson 08:** the id/key distinction and the full bit layout every Part II lesson needs;
-  lesson 07's `EDGESTORE_MAX_KEY` question (unreachable, PR candidate 9); and the real value of
-  `partitionBits` (5, not 0), which lessons 09-13 must assume rather than re-derive.
-- **Owed to lesson 10 by lesson 08:** `TYPE_LEN_RESERVE = 3` and `MAX_PADDING_BITWIDTH = 6` are accounted
-  for but not spent — `EdgeSerializer.writeRelation` spends them, with `SCHEMA_COUNT_BOUND = 1 << 54` as
-  the budget. `IDHandler`'s **different** first-bit convention (per `getKeyID`'s javadoc at `:523-529`)
-  must be reconciled there, and `IDManagementTest.edgeTypeIDTest`'s 1,000,000-trial `IDHandler` loop is
-  the starting point. `BufferUtil.nextBiggerBuffer` / `padBuffer` also go to lesson 10.
+- **Closed by lesson 09:** where `count` and `partition` come from; the full claim protocol and its
+  330 ms; the five pools and their block sizes; lesson 08's `count == 0` question (`BASE_ID = 1`); and
+  lesson 06's note about `IDAUTHORITY_WAIT = Duration.ZERO`, which turns out to be subsumed by the
+  `isDistributed()` gate.
+- **Owed to lesson 10 by lessons 08 and 09:** `TYPE_LEN_RESERVE = 3` and `MAX_PADDING_BITWIDTH = 6` are
+  accounted for but not spent — `EdgeSerializer.writeRelation` spends them, with
+  `SCHEMA_COUNT_BOUND = 1 << 54` as the budget. `IDHandler`'s **different** first-bit convention (per
+  `getKeyID`'s javadoc at `:523-529`) must be reconciled there, and
+  `IDManagementTest.edgeTypeIDTest`'s 1,000,000-trial `IDHandler` loop is the starting point.
+  `BufferUtil.nextBiggerBuffer` / `padBuffer` also go to lesson 10. **From lesson 09:** relation counts
+  arrive from a pool whose block is 80,000 wide in steps of **16**, and an edge is co-located with one
+  endpoint's partition — both relevant to the column layout's locality claims.
+- **Owed to lesson 16 by lesson 09:** `assignIDs(Iterable<InternalRelation>)`
+  (`VertexIDAssigner:278-333`) is called from `StandardJanusGraph.prepareCommit`, and `ids.flush`
+  (default `true`) decides whether ids are assigned at element creation or at commit.
+  `VertexIDAssignerTest#testDisableIdsFlush:123` is the entry point. The bulk path's two-pass structure
+  (assign vertices, then relations) and its own 1000-attempt `leftOvers` loop belong there, not in 09.
+- **Owed to lesson 18 by lesson 09:** `ConsistentKeyIDAuthority`'s comment at `:90-92` says its slice
+  bounds mirror `ConsistentKeyLocker`'s. Lesson 18 should read the two protocols side by side — the
+  authority writes-waits-reads and the earliest column wins; the locker is claimed to do the same thing
+  for a different purpose. Also still owed: `ExpectedValueCheckingTransaction.prepareForMutations()`,
+  `ExpectedValueCheckingStore`, `BerkeleyJETx` (6,524 B), `BerkeleyJELocks`,
+  `LockKeyColumnValueStoreTest` (23,021 B). Lesson 18 starts already knowing that two backend
+  transactions are open per graph transaction and that `*ConcurrentTest.java` is excluded from
+  `mvn test` at root `pom.xml:416`.
 - **Owed to lesson 19 by lesson 08:** the partitioned-vertex read cost — one logical vertex, up to
-  `2^partitionBits` representative rows, one slice query each.
-- **Owed to lesson 09 by lesson 08, in addition to the items below:** `StandardIDPool` per partition plus
-  the dedicated schema and partitioned-vertex pools (`VertexIDAssigner:130-133`), `IDPlacementStrategy`
-  injection at `:112`, and the `renewalThreads = 3 * partitionIdBound + 2` sizing at `:123` — three id
-  kinds per partition plus schema plus partitioned vertices, a direct consequence of the ID layout.
-- **A third site for the empty-override anti-pattern (candidate 3's family).**
-  `InMemoryPartitionGraphTest` overrides `testPartitionSpreadFlushBatch`,
-  `testPartitionSpreadFlushNoBatch` and `testKeyBasedGraphPartitioning` with empty bodies and reports
-  them **passing** — the three tests that check partition spread are the three that don't run on the
-  in-memory backend. Fold into candidate 3 when it is written, or send separately.
-- **Closed by lesson 07:** the `Backend`/`BackendTransaction` wiring, the cache and locker wrapper stacks,
-  and the retry semantics every later lesson inherits. Lesson 06's three questions about scan tests are
-  answered by `BackendTransaction`'s `hasScan`/`hasOrderedScan` branches rather than by the iterators.
-- **Reassigned by lesson 07:** `InMemoryKeyColumnValueStore.RowIterator` and
+  `2^partitionBits` representative rows, one slice query each. Plus, carried from lesson 04 and sharpened
+  by lesson 07: the `getNoCopy` aliasing question belongs in `KeyColumnValueStoreTest` (gated by nothing,
+  applying to every backend) and must mutate through a `CacheTransaction`; the `MemoryEntryList` sizing
+  question and the `InMemoryColumnValueStore.java:162` NPE candidate also land here. `MultiPageEntryBuffer`,
+  `BufferPageUtils` and `BufferPage.merge` remain deferred with no owner; propose lesson 19.
+- **Owed to lesson 20 by lesson 09:** edges take the partition of an incident vertex
+  (`VertexIDAssigner:206-219`), so vertex-centric queries have a locality property that falls out of id
+  assignment rather than out of the query layer. Worth one paragraph there.
+- **Owed to lesson 22:** `InMemoryKeyColumnValueStore.RowIterator` and
   `OrderedKeyValueStoreAdapter.KeyIteratorImpl` (`L299+`, shared mutable `current`, per-key limit at
-  `L381`) plus `SimpleScanJob` (14,040 B) now belong with **lesson 22**. `MultiPageEntryBuffer`,
-  `BufferPageUtils` and `BufferPage.merge` remain deferred with no owner; propose **lesson 19** when the
-  vertex cache needs them.
-- **Carried from lesson 04, now sharper:** the `getNoCopy` aliasing question belongs in
-  `KeyColumnValueStoreTest` (gated by nothing, applying to every backend) and must mutate through a
-  `CacheTransaction`, because `flushInternal` holds the caller's `Entry` objects across the whole flush and
-  invalidates only afterwards. The `MemoryEntryList` sizing question and the
-  `InMemoryColumnValueStore.java:162` NPE candidate move to **lesson 19**.
+  `L381`) plus `SimpleScanJob` (14,040 B).
+- **Owed to lesson 27 by lesson 09:** the ids-store column layout —
+  `[-(end)][timestamp][uid]` with an empty value, slice bounds `zeroBuffer(1)` to `oneBuffer(17)` — is
+  the smallest real column layout in the codebase and the cleanest thing to compare against
+  `CQLKeyColumnValueStore` directly. Hands-On §2's byte dump is specified for it. Also: the count stride
+  of 16 at default tag-bits, which affects CQL token distribution.
 - **Carried from sessions 01–04:** 24 questions posed, none answered by Aryant. The half-open interval now
   has **three** implementations on record (`SinglePageEntryBuffer.getSlice` binary search;
   `BerkeleyJEKeyValueStore.java:258`'s per-record `compareTo`;
-  `OrderedKeyValueStoreAdapter.java:294-297`'s `columnInRange`) and lesson 07 adds a **fourth consumer** —
-  `BackendTransaction`'s `EDGESTORE_MAX_KEY` relies on the upper bound being exclusive. Lesson 27 adds CQL
-  as the fourth implementation. The contract is in `KeyColumnValueStore`'s javadoc and **none** of the
-  enforcement is.
-- **Owed to lesson 18:** `ExpectedValueCheckingTransaction.prepareForMutations()`, `ExpectedValueCheckingStore`,
-  `ConsistentKeyLocker`, `BerkeleyJETx` (6,524 B), `BerkeleyJELocks`, `LockKeyColumnValueStoreTest`
-  (23,021 B). Lesson 18 starts already knowing that two backend transactions are open per graph
-  transaction and that `*ConcurrentTest.java` is excluded from `mvn test` at root `pom.xml:416`.
-- **Owed to lesson 09:** `ConsistentKeyIDAuthority`, `IDAuthorityTest` (20,575 B), and lesson 06's note
-  that `StorageSetup.getInMemoryConfiguration()` sets `IDAUTHORITY_WAIT = Duration.ZERO`, so everything
-  passing in memory passes with ID-authority coordination latency removed. Add lesson 07's finding that the
-  ids store is opened through the **unwrapped** manager with **no cache and no lock wrapper**.
-- **Entry size.** Lesson 05 ≈35 KB, lesson 06 ≈63 KB, lesson 07 ≈78 KB (a large share of that is
-  permalink URLs, which are not prose). In line with the SQLite and PostgreSQL lessons. The old 5–9 KB
-  budget was a `contributor-reading` constraint and does not apply.
-- **tdd.cat, 2026-11-06: the archive led the front page, and the resolution rule's exception fired.**
-  At 09:00 IST the front page served **2026-11-04** (56 stories) while `/archive/` listed **2026-11-05**
-  (62 stories) as latest with the 2026-11-06 cell unlinked — the archive *ahead* by one, the opposite of
-  2026-11-05. `https://tdd.cat/2026-11-05/` fetched cleanly from the archive's own href, so lesson 08
-  digested 2026-11-05 and said so in a blockquote at the top of the document. **The rule stands as
-  written** (front page authoritative for "newest available", glance at `/archive/` only to notice a
-  *larger* maximum) — today was exactly the case the exception clause covers, and it cost one extra
-  fetch. Keep naming the edition in the document. Also: the 2026-11-05 page's filter bar rendered
-  "No stories match the selected filters" while the header counted 62, the same glitch as 2026-11-04, so
-  Must-Read/Recommended tags were unavailable again — worth one line and nothing more.
-- **tdd.cat: the cheap endpoints are reliable but not always in agreement.** On 2026-11-05 the front page
-  served **2026-11-04** (56 stories, source URLs intact on the first fetch) while `/archive/` reported a
-  maximum of **2026-11-03** across 128 editions — the archive one *behind* the front page, the reverse of
-  2026-11-03 and 2026-11-04 when the two agreed. **Resolution rule, settled: the front page is
-  authoritative for "newest available"; the archive is a lagging index, not a tie-breaker.** The procedure
-  stands: fetch the front page, digest whatever edition it serves, **say which one it is**, glance at
-  `/archive/` only to notice a *larger* maximum, treat RSS as a third opinion. Do not spend entry space
-  re-deriving an ordering. Rendering glitches continue to be worth a one-line note and nothing more:
-  2026-11-03's item 41 paired a title with another story's summary; 2026-11-04's HN section rendered
-  "No stories match the selected filters" while the header counted 56.
+  `OrderedKeyValueStoreAdapter.java:294-297`'s `columnInRange`) and two consumers relying on the upper
+  bound being exclusive (`BackendTransaction`'s `EDGESTORE_MAX_KEY`, and `ConsistentKeyIDAuthority`'s
+  `UPPER_SLICE = oneBuffer(17)` against columns of 16+uid bytes). Lesson 27 adds CQL as the fourth
+  implementation. The contract is in `KeyColumnValueStore`'s javadoc and **none** of the enforcement is.
+- **tdd.cat, 2026-11-07: the archive led the front page for the second consecutive run, and the
+  one-way cross-check fired again.** At ~03:40 UTC the front page served **2026-11-05** (62 stories) —
+  the edition lesson 08 digested — while `/archive/` reported **131 editions** with **2026-11-06 / 52**
+  as *Latest* and 2026-11-07 unlinked. `https://tdd.cat/2026-11-06/` served the complete 52-story
+  edition with every source URL on the first attempt, trailing-slash form. Three fetches, no forward
+  probe, no fallback. **The front page is now two days behind**, the largest gap recorded since the
+  2-day settling window was found, and the rule stands exactly as written on 2026-11-05: front page
+  authoritative for "newest available", `/archive/` consulted only to notice a *larger* maximum. Two
+  consecutive successful uses is the first time any rule in that table has been *used* twice rather
+  than merely not needed. Rendering note, the fourth in five runs: the filter bar read "No stories
+  match the selected filters in today's edition" while the header counted 52, so Must-Read /
+  Recommended tags were unreadable again — one line, nothing more. **Practical consequence for the
+  next run: the front page may well still serve 2026-11-05 or 2026-11-06, so check `/archive/` for a
+  2026-11-07 or 2026-11-08 maximum and do not re-digest an edition the session log already names.**
 
 ## Paused Subjects
 
