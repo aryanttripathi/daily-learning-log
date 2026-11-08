@@ -5,7 +5,7 @@ mode: lesson
 mode-history: contributor-reading 2026-10-30 .. 2026-11-02 (sessions 01-04); lesson from 2026-11-03 (lesson 05 on)
 started: 2026-10-30
 lessons-total: 28
-lessons-done: 9
+lessons-done: 10
 pinned-commit: a59ae8d8024207598eada34998d867617df51adf
 pinned-commit-date: 2026-10-28
 upstream: JanusGraph/janusgraph
@@ -50,6 +50,7 @@ From lesson 05, `janusgraph-berkeleyje` is also needed:
 
 Newest first.
 
+- **10 — 2026-11-08** · [`2026/11/2026-11-08-janusgraph-edge-serializer-column-layout/README.md`](2026/11/2026-11-08-janusgraph-edge-serializer-column-layout/README.md) · **stayed on `a59ae8d8`** (mid-Part; the re-pin decision is due after lesson 13, not available this run). Read `EdgeSerializer` (whole, 591 lines), `IDHandler` (whole), `VariableLong` L56-235, `EdgeDirection` (whole), `IDManager` L60-340 / L372-420 / L691-723, `Multiplicity` L35-120, `BufferUtil` L178-212, `WriteByteBuffer` L140-154, `StandardJanusGraph` L896-904 / L999-1006 / L1100-1156, `ManagementSystem` L330-400, `RelationTypeVertex` L54-117, `StandardEdgeLabelMaker` L90-110, `StandardRelationTypeMaker` L61-67 / L119-126 / L196-199, `TypeDefinitionCategory` L40-86, `BaseRelationType` L59-68, `ImplicitKey` L151-160, `InternalRelationType` L30-38, `Serializer` L38-44, `StandardSerializer` L262-272, `Interval`/`PointInterval`/`RangeInterval`, `BasicVertexCentricQueryBuilder` L498-723, `IndexRepairJob` L211-219, `TransactionLogHeader` L86-93, `IndexRecordUtil` L454-462, `AbstractTypedRelation` L101-110, `JanusGraphLazyRelation` L157-166, `JanusGraphVertexDeserializer` L124-133, plus `EdgeSerializerTest`, `IDManagementTest` L141-265, `SerializerTest` L139-170, `JanusGraphTest` L973-982 and `docs/advanced-topics/data-model.md`. **THE finding: lesson 09's four conflict-avoidance bits cost one byte in every single cell of every row.** `writePositiveWithPrefix` with `PREFIX_BIT_LEN = 3` gives a **1-byte** relation-type prefix only for `count << 1 | dir ≤ 15`, i.e. **schema count ≤ 7** — and the smallest count a default graph can assign is **16**, so **the cheapest case in the encoding is unreachable on every default deployment**, permanently (`FIXED` option). The 2-byte prefix then holds exactly **63** relation types (counts 16..1008); the 64th (count 1024) spills to 3 bytes. Second finding: **columns are grouped by relation type, not sorted by relation-type id.** Re-implementing `writeUnsigned` / `writePositiveWithPrefix` / `getPrefix` line-for-line and sweeping counts 1-5000 finds exactly **one** inversion — `1023 → 1024` (`7f fe` vs `70 10 80`), and at the default stride of 16 it is **1008 → 1024**, so the 63rd type sorts *after* the 64th. Inversions sit at every byte-length boundary because the STOP bit marks the **last** byte. Nothing in the read path depends on the stronger property — `getBounds` compares only the top 3 bits, per-type slices are exact byte-prefix matches, and the same STOP bit keeps different-length prefixes from interleaving inside a `Direction.BOTH` window — and **no test asserts any of it** (`IDManagementTest.edgeTypeIDTest`'s 1,000,000 trials never compare two type prefixes). PR candidate 15. Third: **six prefix bands exist, and `getBounds` can reach only four of them** — it passes `getPrefix(systemTypes, systemTypes)`, so it emits `(0,1)` or `(2,3)` and never `(4,5)`; bands 4 (`0x80`-`0x9f`) and 5 (`0xa0`-`0xbf`) are the **invisible-non-system** bands, which is exactly where every vertex-centric index replica lives. `ManagementSystem.buildRelationTypeIndex:368`'s `maker.invisible()` is what puts them there, and `StandardEdgeLabelMaker:106` makes invisibility *structurally required* (an IN-only unidirected label is illegal otherwise). An edge with *N* vertex-centric indexes is **2 + N full columns**, each a complete re-serialization. Fourth: **the column *is* the uniqueness constraint** — `valuePosition` is assigned in six places and `MANY2ONE`-at-OUT and `SINGLE` get a bare-prefix column, so last-write-wins needs no read; `SET` puts the value in the column (set semantics for free); `MULTI`/`LIST` put the relation id in the column so nothing is overwritten. Fifth: `EdgeSerializer:481-483`'s `interval.isEmpty()` branch is **dead** — `BasicVertexCentricQueryBuilder:607-610` returns `emptyQuery()` first — and if reached it widens the slice to the whole type band (PR candidate 17). **Closed lesson 08's and 09's loose ends:** `TYPE_LEN_RESERVE = 3` **is** `IDHandler.PREFIX_BIT_LEN`, `MAX_PADDING_BITWIDTH = 6` **is** the one shift in `stripEntireRelationTypePadding`, the "different first-bit convention" needs no reconciling (row keys put the partition at the top, columns put the band at the top — different address spaces), and `BufferUtil.nextBiggerBuffer` **cannot overflow on a type prefix** (band maxes at 5, so byte 0 ≤ `0xbf`) while `padBuffer` turns out never to touch columns at all (its only caller pads **row keys** in the OKVS adapter). Also verified: the missing-value `0xff` marker sorts last in ASC and, flipped to `0x00`, first in DESC, with the exclusive bound applied on the matching side in each case. Daily Diff: **no 2026-11-08 or 2026-11-07 edition exists** — front page and `/archive/` both top out at 2026-11-06, which lesson 09 already digested — so one uncovered item from that edition instead: Postgres `SKIP LOCKED` queues saturating 1 vCPU at 64 connections against a `max_connections` of 100.
 - **09 — 2026-11-07** · [`2026/11/2026-11-07-janusgraph-id-authority-block-allocation/README.md`](2026/11/2026-11-07-janusgraph-id-authority-block-allocation/README.md) · **stayed on `a59ae8d8`** (mid-Part, no decision available). Read `VertexIDAssigner` (whole, 545 lines), `StandardIDPool` (whole), `IDBlockSizer` (whole), `ConsistentKeyIDAuthority` (whole, 500 lines), `AbstractIDAuthority` (whole), `ConflictAvoidanceMode` (whole), `IDBlock` (whole), `SimpleBulkPlacementStrategy` (whole), `IDManager` L60-130 / L370-430 / L450-460 / L545-565 / L610-650 / L715-725, `GraphDatabaseConfiguration` L1040-1180, `VariableLong` L77-92, `IDAuthorityTest` L75-295, plus the test inventories of `IDPoolTest`, `VertexIDAssignerTest`, `InMemoryIDAuthorityTest`, `CQLIDAuthorityTest`, `HBaseIDAuthorityTest`, `PropertyPlacementStrategy` L95-110, `docs/changelog.md` L2041-2058, `docs/configs/janusgraph-cfg.md` L88-113, `docs/operations/bulk-loading.md` L78-91. **THE finding: `ids.authority.conflict-avoidance-tag-bits` defaults to 4, is `ConfigOption.Type.FIXED`, and its tag defaults to 0 with mode `NONE` — so `ConsistentKeyIDBlock.getId:486-491` returns `count << 4` with a zero tag and every count JanusGraph assigns is a multiple of 16.** The first `NormalVertex` id in a fresh default graph is **4096** at partition 0 (count 16), not 256; the stride between consecutive vertices in one partition is 128, not 8; and `maxAvailableBits = unsignedBitLength(idUpperBound)-1-uniqueIdBitWidth` takes the four bits straight off every namespace's ceiling, so **2^51 of 2^55 vertex counts, 2^54 of 2^58 relation counts and 2^50 of 2^54 schema counts are reachable — 15/16 of each space is not**, on every graph created with the defaults, unchangeably. Second finding: the give-up message at `:420-421` prints `timeout.getNano()`, which is **0** for any whole-second `Duration`, including the 120 s `ids.renew-timeout` default — "Reached timeout 0" on every default deployment (PR candidate 11). Third: the rollback path's anonymous `TransactionalProvider` (`:392-399`) is commented "Use normal consistency level" and builds a transaction config **character-for-character identical** to `openTx()` at `:223-225` (PR candidate 12). Fourth: `IDAuthorityTest`'s two contiguity assertions (`checkBlock:207-209`, `testSimpleIDAcquisition:247-251`) are gated on `hasEmptyUid` and **none of the three `configs()` parameterizations sets tag-bits to 0**, so neither has ever executed (PR candidate 13). Fifth: `accessed()` writes a `volatile long` via `System.currentTimeMillis()` on every element id (`:378`) for a `getLastAccess()` that has **no caller in the tree** — measured **33.0 ns/op** against 0.30 ns for an empty loop under OpenJDK 21 (PR candidate 14, bundled with the `SimpleBulkPlacementStrategy` items). **Closed lesson 08's `count == 0` question properly:** `BASE_ID = 1` (`AbstractIDAuthority:45`), so no count 0 is ever offered — `addPadding`'s refusal was never the thing protecting it. Also: five pools with `getIDNamespace() == ordinal()`, three per partition (`hasOnePerPartition()`); `renewBlockIndex = 0` for `SCHEMA` (block 50) and `PARTITIONED_VERTEX` (block 100) because `RENEW_ID_COUNT = 100` exceeds both, so those two namespaces permanently double-buffer; the negated-counter column order that makes `getCurrentID`'s `setLimit(5)` correct; the 330 ms claim and the ~9,090 vertices/s/pool it implies; and `renewalThreads = 3*partitionIdBound+2` = 98 at defaults against a live-pool ceiling of 32 (`ids.num-partitions = 10`). Daily Diff: the **2026-11-06** edition (52 stories), found via `/archive/` while the front page still served 2026-11-05 — deep dive on Infino's coordinator-free 128-bit ids, whose 40-bit random writer id is JanusGraph's 4-bit conflict-avoidance tag with 36 more bits of budget.
 - **08 — 2026-11-06** · [`2026/11/2026-11-06-janusgraph-id-bit-layout/README.md`](2026/11/2026-11-06-janusgraph-id-bit-layout/README.md) · **Part II opens; stayed on `a59ae8d8` deliberately** so Part II's byte offsets stay comparable with lessons 02-07. Read `IDManager` (whole, 754 lines), `BufferUtil`, `NumberUtil`, `VertexIDAssigner`, `ManagementSystem`, `IDManagementTest`, `JanusGraphPartitionGraphTest`, `InMemoryPartitionGraphTest`, `docs/advanced-topics/data-model.md`, `docs/advanced-topics/custom-vertex-id.md`. **THE finding: the vertex id and the edgestore row key are two different 64-bit words** — `constructId:450` builds `[0 | count | partition | suffix]`, `getKey:502` rebuilds it as `(partition << partitionOffset) | addPadding(count)`, rotating the partition to the **top**. Second: **every default graph runs at `partitionBits = 5`, not 0.** Third: **`fromVertexId` accepts a temporary (negative) id and returns garbage** (PR candidate 8). Closed lesson 07's `EDGESTORE_MAX_KEY` question (PR candidate 9). Daily Diff: no 2026-11-06 edition at the time; digested **2026-11-05** (62 stories) — GitHub's "Rubicon" Git storage architecture.
 - **07 — 2026-11-05** · [`2026/11/2026-11-05-janusgraph-backend-store-wiring/README.md`](2026/11/2026-11-05-janusgraph-backend-store-wiring/README.md) · **Part I complete.** Read `Backend` (775 lines), `BackendTransaction` (568), `BackendOperation`, `CacheTransaction`, `KCVSCache`, `NoKCVSCache`, `KCVSProxy`, `ExpectedValueCheckingStoreManager`, `ExpirationKCVSCache`, `ExpirationCacheTest`, and slices of `GraphDatabaseConfiguration`. **THE finding: the retry backoff is a coin flip, not a ±20% jitter** — `(int)(2.0 / (1 + (rand*2-1)*0.2))` truncates to 1 or 2, measured median **14** attempts (max 38) against the 10 s read budget and **21** (max 48) against the 100 s write budget. Second: **`KCVSProxy.java:67` omits `unwrapTx`** (PR candidate 1). Daily Diff: the **2026-11-04** edition, 56 stories — PostgreSQL 19's `REPACK CONCURRENTLY`.
@@ -76,7 +77,7 @@ Newest first.
 
 - [x] 08 — `IDManager`: vertex ID bit layout, partition bits, vertex-type suffixes, and how row keys are derived
 - [x] 09 — `VertexIDAssigner` and the ID authority: block allocation from the ids store without per-insert coordination
-- [ ] 10 — `EdgeSerializer.writeRelation`: the column layout for edges and properties, direction, sort keys
+- [x] 10 — `EdgeSerializer.writeRelation`: the column layout for edges and properties, direction, sort keys
 - [ ] 11 — `EdgeSerializer.parseRelation` and `RelationCache`: decoding columns back into relations
 - [ ] 12 — `StandardSerializer`: attribute encodings, order-preserving serializers, and custom types
 - [ ] 13 — System types and schema storage: schema vertices, `BaseKey`/`BaseLabel`, and how a property-key definition is persisted
@@ -111,33 +112,173 @@ Newest first.
 ## Notes For The Next Run
 
 **Syllabus unchanged this run. No items added, split, merged or reordered; the 28 stand as written on
-2026-10-30.** Lesson 09 is mid-Part, so the re-pin question was not available and was not raised:
+2026-10-30.** Lesson 10 is mid-Part, so the re-pin question was not available and was not raised:
 **stay on `a59ae8d8`**. The next boundary where re-pinning is allowed is **Part II/III, after lesson
-13**; at that point either re-pin and record the new commit in the front-matter and here, or state
-explicitly that it is staying, as lesson 08 did.
+13** — two runs away. At that point either re-pin and record the new commit in the front-matter and
+here, or state explicitly that it is staying, as lessons 08 and 09 did.
 
-**One structural revision this run, applied under this file's own roll-off rule** (the root README
-states that `TRACK.md` keeps the notes for the three most recent lessons and older ones roll off into
-git history). Lesson 07's `Verified by lesson 07` block is now **compressed to the facts later lessons
-were promised**; the full block, with every line number and measurement, is preserved verbatim in git
-history at commit `513a317b2650b49e6069eb35e3bdfb70441a913a`. Lessons 08 and 09 keep their blocks in
-full because Part II lessons 10–13 cite them directly. Next run, lesson 08's block becomes the oldest
-of the three and the same rule applies to it.
+**The roll-off rule applied again this run.** The root README states that `TRACK.md` keeps the notes
+for the three most recent lessons and older ones roll off into git history. The three most recent are
+now 08, 09 and 10, so: **lesson 07's compressed block is removed** (it remains verbatim in git history
+at `513a317b2650b49e6069eb35e3bdfb70441a913a`), **lesson 08's block is now compressed** to the facts
+lessons 11-13 and the read path were promised — the full block is preserved verbatim in git history at
+`8af5383f23dca6b67f6ec56ca71c8164bc38000f` — and lessons 09 and 10 keep their blocks in full. Next
+run, lesson 09's block becomes the oldest of the three and the same rule applies to it.
 
 - **The mode question is closed. Do not reopen it unprompted.** Four consecutive empty `My Notes`
   triggered the switch recorded in the front-matter. Entries from lesson 05 on write in `lesson` mode
   without re-litigating the decision, without a notice at the top, and without nagging. If Aryant asks
   for reading sessions back, flip `mode:` and the entries resume the other shape from the next run.
-- **Never touch an earlier entry's `## My Notes`.** Sessions 01–04 keep their templates. They are his
+- **Never touch an earlier entry's `## My Notes`.** Sessions 01-04 keep their templates. They are his
   to fill at any time; if a future run finds content in any of them, answer those questions in that
   run's entry regardless of mode.
-- **Part I is complete; Part II is half done.** Lessons 01–07 cover the storage contract, two store
-  implementations, the adapter, the harness, and the wiring; lessons 08 and 09 cover the id layout and
-  the id supply. Lessons 10–13 are serialization: `EdgeSerializer` out, `EdgeSerializer` back in,
-  `StandardSerializer`, and schema persistence.
-- **Entry size.** Lesson 05 ≈35 KB, 06 ≈63 KB, 07 ≈78 KB, 08 ≈67 KB, 09 ≈61 KB (a large share of each
-  is permalink URLs, which are not prose). In line with the SQLite and PostgreSQL lessons. The old
-  5–9 KB budget was a `contributor-reading` constraint and does not apply.
+- **Part II is three-quarters done.** Lessons 08-10 cover the id bit layout, the id supply and the
+  column layout. **Lesson 11 is `parseRelation`, which is lesson 10 read backwards** — every branch in
+  lesson 10's §3 table is a branch there, and lesson 10's `Next Steps` 1 states the specific question
+  to carry in (which of the six layouts can be fully parsed from the header alone). Lesson 12 is
+  `StandardSerializer`, which owns the attribute bytes lesson 10 treated as opaque; lesson 13 is schema
+  persistence, and should verify rather than assume that schema-definition relations land in bands 0
+  and 1.
+- **Entry size.** Lesson 05 ≈35 KB, 06 ≈63 KB, 07 ≈78 KB, 08 ≈67 KB, 09 ≈61 KB, 10 ≈70 KB (a large
+  share of each is permalink URLs, which are not prose). In line with the SQLite and PostgreSQL
+  lessons. The old 5-9 KB budget was a `contributor-reading` constraint and does not apply.
+- **Method note for lessons 11-13.** Lesson 10's byte sequences were produced by re-implementing
+  `VariableLong.writeUnsigned`, `VariableLong.writePositiveWithPrefix` and `DirectionID.getPrefix`
+  line-for-line from the pinned sources and running them, with an in-tree check specified as Hands-On
+  exercise 3. That is a legitimate method for a pure function and worth reusing for
+  `StandardSerializer`'s order-preserving encodings in lesson 12 — but state it, as lesson 10 does,
+  and always pair it with an exercise that runs the real code.
+
+### Verified by lesson 10, for lessons 11-13, 17 and 20 to cite rather than re-derive
+
+- **`writeRelation` writes one buffer and returns one offset.** `EdgeSerializer:288-381` produces a
+  `StaticArrayEntry(buffer, valuePosition)`; there is no second buffer. `valuePosition` is assigned in
+  **six** places and each assignment is a different storage contract. The full table (P = relation-type
+  prefix, S = byte-ordered sort-key values, `→` forward-readable, `←` backward-readable):
+  edge `MULTI` → col `P S vid← rid←`, val signature+props (`:325-327`); edge `SIMPLE` → col `P vid→`,
+  val `rid`+… (`:320-322`); edge unique-in-dir (`MANY2ONE` at OUT, `ONE2MANY` at IN, `ONE2ONE` either)
+  → col `P`, val `vid→ rid`+… (`:317-318`); property `SINGLE` → col `P`, val `value rid`+… (`:338-339`);
+  property `SET` → col `P value`, val `rid`+… (`:341-342`); property `LIST` → col `P S rid←`, val
+  `value`+… (`:347-349`). `Multiplicity.convert`: `LIST→MULTI`, `SET→SIMPLE`, `SINGLE→MANY2ONE`.
+- **The column *is* the uniqueness constraint.** A bare-prefix column means one physical cell per
+  `(vertex, type)`, so a second `MANY2ONE` out-edge **overwrites** the first with no read, no lock and
+  no check; `SET`'s `P value` column is set semantics for free; `MULTI`/`LIST` put the relation id in
+  the column so nothing is ever overwritten. This is why `isDirectColumnByStartOnlyAllowed:566-577`
+  returns true **only** for `Cardinality.SINGLE` property keys (and only for a `PropertyKeyVertex`,
+  reading `TypeDefinitionCategory.MULTIPLICITY` out of the definition map rather than calling
+  `multiplicity()`), and why `ManagementSystem:348-349` refuses to index a constrained direction.
+  **"Sort key ⟺ unconstrained multiplicity" is enforced three times in three files** —
+  `ManagementSystem:348`, `StandardEdgeLabelMaker:103-105`, and `EdgeSerializer:302`, the only one in
+  the write path and a **bare `assert`**.
+- **THE finding: lesson 09's four tag bits cost one byte in every cell.** `writePositiveWithPrefix`
+  (`VariableLong:160-186`) with `PREFIX_BIT_LEN = 3` lays the first byte out as
+  `[band(3) | continue(1) | top 0-4 bits of (count<<1 | dirBit)]`, so a **1-byte** prefix needs
+  `count << 1 | dir ≤ 15`, i.e. **count ≤ 7**. The smallest count a default graph can assign is **16**
+  (lesson 09: tag-bits `FIXED` at 4, tag always 0), so **the 1-byte prefix is unreachable on every
+  default graph** and is not reachable later either. Exact prefixes at count 16: `50 a0` (property),
+  `70 a0` (edge OUT), `70 a1` (edge IN). The **2-byte prefix holds counts ≤ 1023 → exactly 63
+  multiples of 16** (16..1008); count 1024 is 3 bytes. ~200 MB of pure padding on a 100M-edge graph.
+- **Columns are grouped by relation type, NOT sorted by relation-type id.** Sweeping counts 1-5000:
+  exactly **one** inversion, `1023 → 1024` (`7f fe` vs `70 10 80`); at the default stride of 16 it is
+  **1008 → 1024**. Cause is structural — `writeUnsigned:60-70` sets `STOP_MASK` on the **last** byte,
+  so a longer encoding's second byte is always `< 0x80` and a 2-byte encoding's is always `≥ 0x80`.
+  Inversions sit at every length boundary (`131071 → 131072` next). **Nothing in the read path depends
+  on the stronger property**, and the same STOP bit is why: `getBounds` compares only the first byte's
+  top 3 bits; `getQuery(type, dir, sortKey)` writes the same prefix bytes with the same function for
+  both ends, so a per-type slice is an exact byte-prefix match; and a 3-byte prefix sharing a first byte
+  can never land inside a 2-byte `Direction.BOTH` window (`70 a0`..`70 a2`) because its second byte is
+  `< 0x80`. **Untested and undocumented** — `IDManagementTest.edgeTypeIDTest:141-201` runs 1,000,000
+  trials and asserts round trip, `DirectionID`, full consumption, inline round trip, `DataOutput`
+  equality and both `getBounds` bracketings, and never compares two different counts. PR candidate 15.
+- **Six prefix bands; `getBounds` reaches four.** `DirectionID.getPrefix:93-96` is
+  `((systemType?0:invisible?2:1)<<1) + (id>>>1)`, and the direction does **not** affect the band:
+  0 = system property (`0x00`-`0x1f`), 1 = system edge (`0x20`-`0x3f`), 2 = user property
+  (`0x40`-`0x5f`), 3 = user edge, **OUT and IN interleaved per type** (`0x60`-`0x7f`), 4 =
+  invisible-non-system property (`0x80`-`0x9f`), 5 = invisible-non-system edge (`0xa0`-`0xbf`), 6-7
+  unreachable. `getBounds:185-206` only ever passes `getPrefix(systemTypes, systemTypes)`, so it emits
+  `[0x00,0x40)` or `[0x40,0x80)` and **never touches bands 4-5**. `IDManagementTest.testDirectionPrefix`
+  asserts both bounds are exactly 1 byte and `< 0xff`.
+- **Bands 4-5 are the vertex-centric index bands, and that is deliberate.**
+  `ManagementSystem.buildRelationTypeIndex:340-393` creates a **whole new relation type** named
+  `<baseTypeId>:<indexName>`, with `maker.invisible()` (`:368`), `Multiplicity.MULTI` (`:369`), the sort
+  keys, the sort order, and a signature pruned of the sort keys (`:374-385`); it is linked to the base
+  type by a `RELATIONTYPE_INDEX` schema edge (`:387`). `RelationTypeVertex.getRelationIndexes:109-117`
+  returns `[this] ++ indexTypes`, and `StandardJanusGraph:1124-1149` calls `writeRelation(edge, type,
+  pos, tx)` once per (index type × covered position). **Invisibility is structurally required**, not
+  just convenient: `ManagementSystem:355` can pass `Direction.IN` to `lm.unidirected`, and
+  `StandardEdgeLabelMaker:106` forbids an IN-only unidirected label unless `INVISIBLE` is set. A
+  unidirected index type fails the `isUnidirected` check at `StandardJanusGraph:1127-1128` for the other
+  position, so **an edge with *N* vertex-centric indexes is 2 + N full columns**, each with its own
+  prefix, sort-key window, tail ids, signature and inline properties — and each index type burns a
+  schema count, i.e. 16 at default stride, out of the same 63-type 2-byte window.
+  `IndexRepairJob:211-219` re-runs the identical loop, which is why reindexing needs no new code path;
+  `JanusGraphVertexDeserializer:124-128` filters bands 4-5 in application code because it scans whole
+  rows instead of issuing band-bounded slices.
+- **`TYPE_LEN_RESERVE = 3` IS `IDHandler.PREFIX_BIT_LEN`, and `MAX_PADDING_BITWIDTH = 6` IS one shift.**
+  `stripEntireRelationTypePadding:701-704` is `UserEdgeLabel.removePadding` = `id >>> 6`; all four proper
+  relation-type suffixes are 6 bits (`000101`, `100101`, `010101`, `110101`) so one shift strips any of
+  them, and `readRelationType:143-155` **reconstructs** those 6 bits from the 3-bit band plus the 1
+  direction bit. `SCHEMA_COUNT_BOUND = 1L << (63 - 6 - 3) = 1 << 54` (`IDManager:410`) is sized so
+  `count << 1` plus a 3-bit prefix still fits a positive long. **Lesson 08's and 09's loose ends,
+  closed.** The inline path differs by two bits on purpose: `writeInlineRelationType:168-171` uses
+  `stripRelationTypePadding` = `>>> 4`, keeping property-vs-edge and user-vs-system, because an inline
+  key id has no band to rebuild itself from.
+- **The "different first-bit convention" needs no reconciling.** In a **row key** the high bits are the
+  partition and the low bits are the type suffix (`getKeyID`'s javadoc, `IDManager:523-529`); in a
+  **column** the high bits are the band and the **low bit of the encoded value** is the direction. The
+  `writeRelationType` javadoc (`IDHandler:120-128`) lists the *logical* field order, not the byte order.
+  Two different address spaces, same 64-bit vocabulary. Lesson 08's question, answered.
+- **`BufferUtil.nextBiggerBuffer:193-212` cannot overflow on a type prefix**, and `padBuffer` never
+  touches columns. `nextBiggerBuffer` increments **in place, no length change**, carrying right-to-left,
+  and throws on carry-out unless `allowOverflow`; byte 0's top 3 bits are the band, which maxes at 5, so
+  byte 0 ≤ `0xbf` and the carry always stops. A prefix *can* end in `0xff` (count 63, `EDGE_IN_DIR` →
+  `70 ff`) and then yields `71 00`, still a correct exclusive bound. `padBuffer:180-187`'s only caller is
+  `OrderedKeyValueStoreAdapter:143`, padding **row keys** in the lesson-05 OKVS adapter. Both items
+  owed to lesson 10, closed.
+- **Everything the reader needs after the sort keys is written backward.** `writePositiveBackward:217`
+  and `writeVertexId(out, id, false)` lay bytes down so a reader walking from the **tail** of the column
+  finds the relation id, then the adjacent vertex id, leaving the middle as the sort-key window with no
+  length header. The `forward` flag tracks exactly whether the id is in the value (`true`, parsed front
+  to back) or in the column (`false`); `readVertexId:218-234` peeks `getByte(position-1)` for
+  `STRING_ID_MARKER` when reading backward. This is what makes `ImplicitKey.ADJACENT_ID` and
+  `ImplicitKey.JANUSGRAPHID` addressable as pseudo-sort-keys in `getQuery:484-496`: they are the
+  backward-written tail fields, and `:466-471` pins their only legal positions — `ADJACENT_ID` exactly
+  at `i == sortKeyIDs.length`, `JANUSGRAPHID` at `sortKeyIDs.length` or `+1`, both only for non-unique
+  directions. That is the contract `BasicVertexCentricQueryBuilder:683-690`'s extended sort key must
+  satisfy — **lesson 20's starting point.**
+- **`InlineType` is two independent booleans, not three cases.** `KEY` = no inline key id + byte-ordered
+  (sort keys, in the column); `SIGNATURE` = no inline key id, not byte-ordered (in the value); `NORMAL`
+  = inline key id, not byte-ordered (everything else). `:406`'s assert means a generically typed key
+  (`dataType() == Object.class`, written with `writeClassAndObject`) can **only** be a `NORMAL` inline
+  property — never a sort key, never a signature field. Remaining properties are `Arrays.sort`ed by id
+  (`:369-371`) so that two serializations of the same relation are byte-identical, which
+  `acquireEdgeLock` (`StandardJanusGraph:900-901`) depends on.
+- **`DESC` is a one's complement over exactly `[keyStartPos, keyEndPos)`.**
+  `WriteByteBuffer.getStaticBufferFlipBytes:146-153` is `b.put(i,(byte)~b.get(i))` over that half-open
+  window only — not the prefix (so a DESC type stays in its band and its slice stays an exact prefix
+  match), not the tail (so tail-reading is order-independent). For a constrained type
+  `keyStartPos == keyEndPos` and the flip is a no-op; `getStaticBuffer()` **is**
+  `getStaticBufferFlipBytes(0,0)` (`:142`), so `EdgeSerializer:378-380`'s ternary is cosmetic.
+- **The missing-value marker is correct in both sort orders.** `StandardSerializer.writesMissingValuesLast:264-267`
+  plus `SerializerTest:139-155`: a missing value of any order-preserving type is the single byte `0xff`,
+  above every real value (and `Class`, `Instant`, `byte[]` are excluded). ASC (`:511-516`):
+  `sliceEnd = [prefix][0xff]` with `endInclusive = false`, so missing values are excluded at the top.
+  DESC (`:518-523`): the `0xff` is **inside the flipped window** and becomes `0x00`, so missing values
+  sort **first**, and `if (!endInclusive) sliceStart = nextBiggerBuffer(...)` bumps the lower bound to
+  `[prefix][0x01]` — excluded at the bottom. The javadoc at `:554-561` is order-neutral and right; only
+  the inline comment at `:504-505` ("written as -1 after the values") is ASC-phrased.
+- **`EdgeSerializer:481-483` is dead code with a bad failure mode.** `RangeInterval.isEmpty():110-115`
+  means *unsatisfiable*; breaking out leaves `sliceStart == null`, which falls into `:533` and produces a
+  slice over the **whole type band** — maximum over-read instead of nothing. It never fires:
+  `BasicVertexCentricQueryBuilder:607-610` returns `BaseVertexCentricQuery.emptyQuery()` for any empty
+  interval before `getQuery` is ever called. PR candidate 17.
+- **Two columns per edge, two different shapes.** `EdgeDirection.fromPosition`: **0 → OUT, 1 → IN**.
+  `StandardJanusGraph:1126-1149` loops `pos` over `edge.getArity()` and writes only the position whose
+  endpoint is the row's vertex — which is where the data-model doc's "each edge has to be stored twice"
+  physically happens. For a `MANY2ONE` edge the OUT column is bare-prefix and the IN column carries the
+  adjacent vertex id: **same edge, two layouts.** Three other callers write a column outside the commit
+  path: `TransactionLogHeader:86-93` (always `position = 0`), `IndexRecordUtil:454-462` (inline index
+  fields, always `0`), and `IndexRepairJob:211-219`.
 
 ### Verified by lesson 09, for lessons 10, 16, 18 and 27 to cite rather than re-derive
 
@@ -253,128 +394,54 @@ of the three and the same rule applies to it.
   for a pool that fell back to its own thread (`StandardIDPool:131-137`). On a graph opened through
   `JanusGraphFactory` the second count should be **0**.
 
-### Verified by lesson 07 — compressed; full block in git history at `513a317b`
+### Verified by lesson 08 — compressed; full block in git history at `8af5383f`
 
-- **`Backend` is two-phase.** The constructor turns `StoreFeatures` into configuration; `initialize`
-  opens **six** named stores (`janusgraph_ids`, `edgestore`, `graphindex`, `system_properties`,
-  `systemlog`/`txlog`), and **three of the six** go through the locking manager, so a locking-emulated
-  backend really runs **nine** physical stores. **The ids store is opened through the *unwrapped*
-  manager with no cache and no lock wrapper** — which is why lesson 09 found no cache in that path.
-  The fixed-key-length map (`Backend.java:537-542`) gives `8` to `edgestore`, `edgestore_lock_` and the
-  ids store **by name**; everything else pays the variable-length cost.
-- **The transaction stack is four levels deep** (`BackendTransaction` → `CacheTransaction` →
-  `ExpectedValueCheckingTransaction` → two real backend transactions, opened unconditionally) and
-  `unwrapTx` strips exactly one level per wrapper. `KCVSProxy.java:67` omits it — PR candidate 1.
-- **THE finding: the retry backoff is a coin flip, not a ±20% jitter.** `BackendOperation`'s
-  `(int)(2.0 / (1 + (rand*2-1)*0.2))` truncates to 1 or 2, so `pertubTime(d)` ∈ {d, d/2}; reproduced
-  verbatim under OpenJDK 21 (`{1=500803, 2=499197}` over 1,000,000 draws) and measured at a median of
-  **14** attempts (max 38) against the 10 s read budget and **21** (max 48) against the 100 s write
-  budget, against documentation that says "backoff exponentially". PR candidate 7 (file as an issue).
-- **Cache invalidation does not evict** (`ExpirationKCVSCache.invalidate:266-270`): it marks the row so
-  reads bypass for at least `db-cache-clean-wait`, and the sweep is triggered by a `CountDownLatch(5)`
-  counted down by wasted reads. `cache.db-cache-size` default **0.3**. `NoKCVSCache` is 44 lines of
-  empty overrides passing `metricsName = null`.
-- **`CacheTransaction` is the write buffer**: `Map<KCVSCache, Map<StaticBuffer, KCVEntryMutation>>`
-  with a monotonic `numMutations`; `storage.buffer-size` default **1024**, a durability knob that some
-  backends ignore. `flushInternal` holds the caller's `Entry` objects across the whole flush and
-  invalidates only afterwards — which is why lesson 04's `getNoCopy` aliasing test must mutate through
-  a `CacheTransaction`.
-- **`GraphDatabaseConfiguration.getBackend()` is a factory, not an accessor** (`:1951-1956`): every
-  call builds a new `Backend`. Reachable from three call sites — PR candidate 5, which still needs its
-  experiment run. `close()`/`clearStorage()` share one `hasAttemptedClose` flag.
-- **`BackendTransaction` has five feature branches** against the raw features from `Backend.java:249`,
-  including the `hasScan`/`hasOrderedScan` pair that answers lesson 06's scan-test questions, and
-  `EDGESTORE_MIN_KEY`/`EDGESTORE_MAX_KEY`, whose safety lesson 08 proved and lesson 09's `BASE_ID = 1`
-  completes. `commit()` is storage-then-indexes; `StandardScanner` is built from the unwrapped manager
-  (`Backend.java:305`). **No non-key-consistent fallback exists**: `initialize` L339-343 throws
-  `IllegalStateException`.
-- **`ExpirationCacheTest` is the single concrete subclass of `KCVSCacheTest`**, and
-  `#testGracePeriod` asserts the cache-bypass semantics directly (`getSliceCalls` 0 → 2 → 4 on two
-  identical reads), needing exactly `PENALTY_THRESHOLD = 5` reads to wake the cleanup thread.
-
-### Verified by lesson 08, for lessons 10-13 and the read path to cite rather than re-derive
-
-- **An id is not a row key, and `getKey:502` is the whole difference.** `constructId:450-459` builds
-  `[0 | count | partition | suffix]`; `getKey:489-510` rebuilds it as
-  `(partition << partitionOffset) | type.addPadding(count)` with `partitionOffset = Long.SIZE - partitionBits`
-  (`:431`, **64 not `TOTAL_BITS`**). Count is **not** shifted by `partitionBits` in the key. Verified
-  examples at pb=3: `(count=1, part=5)` → id `104` / key `0xa000000000000008`; `(count=2, part=5)` → id
-  `168` / key `0xa000000000000010`. At **pb=0 the two words are identical**, which is why the distinction
-  is invisible in most tests. Round trip `getKeyID(getKey(id)) == id` re-verified against
-  `IDManagementTest.EntityIDTest`'s own five parameter sets, 0 mismatches over ~9,000 counts × 3 proper
-  user-vertex types.
+- **An id is not a row key.** `constructId:450-459` builds `[0 | count | partition | suffix]`;
+  `getKey:489-510` rebuilds it as `(partition << partitionOffset) | type.addPadding(count)` with
+  `partitionOffset = Long.SIZE - partitionBits` (`:431`, **64 not `TOTAL_BITS`**) — the partition rotates
+  to the **top** and the count is **not** shifted by `partitionBits`. At pb=0 the two words are identical,
+  which is why the distinction is invisible in most tests. Round trip `getKeyID(getKey(id)) == id`
+  re-verified over ~9,000 counts × 3 proper user-vertex types, 0 mismatches.
 - **`partitionBits = 5` is the production default and 0 is not configurable.** `CLUSTER_MAX_PARTITIONS`
-  (`cluster.max-partitions`) is `ConfigOption.Type.FIXED`, default **32**, validator
-  `integer>1 && NumberUtil.isPowerOf2(integer)`. `VertexIDAssigner.java:104` is
-  `NumberUtil.getPowerOf2(config.get(CLUSTER_MAX_PARTITIONS))`, and `getPowerOf2` is
-  `Long.SIZE-(numberOfLeadingZeros(value)+1)` → **5**. `ConsistentKeyIDAuthority` re-derives the same
-  number independently and re-checks `0..16`. **`DEFAULT_PARTITION_BITS = 0` (`:396`) and the no-arg
-  `IDManager()` (`:434-436`) have no caller anywhere in the tree** — code-searched at the pinned commit:
-  `new IDManager(` matches exactly `VertexIDAssigner.java:105` and `IDManagementTest`, both with an
-  explicit width. Do not build mental models on pb=0.
-- **The bounds table, exact** (`vertexCountBound = 1L << (63 - pb - 3)`, `:429`):
-  pb=0 → 2^60; pb=3 → 2^57 (the test default, `JanusGraphPartitionGraphTest:87` sets
-  `cluster.max-partitions = 8`); **pb=5 → 2^55 = 36,028,797,018,963,968**; pb=8 → 2^52; pb=12 → 2^48;
-  pb=16 (`MAX_PARTITION_BITS`, `:392`) → 2^44 = 17,592,186,044,416. One partition bit costs one bit of
-  vertex count, and the choice is `FIXED` at graph creation. `relationCountBound` is special-cased to
-  `Long.MAX_VALUE` at pb=0 (`:427`) because `1L << 63` would overflow.
-  `SCHEMA_COUNT_BOUND = 1 << 54` (`:410`) uses `MAX_PADDING_BITWIDTH = 6` and `TYPE_LEN_RESERVE = 3`
-  and does **not** depend on `partitionBits` — schema ids have no partition field (`:678-681`).
-  **Lesson 09 narrows all of these by four bits in practice** — see its block above.
-- **One always-zero gap bit per row key.** Since `count < 2^(60-pb)`, `count<<3` occupies bits
-  `0..62-pb` while the partition starts at bit `64-pb`: **bit `63-pb` of every user-vertex row key is
-  always 0**. At pb=0 that bit is the sign bit the `TOTAL_BITS` comment (`:382-387`) is about. At pb>0
-  the key's **sign bit belongs to the partition and can be set** — pb=5, partition 17 →
-  `0x8800000000000008`. Ordering is still correct because `StaticBuffer` compares unsigned byte-wise;
-  arithmetic after `getLong(0)` is not, which is what `getKeyID`'s javadoc (`:523-529`) warns about and
-  why it uses `>>>` exclusively. `:543`'s `partitionOffset<Long.SIZE ? ... : 0` ternary is **required**,
-  not defensive: Java masks long shift distances to 6 bits, so `value >>> 64` is `value >>> 0`.
-- **`VertexIDType` is a variable-length suffix code, not a stored tag.** 17 members,
-  `offset()`/`suffix()`/`isProper()`. Proper user vertices: `NormalVertex` `000`, `PartitionedVertex`
-  `010`, `UnmodifiableVertex` `100` — **all three have `offset() == 3`**, asserted at `getKey:498` and
-  guarded for the whole enum by `IDManagementTest.testUserVertexBitWidth` (whose first clause is a bare
-  `assert`, so a no-op without `-ea`). Schema side: `Schema` `01`, `SchemaType` `101`, `RelationType`
-  `0101`, `PropertyKey` `00101`, `UserPropertyKey` `000101`, `SystemPropertyKey` `100101`, `EdgeLabel`
-  `10101`, `UserEdgeLabel` `010101`, `SystemEdgeLabel` `110101`, `VertexLabel` `01101`,
-  `GenericSchemaType` `1001`; `Invisible` `1`, `InvisibleVertex` `11`. `is()` (`:355-362`) is a masked
-  compare, so the hierarchy costs nothing — and **on a non-`Number` it returns `suffix() == 0`**, which
-  is the custom-string-id path: a string id is a `NormalVertex` by definition and can never be schema or
-  partitioned. `UserPropertyKey` count=1 → id `69` = `0b1000101`; `UserEdgeLabel` count=1 → `85`.
+  is `FIXED`, default 32; `VertexIDAssigner:104-105` derives 5 from it. `DEFAULT_PARTITION_BITS = 0`
+  (`:396`) and the no-arg `IDManager()` (`:434-436`) have **no caller anywhere in the tree**. Do not build
+  mental models on pb=0. Bounds: `vertexCountBound = 1L << (63 - pb - 3)`, so **pb=5 → 2^55**;
+  `SCHEMA_COUNT_BOUND = 1 << 54` does **not** depend on `partitionBits` (schema ids have no partition
+  field, `:678-681`). Lesson 09 narrows all of these by four bits in practice.
+- **`VertexIDType` is a variable-length suffix code, not a stored tag.** 17 members with
+  `offset()`/`suffix()`/`isProper()`; `is()` (`:355-362`) is a masked compare, and **on a non-`Number` it
+  returns `suffix() == 0`** — the custom-string-id path. The four proper relation-type suffixes all have
+  `offset() == 6`: `UserPropertyKey` `000101`, `SystemPropertyKey` `100101`, `UserEdgeLabel` `010101`,
+  `SystemEdgeLabel` `110101`. The three proper user-vertex types all have `offset() == 3`:
+  `NormalVertex` `000`, `PartitionedVertex` `010`, `UnmodifiableVertex` `100`.
 - **`EDGESTORE_MAX_KEY` and `EDGESTORE_MIN_KEY` are both unreachable — lesson 07's question, closed.**
-  `oneBuffer(8)` ends in `111`; no proper `VertexIDType` suffix is `111` (only `000`/`010`/`100`), and
-  `getUserVertexIDType:461-470` throws `InvalidIDException` for anything else. The schema branch has
-  key == id and requires low 2 bits `01`, but `0xFF & 3 == 3`. String ids can't collide: `getStringIdBuffer`
-  forces `length != 8`, and the ordered-scan branch is gated on `!allowCustomVertexIdType` anyway.
-  `zeroBuffer(8)` needs `count == 0`, forbidden by `addPadding:347` and asserted at `getKey:501` — and
-  **lesson 09 showed the authority never offers count 0 at all** (`BASE_ID = 1`). The half-open interval
-  is therefore safe here — **by accident of the suffix encoding, documented nowhere**. See PR candidate 9.
-- **Partitioned vertices: one id, up to `2^pb` row keys, and the hash is the identity for small counts.**
-  `getVertexID:555-564` checks `partition == PARTITIONED_VERTEX_PARTITION (1)` then **discards it**,
-  calling `getCanonicalVertexIdFromCount`. Placement is the XOR fold `getPartitionHashForId:566-577`,
-  guarded by `checkState(partitionBits>0)` because the loop never advances at pb=0. **Every count below
-  `2^pb` folds to itself** (verified: at pb=16, counts 1..10 → partitions 1..10 in order), so the first
-  handful of partitioned vertices get exactly the sequential placement the fold exists to prevent;
-  `testPartitionHashes` (`JanusGraphPartitionGraphTest:113-119`) only asserts `> bound/2` distinct over
-  `1..2*bound`. `getPartitionedVertexRepresentatives:601-609` allocates `long[getPartitionBound()]`
-  fresh per call — 32 longs at pb=5, **65,536 longs / 512 KB at pb=16**, with only a bare `assert` at
-  `:603` between that and an `int` overflow (the real guard is `VertexIDAssigner:106`).
-- **Temporary ids preserve the bit pattern.** `makeTemporary:665-668` is `(1L<<63) | id` with
-  `checkArgument(id>0)`; `isTemporary` is `id<0`. Every `VertexIDType.is()` check still works on a
-  temporary, which `IDManagementTest` asserts for `NormalVertex`, `UserEdgeLabel` and `Invisible`.
-  Temporaries carry no partition (`:650-654`). This is what PR candidate 8 trips over.
+  `oneBuffer(8)` ends in `111` and no proper suffix is `111`; `zeroBuffer(8)` needs `count == 0`, which
+  lesson 09 showed the authority never offers (`BASE_ID = 1`). Safe **by accident of the suffix encoding,
+  documented nowhere**. PR candidate 9.
+- **One always-zero gap bit per row key** (bit `63-pb`), and at pb>0 the key's **sign bit belongs to the
+  partition and can be set**. Ordering stays correct because `StaticBuffer` compares unsigned byte-wise;
+  arithmetic after `getLong(0)` does not, which is why `getKeyID` uses `>>>` exclusively and why
+  `:543`'s `partitionOffset<Long.SIZE ? ... : 0` ternary is **required** (Java masks long shift distances
+  to 6 bits).
+- **Partitioned vertices: one id, up to `2^pb` row keys**, placed by the XOR fold
+  `getPartitionHashForId:566-577` — in which **every count below `2^pb` folds to itself**, so the first
+  handful get exactly the sequential placement the fold exists to prevent.
+  `getPartitionedVertexRepresentatives:601-609` allocates `long[getPartitionBound()]` fresh per call.
+  Owed to lesson 19: the read cost is one slice query per representative row.
+- **Temporary ids preserve the bit pattern** (`makeTemporary:665-668` is `(1L<<63) | id`), so every
+  `VertexIDType.is()` check still works on one — which is what PR candidate 8 (`fromVertexId` accepting a
+  negative id and returning garbage) trips over.
 - **Three invariants are `assert`, not `Preconditions`:** `getKey:498`, `getKey:501`,
   `getPartitionedVertexRepresentatives:603`. No-ops under a normal JVM, all on cold paths.
-- **`relationCountBound` and `constructId` disagree at pb=0.** `getRelationID:549-552` admits
-  `count < Long.MAX_VALUE`; `constructId:453-454` then requires
-  `unsignedBitLength(count)+pb+offset <= 63`. Unreachable in practice because pb=0 is not configurable.
 
 ### PR candidates, all verified at the pinned commit
 
 Numbering is **stable** — earlier entries reference these numbers, so new candidates are appended rather
-than inserted in size order. **Candidates 11–14 are new this run** (lesson 09), and **11 is now the
-smallest the track has found**. Candidates 1–10 carry forward and were **not** re-verified this run:
-8–10 were verified at this pinned commit on 2026-11-06, 1 and 7 on 2026-11-05, 2–4 and 6 on 2026-11-04,
-and 5 still needs its experiment run.
+than inserted in size order. **Candidates 15–17 are new this run** (lesson 10); 15 is a pure test
+addition and 17 should be opened as an issue rather than a PR. **11 is still the smallest the track has
+found.** Candidates 1–14 carry forward and were **not** re-verified this run: 11–14 were verified at this
+pinned commit on 2026-11-07, 8–10 on 2026-11-06, 1 and 7 on 2026-11-05, 2–4 and 6 on 2026-11-04, and 5
+still needs its experiment run.
 
 1. **`KCVSProxy.java:67`** passes `txh` where every sibling method passes `unwrapTx(txh)`. One token.
    Fix the same omission in the test double at `KCVSCacheTest.java:242` and add a `KCVSCacheTest` case
@@ -478,71 +545,125 @@ and 5 still needs its experiment run.
     `Random`, fix the javadoc. `currentPartitions` being a non-volatile `int[]` written from any thread
     is worth a sentence in the PR body but not a change — a stale read is still a valid partition.
 
+15. **A test for the relation-type ordering contract.** `IDManagementTest.edgeTypeIDTest:141-201` runs
+    1,000,000 trials and asserts the round trip, the `DirectionID`, full buffer consumption, the inline
+    round trip, `DataOutput`-vs-`getRelationType` equality, and both `getBounds` bracketings — and never
+    compares two **different** type prefixes to each other. So the actual ordering property is unpinned:
+    the encoding is monotone *within* a byte-length class and **inverts across one**. Add a case asserting
+    exactly that, with the two concrete pairs lesson 10 verified — `count 1023` (`7f fe`) vs `count 1024`
+    (`70 10 80`), and the default-stride pair `1008` vs `1024` — so "columns are grouped by type, not
+    sorted by type id" is documented in the suite rather than folklore. Phrase the assertions as the
+    contract (`compareTo(...) > 0` with a comment naming the STOP-bit cause), not as a bug. The same patch
+    can fix `int trails = 1000000` at `:145` (`trails` → `trials`). **Smallest-risk candidate on the list
+    after 11** — pure test addition, no production change.
+16. **One paragraph in `docs/advanced-topics/data-model.md`.** The doc's "Individual Edge Layout" section
+    (L66-88) describes the relation-type id, the direction bit and the sort key correctly, and says nothing
+    about the **six prefix bands** — which are the single most useful thing to know when reading a raw
+    edgestore row, and the reason a `v.edges()` slice does not return vertex-centric index replicas. Add
+    the band table (0-1 system, 2-3 user, 4-5 invisible = index replicas, 6-7 unreachable), one sentence
+    on `getBounds`, and one sentence making explicit that columns are **grouped** by type rather than
+    ordered by type id. Docs-only, no code risk.
+17. **`EdgeSerializer.java:481-483` — the dead empty-interval branch.** `interval.isEmpty()` means
+    *unsatisfiable*, and breaking out of the loop leaves `sliceStart == null`, which falls into `:533` and
+    yields a slice over the **whole type band** — the maximum over-read, where the correct answer is the
+    empty set. It is unreachable today because `BasicVertexCentricQueryBuilder:607-610` returns
+    `BaseVertexCentricQuery.emptyQuery()` for any empty interval before `getQuery` is called, so this is
+    not a live bug. Either delete the branch as dead or make the empty case produce an empty slice;
+    which one is a maintainer's call, so **open as an issue first**, with the trace from `:481` to `:533`
+    to `:548`, rather than as a PR.
+
 ### Still open, and who owns it
 
-- **Closed by lesson 09:** where `count` and `partition` come from; the full claim protocol and its
-  330 ms; the five pools and their block sizes; lesson 08's `count == 0` question (`BASE_ID = 1`); and
-  lesson 06's note about `IDAUTHORITY_WAIT = Duration.ZERO`, which turns out to be subsumed by the
-  `isDistributed()` gate.
-- **Owed to lesson 10 by lessons 08 and 09:** `TYPE_LEN_RESERVE = 3` and `MAX_PADDING_BITWIDTH = 6` are
-  accounted for but not spent — `EdgeSerializer.writeRelation` spends them, with
-  `SCHEMA_COUNT_BOUND = 1 << 54` as the budget. `IDHandler`'s **different** first-bit convention (per
-  `getKeyID`'s javadoc at `:523-529`) must be reconciled there, and
-  `IDManagementTest.edgeTypeIDTest`'s 1,000,000-trial `IDHandler` loop is the starting point.
-  `BufferUtil.nextBiggerBuffer` / `padBuffer` also go to lesson 10. **From lesson 09:** relation counts
-  arrive from a pool whose block is 80,000 wide in steps of **16**, and an edge is co-located with one
-  endpoint's partition — both relevant to the column layout's locality claims.
+- **Closed by lesson 10:** `TYPE_LEN_RESERVE` and `MAX_PADDING_BITWIDTH` (they are `PREFIX_BIT_LEN` and
+  the one shift in `stripEntireRelationTypePadding`); the `IDHandler`-vs-`getKeyID` first-bit convention
+  (two different address spaces, nothing to reconcile); `BufferUtil.nextBiggerBuffer` (cannot overflow on
+  a type prefix) and `padBuffer` (pads row keys, never columns); and where lesson 09's stride of 16 and
+  the edge/endpoint co-location actually show up in the column layout — the stride as one byte of prefix
+  in every cell, the co-location as the reason a vertex-centric index slice is local.
+- **Owed to lesson 11 by lesson 10:** every branch in lesson 10's six-layout table is a branch in
+  `parseRelation`. The specific question to carry in: `EdgeSerializerTest.testRelationIsFullyParsedOnce`
+  exists because a relation with **no properties** used to be re-parsed on every read of its properties —
+  determine which of the six layouts can be fully parsed from the header alone, and confirm it is exactly
+  the ones whose tail is empty. Also `readInlineTypes:226-234`, `hasPropertyMetaData:214-224`, the
+  `RelationCache` identity assertions (`assertSame` at `EdgeSerializerTest:202, 215, 251`), and the
+  `EntryMetaData.TIMESTAMP`-vs-`ROW_KEY` asymmetry at `:237-258` (a timestamp becomes a property and so
+  keeps a parse header-only; a row key does not).
+- **Owed to lesson 12 by lesson 10:** `writeObjectByteOrder` vs `writeObject` vs `writeClassAndObject`,
+  the order-preserving serializers, and `writesMissingValuesLast`. The question that matters for the
+  column layout: **is every `isOrderPreservingDatatype` also fixed-width?** A variable-width
+  order-preserving sort key would make the sort-key window's end ambiguous without the backward-tail
+  trick, so the two mechanisms are coupled. `SerializerTest:139-170` (the `0xff` missing-value marker and
+  the single-value NaN encoding after `+∞`) is the entry point.
+- **Owed to lesson 13 by lesson 10:** verify rather than assume that a schema vertex's own row uses the
+  same six bands. `BaseRelationType.isInvisibleType():62-64` returns an unconditional `true` and
+  `BaseKey`/`BaseLabel` ids are system ids, so schema-definition relations should land in bands **0 and
+  1** — but `ImplicitKey.isInvisibleType():154-156` returns `false`, so implicit keys are user-band, and
+  `writeRelation:364-365` filters `ImplicitKey` out of the remaining-properties loop entirely.
+- **Owed to lesson 17 by lesson 10:** composite indexes go to the **graphindex** store with a different
+  key and column scheme. Carry lesson 10's §8 column arithmetic over (2 + N columns per edge for N
+  vertex-centric indexes, each a full re-serialization) so the two index kinds can be costed side by side.
+- **Owed to lesson 20 by lessons 09 and 10:** `BasicVertexCentricQueryBuilder` properly —
+  `constructSliceQueries`' recursion, the candidate scoring at `:683-713`, `getExtendedSortKey`, and the
+  `ADJACENT_ID` / `JANUSGRAPHID` position assertions at `EdgeSerializer:466-471` that it has to satisfy.
+  Plus, from lesson 09: edges take the partition of an incident vertex (`VertexIDAssigner:206-219`), so
+  vertex-centric queries have a locality property that falls out of id assignment, not out of the query
+  layer. Worth one paragraph.
 - **Owed to lesson 16 by lesson 09:** `assignIDs(Iterable<InternalRelation>)`
   (`VertexIDAssigner:278-333`) is called from `StandardJanusGraph.prepareCommit`, and `ids.flush`
   (default `true`) decides whether ids are assigned at element creation or at commit.
   `VertexIDAssignerTest#testDisableIdsFlush:123` is the entry point. The bulk path's two-pass structure
-  (assign vertices, then relations) and its own 1000-attempt `leftOvers` loop belong there, not in 09.
+  and its own 1000-attempt `leftOvers` loop belong there. **Add from lesson 10:** `prepareCommit`'s
+  `wholeRowDeletion` short-circuit (`StandardJanusGraph:1112-1138`) skips `writeRelation` entirely for a
+  fully-removed vertex when the backend advertises the capability — a serialization cost, not a
+  correctness one, and the comment at `:1131-1135` says so.
 - **Owed to lesson 18 by lesson 09:** `ConsistentKeyIDAuthority`'s comment at `:90-92` says its slice
-  bounds mirror `ConsistentKeyLocker`'s. Lesson 18 should read the two protocols side by side — the
-  authority writes-waits-reads and the earliest column wins; the locker is claimed to do the same thing
-  for a different purpose. Also still owed: `ExpectedValueCheckingTransaction.prepareForMutations()`,
-  `ExpectedValueCheckingStore`, `BerkeleyJETx` (6,524 B), `BerkeleyJELocks`,
-  `LockKeyColumnValueStoreTest` (23,021 B). Lesson 18 starts already knowing that two backend
-  transactions are open per graph transaction and that `*ConcurrentTest.java` is excluded from
-  `mvn test` at root `pom.xml:416`.
+  bounds mirror `ConsistentKeyLocker`'s; read the two protocols side by side. Also still owed:
+  `ExpectedValueCheckingTransaction.prepareForMutations()`, `ExpectedValueCheckingStore`, `BerkeleyJETx`,
+  `BerkeleyJELocks`, `LockKeyColumnValueStoreTest`. **Add from lesson 10:** `acquireEdgeLock` locks on
+  the **serialized entry** (`StandardJanusGraph:900-901` passes the whole `Entry`; `:1004` passes only
+  `entry.getColumn()`) — which is why the remaining-properties sort at `EdgeSerializer:369-371` is a
+  correctness requirement, not tidiness. The asymmetry between those two call sites is worth a look.
 - **Owed to lesson 19 by lesson 08:** the partitioned-vertex read cost — one logical vertex, up to
   `2^partitionBits` representative rows, one slice query each. Plus, carried from lesson 04 and sharpened
-  by lesson 07: the `getNoCopy` aliasing question belongs in `KeyColumnValueStoreTest` (gated by nothing,
-  applying to every backend) and must mutate through a `CacheTransaction`; the `MemoryEntryList` sizing
-  question and the `InMemoryColumnValueStore.java:162` NPE candidate also land here. `MultiPageEntryBuffer`,
+  by lesson 07: the `getNoCopy` aliasing question belongs in `KeyColumnValueStoreTest` and must mutate
+  through a `CacheTransaction`; the `MemoryEntryList` sizing question and the
+  `InMemoryColumnValueStore.java:162` NPE candidate also land here. `MultiPageEntryBuffer`,
   `BufferPageUtils` and `BufferPage.merge` remain deferred with no owner; propose lesson 19.
-- **Owed to lesson 20 by lesson 09:** edges take the partition of an incident vertex
-  (`VertexIDAssigner:206-219`), so vertex-centric queries have a locality property that falls out of id
-  assignment rather than out of the query layer. Worth one paragraph there.
 - **Owed to lesson 22:** `InMemoryKeyColumnValueStore.RowIterator` and
   `OrderedKeyValueStoreAdapter.KeyIteratorImpl` (`L299+`, shared mutable `current`, per-key limit at
-  `L381`) plus `SimpleScanJob` (14,040 B).
-- **Owed to lesson 27 by lesson 09:** the ids-store column layout —
-  `[-(end)][timestamp][uid]` with an empty value, slice bounds `zeroBuffer(1)` to `oneBuffer(17)` — is
-  the smallest real column layout in the codebase and the cleanest thing to compare against
-  `CQLKeyColumnValueStore` directly. Hands-On §2's byte dump is specified for it. Also: the count stride
-  of 16 at default tag-bits, which affects CQL token distribution.
-- **Carried from sessions 01–04:** 24 questions posed, none answered by Aryant. The half-open interval now
+  `L381`) plus `SimpleScanJob`.
+- **Owed to lesson 25 by lesson 10:** the `SchemaStatus` gate at `StandardJanusGraph:1125`
+  (`DISABLED` index types are skipped at write time) and `ManagementSystem:365-390`'s
+  `canIndexBeEnabled` / `REGISTER_INDEX` branch are the write-side half of the index lifecycle. Also:
+  changing a multiplicity rewrites the column layout and there is **no migration in `writeRelation`** —
+  whatever protects a user from that lives in lesson 25's machinery.
+- **Owed to lesson 27 by lesson 09:** the ids-store column layout — `[-(end)][timestamp][uid]` with an
+  empty value, slice bounds `zeroBuffer(1)` to `oneBuffer(17)` — is the smallest real column layout in
+  the codebase and the cleanest thing to compare against `CQLKeyColumnValueStore`. Hands-On §2's byte
+  dump is specified for it. Also the count stride of 16, which affects CQL token distribution. **Add from
+  lesson 10:** the edgestore column layout is now fully specified, so lesson 27 can compare CQL's
+  clustering-key encoding against the six-band prefix directly.
+- **Carried from sessions 01-04:** 24 questions posed, none answered by Aryant. The half-open interval now
   has **three** implementations on record (`SinglePageEntryBuffer.getSlice` binary search;
   `BerkeleyJEKeyValueStore.java:258`'s per-record `compareTo`;
   `OrderedKeyValueStoreAdapter.java:294-297`'s `columnInRange`) and two consumers relying on the upper
   bound being exclusive (`BackendTransaction`'s `EDGESTORE_MAX_KEY`, and `ConsistentKeyIDAuthority`'s
-  `UPPER_SLICE = oneBuffer(17)` against columns of 16+uid bytes). Lesson 27 adds CQL as the fourth
-  implementation. The contract is in `KeyColumnValueStore`'s javadoc and **none** of the enforcement is.
-- **tdd.cat, 2026-11-07: the archive led the front page for the second consecutive run, and the
-  one-way cross-check fired again.** At ~03:40 UTC the front page served **2026-11-05** (62 stories) —
-  the edition lesson 08 digested — while `/archive/` reported **131 editions** with **2026-11-06 / 52**
-  as *Latest* and 2026-11-07 unlinked. `https://tdd.cat/2026-11-06/` served the complete 52-story
-  edition with every source URL on the first attempt, trailing-slash form. Three fetches, no forward
-  probe, no fallback. **The front page is now two days behind**, the largest gap recorded since the
-  2-day settling window was found, and the rule stands exactly as written on 2026-11-05: front page
-  authoritative for "newest available", `/archive/` consulted only to notice a *larger* maximum. Two
-  consecutive successful uses is the first time any rule in that table has been *used* twice rather
-  than merely not needed. Rendering note, the fourth in five runs: the filter bar read "No stories
-  match the selected filters in today's edition" while the header counted 52, so Must-Read /
-  Recommended tags were unreadable again — one line, nothing more. **Practical consequence for the
-  next run: the front page may well still serve 2026-11-05 or 2026-11-06, so check `/archive/` for a
-  2026-11-07 or 2026-11-08 maximum and do not re-digest an edition the session log already names.**
+  `UPPER_SLICE = oneBuffer(17)`). **Lesson 10 adds a third consumer:** every `getQuery` slice end is
+  `nextBiggerBuffer`-exclusive, and the missing-value marker relies on exclusivity on the ASC upper bound
+  and the DESC lower bound. Lesson 27 adds CQL as the fourth implementation. The contract is in
+  `KeyColumnValueStore`'s javadoc and **none** of the enforcement is.
+- **tdd.cat, 2026-11-08: the front page caught up, and the rule found nothing to correct.** At ~03:35 UTC
+  the front page served **2026-11-06** (52 stories) and `/archive/` reported **131 editions** with
+  **2026-11-06** as the newest — the first run in three where the two agree. `https://tdd.cat/2026-11-07/`
+  returned a client error, so **no 2026-11-07 edition exists**, and no 2026-11-08 one either. The
+  2026-11-06 edition had already been digested by lesson 09, so this run's digest states the gap and goes
+  deep on **one uncovered item from that edition** instead of re-digesting it — stated explicitly in the
+  document as a deliberate choice, not a second pass. Rendering note, the fifth in six runs: the filter
+  bar read "No stories match the selected filters in today's edition" while the header counted 52.
+  **Practical consequence for the next run: the site has now skipped two consecutive days, so do not
+  assume a 2026-11-09 edition exists. Check the front page, then `/archive/` for a larger maximum, and do
+  not re-digest an edition the session log already names — the uncovered-item fallback is now a
+  precedent, and the 2026-11-06 edition has two items spent (Infino ids, Postgres SKIP LOCKED queues).**
 
 ## Paused Subjects
 
