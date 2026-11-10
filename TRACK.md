@@ -5,7 +5,7 @@ mode: lesson
 mode-history: contributor-reading 2026-10-30 .. 2026-11-02 (sessions 01-04); lesson from 2026-11-03 (lesson 05 on)
 started: 2026-10-30
 lessons-total: 28
-lessons-done: 11
+lessons-done: 12
 pinned-commit: a59ae8d8024207598eada34998d867617df51adf
 pinned-commit-date: 2026-10-28
 upstream: JanusGraph/janusgraph
@@ -50,6 +50,7 @@ From lesson 05, `janusgraph-berkeleyje` is also needed:
 
 Newest first.
 
+- **12 — 2026-11-10** · [`2026/11/2026-11-10-janusgraph-standard-serializer-attribute-encodings/README.md`](2026/11/2026-11-10-janusgraph-standard-serializer-attribute-encodings/README.md) · **stayed on `a59ae8d8`** (mid-Part; the re-pin decision is due **next run**, after lesson 13 closes Part II). Read `StandardSerializer` (whole), `Serializer` (whole), `OrderPreservingSerializer` (whole), `SupportsNullSerializer` (whole), `InternalAttributeUtil` (whole), `AttributeSerializer` (whole), and every registered attribute serializer that matters: `ByteSerializer`, `ShortSerializer`, `IntegerSerializer`, `LongSerializer`, `CharacterSerializer`, `BooleanSerializer`, `FloatSerializer`, `DoubleSerializer`, `DateSerializer`, `InstantSerializer`, `DurationSerializer`, `UUIDSerializer`, `EnumSerializer`, `StringSerializer`, `ObjectSerializer`, `ArraySerializer`, `SerializableSerializer` (all whole), plus `NumericUtils` (whole), `StringEncoding` (whole), `VariableLong` (whole, now the forward signed path), `VariableString` (whole), `StandardRelationTypeMaker` (whole), `AttributeUtils` in **`janusgraph-driver`** (whole), `RegisteredAttributeClass` (whole), `RegisteredAttributeClassesConverter` (whole), `GraphDatabaseConfiguration` L1363-1375 / L1967-1980, `EdgeSerializer` again (the `InlineType` / `writePropertyValue` / `readPropertyValue` call sites), `SerializerTest` (whole, 840 lines), `UUIDSerializerTest` (whole), `docs/advanced-topics/serializer.md`, and commit `46f9d249` (2026-10-15, Oleksandr Porunov, fixes #5087). **THE finding: the `0x00` flag byte is load-bearing for *order*, not for null.** `ByteSerializer.writeByteOrder(Byte.MAX_VALUE)` is `putByte((byte)(127 - (-128)))` = **the single byte `0xff`** — byte-identical to the missing-value marker `EdgeSerializer:506` writes to end an open sort-key range. The same collision sits at the top of every fixed-width type (`Short.MAX_VALUE` = `ffff`, `Long.MAX_VALUE` = eight `ff`, `Double.NaN` = `fff8…`, `new UUID(-1,-1)` = sixteen `ff`), and the only thing separating "largest value" from "no value" is the flag `writeObjectInternal` prepends for every type that is not a `SupportsNullSerializer`. Verified: re-implementing all eleven `writeByteOrder` bodies line-for-line and sweeping gives **0 violations** of `value < 0xff` across all eleven types. That makes `writesMissingValuesLast`'s odd second clause exact rather than arbitrary — it is the question *"does the first byte come from the two-valued flag protocol?"* — and the clause exists to exclude **exactly one serializer in the tree**, the private inner `ClassSerializer`, which supports null, writes no flag, and encodes null as registration 0 = `80000000`, so a `Class` sort key's missing values sort **first** (`SerializerTest:152-154` pins `Class`, `Instant` and `byte[]`, three types for three different reasons). **Lesson 11's question answered, and it kills a PR as written: no in-tree `readObjectByteOrder` is length-ambiguous.** Ten of the eleven order-preserving datatypes are **fixed width** in byte order (Byte/Boolean 1, Short/Character 2, Integer/Float 4, Long/Double/Date 8, UUID 16, enum 4, Class 4); the eleventh, `String`, is `3 + 2n` and self-delimiting by a `00 00` terminator that `writeByteOrder`'s `Preconditions.checkArgument(c > 0)` refuses to let into the payload — verified read-length == write-length over 20,000 strings, and `3 + 2n` exactly. **PR candidate 20 is therefore downgraded** from "silent corruption" to a one-line hardening whose only trigger is a third-party `OrderPreservingSerializer`, since `checkSortKey`'s sole gate is `instanceof OrderPreservingSerializer` with no width or symmetry check. Second finding: **the same value is encoded three different ways depending on *where in the column* it sits**, selected by `EdgeSerializer`'s private `InlineType` enum (`:383-394`) and its two orthogonal booleans — `KEY` → `writeObjectByteOrder`, `SIGNATURE` → `writeObject`, `NORMAL` → inline relation-type id + `writeObject` — with `writeClassAndObject` as a fourth path reachable only for `dataType == Object.class`, which `checkSignature` bans from both sort keys and signatures, so a sort key is never untyped. The sort-key premium is **zero for every fixed-width type** and lands entirely on the two with variable value encodings: `Integer` is 5 bytes as a sort key against 2 for any `|v| ≤ 63` (its `read`/`write` use `VariableLong`'s **sign-magnitude** zig-zag, `Math.abs(v)<<1 | sign`, while `readByteOrder`/`writeByteOrder` use a fixed biased `putInt`), and `String` is `3 + 2n` against `1 + n` — `'alice'` is **13 bytes** as a sort key against **6** as a value, and that lands in the column a vertex-centric index stores a second full copy of in each of two endpoint rows (20-char sort key, 2 VCIs → **258 bytes of sort key for one edge**). Third: **`Date` is order-preserving and `Instant` is not** — `InstantSerializer` implements plain `AttributeSerializer` only, so `checkSortKey` rejects it, and `StandardRelationTypeMaker.sortKey`'s own javadoc offers *"a property key with a timestamp data type"* as its example. Fixing it is a new 12-byte `[8-byte biased seconds][4-byte biased nanos]` encoding, not a marker, because the nanos field currently rides `VariableLong`'s non-order-preserving zig-zag; `DurationSerializer` is identical. Fourth: **`UUIDSerializer` knowingly violates the `OrderPreservingSerializer` javadoc** — both `write` and `writeByteOrder` are two **unbiased** `putLong`s, so the bytes sort by unsigned bits while `UUID.compareTo` compares each half signed. Measured: **10,070 of 20,000** random pairs disagree with `compareTo`, **0** with string order. Which is why `UUID` is absent from `SerializerTest`'s `TYPES` and therefore from `testSerializedOrder`'s 3,000,000-trial `signum(compareTo) == signum(bytes)` check — it would fail by design — and is covered instead by `UUIDSerializerTest.testByteOrderIsTheOrderOfTheStringForms`. The arc: #948 added the interface in March 2018 reasoning *"supporting native sort order simply means implementing `Comparable`"*; commit `46f9d249` (merged 2026-10-21, fixes #5087) fixed the **comparators** instead, adding `AttributeUtils.compareValues`/`compareUnsigned` and pointing `OrderList`, `RelationComparator`, `RangeInterval` and `Cmp` at them, and says explicitly what it did not fix (TinkerPop's own comparisons, so keyset paging with an unfolded `order()` can still skip UUIDs). Fifth: **enum sort keys are ordered by declaration order and nothing records it** — 17 internal enums are persisted by ordinal, so reordering any of their constants silently reinterprets stored schema; `getValue`'s bounds check catches a removal, never a swap. Sixth: **the registration table has 51 slots used (1, 10-21, 22-30, 41-57, 60-71) and exactly 28 internal slots left (72-99)** before `CLASS_REGISTRATION_OFFSET = 100` — which the code says "may NEVER EVER be changed" — would collide with user attribute 0. Also: `new HashMap<>(60)` for 51 entries **still rehashes** during construction (threshold 48); `normalizeDataType`'s `Instant` branch is **unconditionally dead** (`Instant` is `final`, and the branch returns what the fallthrough returns); `TEXT_COMPRESSION_THRESHOLD = 48` is `public static final` and `StringSerializer` **never reads it** (only `LONG_COMPRESSION_THRESHOLD = 16000` gates the single GZIP compressor, in a 3-bit field with 8 slots and 2 used); the custom-serializer extension point can **add** types but never replace one, with `HashMap` the single hard-coded escape hatch (from #306, a Titan migration collision); both `attributes.custom` options are `GLOBAL_OFFLINE`; `newInstance()` is the deprecated reflective form and its unwrapped constructor exception escapes the `catch`; and the docs' *Custom Object Serialization* section promises a serialize/deserialize round-trip before persisting that **does not exist anywhere in the registration path**. **Lesson 11's second question, answered:** `VariableString.writeBackward` writes characters in reverse then the marker, so `STRING_ID_MARKER` is at the **high** address and the stop bit at the low one — `readBackward`'s `getByte(--position)` peek is correct, and it emits the string in order without reversing. Also found: three near-duplicate in-tree ASCII codecs (`StringSerializer.write`, `StringEncoding.writeAsciiString`, `VariableString.write`) that disagree on the empty string and the marker; the string byte order is **UTF-16 code-unit order, not code-point order** (U+1F600 sorts *before* U+FFFF, verified), i.e. the same class of mismatch as the UUID bug waiting in a different type; a `String` property containing `U+0000` is storable as a value (the UTF path) but throws at serialization time if the key is a sort key, and `verifyAttribute` does not check it; and **three in-tree comparators that disagree** — the bytes, `AttributeUtils.compareValues`, and `AttributeUtils.compare` (which returns 0 for `-0.0` vs `0.0`, `null` for a one-NaN pair, and compares across numeric types where `compareValues` throws). Daily Diff: the **2026-11-09** edition (50 stories) — deep dive on Turso implementing Tantivy's `Directory` trait against its own B-tree, so an immutable-segment FTS index lives in the database file as 512 KB chunks keyed by `(path, chunk_no)` and commits in the SQL transaction, at the price of `NoMergePolicy` — automatic merging disabled, because a background merge would either leave the transaction or hold the single writer open.
 - **11 — 2026-11-09** · [`2026/11/2026-11-09-janusgraph-parse-relation-relation-cache/README.md`](2026/11/2026-11-09-janusgraph-parse-relation-relation-cache/README.md) · **stayed on `a59ae8d8`** (mid-Part; the re-pin decision is due after lesson 13, one run away). Read `EdgeSerializer` again (whole, 591 lines, now from the read side), `RelationCache` (whole), `RelationReader` (whole, 10 lines and the point is what it does **not** declare), `VariableLong` (whole, this time the backward section), `IDHandler` (whole), `StaticArrayEntry` (whole), `StaticArrayBuffer` (whole), `ReadArrayBuffer` (whole), `CacheEdge` (whole), `RelationConstructor` (whole), `ModificationDeserializer` (whole), `Multiplicity` (whole), `JanusGraphVertexDeserializer` (whole), `EdgeSerializerTest` (whole, new this autumn), `RelationReparseBenchmark` (whole, new this autumn), plus commit `29c0b18a` (2026-10-02, Oleksandr Porunov, fixes #4995) and fragments of `CacheVertexProperty` and `RelationCacheTest` via code search. **THE finding: the backward encoding is the only genuinely order-preserving varint in the tree, and that — not readability — is why the tail ids are written backward.** `writeUnsignedBackward` puts the length in bits 4-6 of the **first** byte, the mirror image of `writeUnsigned`'s STOP-bit-on-the-**last**-byte, so a longer encoding's first byte is strictly greater: re-implementing `unsignedBackwardLength`/`writeUnsignedBackward`/`readUnsignedBackward` line-for-line and sweeping `0..400000` finds **zero** order inversions, against lesson 10's one at every length boundary in the forward prefix encoding. `262143 → 262144` is `8f 7f 7f → 90 10 00 00`. That is what makes `ImplicitKey.ADJACENT_ID` and `JANUSGRAPHID` legal sort-key positions in `getQuery`. The price is exact: capacity is **`4 + 7·(n-1)`** bits, not `7n`, and there is a **hard 3-byte floor** from `Math.max(3, ...)`, so the first vertex id a default graph assigns (**4096**, lesson 09) costs **3 bytes backward against 2 forward** (`80 20 00` vs `20 80`); beyond the floor the length field costs +1 byte for 3 of every 7 bit-lengths (bitLength ≡ 5, 6, 0 mod 7; boundaries at 19, 26, 33, 40, 47, 54, 61). Over `NormalVertex` ids at counts 16..160,000,000: **38 bytes backward against 34 forward, +12%**. A plain `MULTI` edge — the default multiplicity — is an **8-byte column with an empty value** (2 prefix + 3 `vid←` + 3 `rid←`) against a 6-byte forward ideal, i.e. ~400 MB of length fields on a 100M-edge graph stored twice, on top of lesson 10's ~200 MB of prefix padding from the same four tag bits. Round trip and the capacity law verified over `0..299999` plus `2^k ± {0,1,2}` for k=5..62, 0 failures. **Lesson 10's carried question, answered: the layout does not decide.** `parseRelation` completes the relation for all ten (type × direction) rows; what decides whether a header-only parse is as good as a full one is the four-way test at `:201-202` — `!in.hasRemaining() && keySignature.length == 0 && def.getSignature().length == 0 && !hasPropertyMetaData(data)`. The layout constrains it in one direction only: the two unconstrained rows are the only ones that can carry a sort key, so **every vertex-centric index replica fails clause 2 by construction** and is re-parsed on its first property read, permanently — the #4995 fix helps base columns and cannot help replicas. `EdgeSerializerTest.testRelationIsFullyParsedOnce` pins it at **17 of 50** entries, and the 17 and the 50 both reconstruct exactly. Also: `SIMPLE` **is** constrained (`isConstrained()` is literally `this != MULTI`), so lesson 10's six layouts are ten (type × direction) rows collapsing into **three** parse shapes — forward-only, pivot-at-`valuePosition`, full backward walk — and `SET` is the one constrained case that reads straight *through* `valuePosition` without jumping. **Second finding (PR candidate 18, the most substantial this lesson found): the OLAP path cannot reach the entry cache at all.** `RelationReader` declares only `parseRelation`; `readRelation` — which reads and writes `StaticArrayEntry`'s `transient volatile RelationCache cache` — is a method on `EdgeSerializer` alone. `JanusGraphVertexDeserializer` holds a `RelationReader` from `setup.getRelationReader()` and iterates the same `Iterable<Entry>` **twice**, calling `parseRelation(data, false, typeManager)` both times, so **every edgestore column in a Hadoop/Spark scan is fully parsed twice and memoised never** — and the first loop reads only `relation.typeId` and `getOtherVertexId()`, for which a header-only parse, or `EdgeSerializer.parseTypeId`, would do. Third finding (PR candidate 20): **the ASC sort-key read is unbounded and the DESC read is not.** `:172` sends DESC through `in.subrange(keyLength, true)`, which **allocates** (`new byte[length]` + arraycopy + `(byte)~b` loop + two wrappers) and whose `limit` makes `StaticArrayBuffer.require` throw past the sort-key window; ASC reads in place out of `in` itself, so an over-reading sort-key serializer would walk into the `vid←`/`rid←` tail and `in.movePositionTo(currentPos)` would discard the evidence — silently wrong values on ASC, a loud `ArrayIndexOutOfBoundsException` on DESC. Fourth (PR candidate 19): `RelationCache.get`, `numProperties` and `propertyIterator` all dereference a `null` `properties` on a header-only cache — a bare NPE, documented only in the `isFullyParsed()` javadoc, with exactly **three** hand-written guards behind it (`EdgeSerializer:85`, `CacheEdge.getPropertyMap`, `CacheVertexProperty.getPropertyMap`) and no test. Fifth: the shared static `EMPTY` map is a **mutable** `LongObjectHashMap` and `propertyIterator()` refuses to iterate it because HPPC writes an iteration seed on `iterator()` — a shared immutable sentinel that turns out not to be immutable. Sixth, cosmetic: `unsignedBackwardLength`'s `bitLength <= 4 ? 0 : ...` ternary is **dead** — `Math.max(3, ...)` discards the computed value for every bitLength 1..11 (11 of 64), and the whole function equals `max(3, ceil((bitLength+3)/7))`, verified for all 64 bit lengths. Also closed: `endKeyPos` is **exclusive** and `:169`'s comment ("we are on the last byte of the key") is off by one in wording while the arithmetic is right; `hasPropertyMetaData` is **not** `hasMetaData` (membership in `ImplicitKey.MetaData2ImplicitKey`, so `TIMESTAMP` keeps a parse header-only and a grouped read's `ROW_KEY` does not); `readVertexId(in, false)`'s string/long peek can never misfire on a long, because a backward long's last byte is always `≤ 0x7f` while its stop bit sits at the low address; and `ModificationDeserializer`'s `hasProperties()` is **not** a repeat of the #4995 mistake — it follows an explicit full `readRelation`, so it means "are there any". Daily Diff: the **2026-11-08** edition (22 stories), which lesson 10's run could not see — deep dive on a Postgres replication slot that cannot advance because its captured tables are idle while the server keeps writing WAL (~680 MB held over 25 quiet minutes at defaults), and on why the obvious fix silently loses half the rows on restart.
 - **10 — 2026-11-08** · [`2026/11/2026-11-08-janusgraph-edge-serializer-column-layout/README.md`](2026/11/2026-11-08-janusgraph-edge-serializer-column-layout/README.md) · **stayed on `a59ae8d8`** (mid-Part; the re-pin decision is due after lesson 13, not available this run). Read `EdgeSerializer` (whole, 591 lines), `IDHandler` (whole), `VariableLong` L56-235, `EdgeDirection` (whole), `IDManager` L60-340 / L372-420 / L691-723, `Multiplicity` L35-120, `BufferUtil` L178-212, `WriteByteBuffer` L140-154, `StandardJanusGraph` L896-904 / L999-1006 / L1100-1156, `ManagementSystem` L330-400, `RelationTypeVertex` L54-117, `StandardEdgeLabelMaker` L90-110, `StandardRelationTypeMaker` L61-67 / L119-126 / L196-199, `TypeDefinitionCategory` L40-86, `BaseRelationType` L59-68, `ImplicitKey` L151-160, `InternalRelationType` L30-38, `Serializer` L38-44, `StandardSerializer` L262-272, `Interval`/`PointInterval`/`RangeInterval`, `BasicVertexCentricQueryBuilder` L498-723, `IndexRepairJob` L211-219, `TransactionLogHeader` L86-93, `IndexRecordUtil` L454-462, `AbstractTypedRelation` L101-110, `JanusGraphLazyRelation` L157-166, `JanusGraphVertexDeserializer` L124-133, plus `EdgeSerializerTest`, `IDManagementTest` L141-265, `SerializerTest` L139-170, `JanusGraphTest` L973-982 and `docs/advanced-topics/data-model.md`. **THE finding: lesson 09's four conflict-avoidance bits cost one byte in every single cell of every row.** `writePositiveWithPrefix` with `PREFIX_BIT_LEN = 3` gives a **1-byte** relation-type prefix only for `count << 1 | dir ≤ 15`, i.e. **schema count ≤ 7** — and the smallest count a default graph can assign is **16**, so **the cheapest case in the encoding is unreachable on every default deployment**, permanently (`FIXED` option). The 2-byte prefix then holds exactly **63** relation types (counts 16..1008); the 64th (count 1024) spills to 3 bytes. Second finding: **columns are grouped by relation type, not sorted by relation-type id.** Re-implementing `writeUnsigned` / `writePositiveWithPrefix` / `getPrefix` line-for-line and sweeping counts 1-5000 finds exactly **one** inversion — `1023 → 1024` (`7f fe` vs `70 10 80`), and at the default stride of 16 it is **1008 → 1024**, so the 63rd type sorts *after* the 64th. Inversions sit at every byte-length boundary because the STOP bit marks the **last** byte. Nothing in the read path depends on the stronger property — `getBounds` compares only the top 3 bits, per-type slices are exact byte-prefix matches, and the same STOP bit keeps different-length prefixes from interleaving inside a `Direction.BOTH` window — and **no test asserts any of it** (`IDManagementTest.edgeTypeIDTest`'s 1,000,000 trials never compare two type prefixes). PR candidate 15. Third: **six prefix bands exist, and `getBounds` can reach only four of them** — it passes `getPrefix(systemTypes, systemTypes)`, so it emits `(0,1)` or `(2,3)` and never `(4,5)`; bands 4 (`0x80`-`0x9f`) and 5 (`0xa0`-`0xbf`) are the **invisible-non-system** bands, which is exactly where every vertex-centric index replica lives. `ManagementSystem.buildRelationTypeIndex:368`'s `maker.invisible()` is what puts them there, and `StandardEdgeLabelMaker:106` makes invisibility *structurally required* (an IN-only unidirected label is illegal otherwise). An edge with *N* vertex-centric indexes is **2 + N full columns**, each a complete re-serialization. Fourth: **the column *is* the uniqueness constraint** — `valuePosition` is assigned in six places and `MANY2ONE`-at-OUT and `SINGLE` get a bare-prefix column, so last-write-wins needs no read; `SET` puts the value in the column (set semantics for free); `MULTI`/`LIST` put the relation id in the column so nothing is overwritten. Fifth: `EdgeSerializer:481-483`'s `interval.isEmpty()` branch is **dead** — `BasicVertexCentricQueryBuilder:607-610` returns `emptyQuery()` first — and if reached it widens the slice to the whole type band (PR candidate 17). **Closed lesson 08's and 09's loose ends:** `TYPE_LEN_RESERVE = 3` **is** `IDHandler.PREFIX_BIT_LEN`, `MAX_PADDING_BITWIDTH = 6` **is** the one shift in `stripEntireRelationTypePadding`, the "different first-bit convention" needs no reconciling (row keys put the partition at the top, columns put the band at the top — different address spaces), and `BufferUtil.nextBiggerBuffer` **cannot overflow on a type prefix** (band maxes at 5, so byte 0 ≤ `0xbf`) while `padBuffer` turns out never to touch columns at all (its only caller pads **row keys** in the OKVS adapter). Also verified: the missing-value `0xff` marker sorts last in ASC and, flipped to `0x00`, first in DESC, with the exclusive bound applied on the matching side in each case. Daily Diff: **no 2026-11-08 or 2026-11-07 edition exists** — front page and `/archive/` both top out at 2026-11-06, which lesson 09 already digested — so one uncovered item from that edition instead: Postgres `SKIP LOCKED` queues saturating 1 vCPU at 64 connections against a `max_connections` of 100.
 - **09 — 2026-11-07** · [`2026/11/2026-11-07-janusgraph-id-authority-block-allocation/README.md`](2026/11/2026-11-07-janusgraph-id-authority-block-allocation/README.md) · **stayed on `a59ae8d8`** (mid-Part, no decision available). Read `VertexIDAssigner` (whole, 545 lines), `StandardIDPool` (whole), `IDBlockSizer` (whole), `ConsistentKeyIDAuthority` (whole, 500 lines), `AbstractIDAuthority` (whole), `ConflictAvoidanceMode` (whole), `IDBlock` (whole), `SimpleBulkPlacementStrategy` (whole), `IDManager` L60-130 / L370-430 / L450-460 / L545-565 / L610-650 / L715-725, `GraphDatabaseConfiguration` L1040-1180, `VariableLong` L77-92, `IDAuthorityTest` L75-295, plus the test inventories of `IDPoolTest`, `VertexIDAssignerTest`, `InMemoryIDAuthorityTest`, `CQLIDAuthorityTest`, `HBaseIDAuthorityTest`, `PropertyPlacementStrategy` L95-110, `docs/changelog.md` L2041-2058, `docs/configs/janusgraph-cfg.md` L88-113, `docs/operations/bulk-loading.md` L78-91. **THE finding: `ids.authority.conflict-avoidance-tag-bits` defaults to 4, is `ConfigOption.Type.FIXED`, and its tag defaults to 0 with mode `NONE` — so `ConsistentKeyIDBlock.getId:486-491` returns `count << 4` with a zero tag and every count JanusGraph assigns is a multiple of 16.** The first `NormalVertex` id in a fresh default graph is **4096** at partition 0 (count 16), not 256; the stride between consecutive vertices in one partition is 128, not 8; and `maxAvailableBits = unsignedBitLength(idUpperBound)-1-uniqueIdBitWidth` takes the four bits straight off every namespace's ceiling, so **2^51 of 2^55 vertex counts, 2^54 of 2^58 relation counts and 2^50 of 2^54 schema counts are reachable — 15/16 of each space is not**, on every graph created with the defaults, unchangeably. Second finding: the give-up message at `:420-421` prints `timeout.getNano()`, which is **0** for any whole-second `Duration`, including the 120 s `ids.renew-timeout` default — "Reached timeout 0" on every default deployment (PR candidate 11). Third: the rollback path's anonymous `TransactionalProvider` (`:392-399`) is commented "Use normal consistency level" and builds a transaction config **character-for-character identical** to `openTx()` at `:223-225` (PR candidate 12). Fourth: `IDAuthorityTest`'s two contiguity assertions (`checkBlock:207-209`, `testSimpleIDAcquisition:247-251`) are gated on `hasEmptyUid` and **none of the three `configs()` parameterizations sets tag-bits to 0**, so neither has ever executed (PR candidate 13). Fifth: `accessed()` writes a `volatile long` via `System.currentTimeMillis()` on every element id (`:378`) for a `getLastAccess()` that has **no caller in the tree** — measured **33.0 ns/op** against 0.30 ns for an empty loop under OpenJDK 21 (PR candidate 14, bundled with the `SimpleBulkPlacementStrategy` items). **Closed lesson 08's `count == 0` question properly:** `BASE_ID = 1` (`AbstractIDAuthority:45`), so no count 0 is ever offered — `addPadding`'s refusal was never the thing protecting it. Also: five pools with `getIDNamespace() == ordinal()`, three per partition (`hasOnePerPartition()`); `renewBlockIndex = 0` for `SCHEMA` (block 50) and `PARTITIONED_VERTEX` (block 100) because `RENEW_ID_COUNT = 100` exceeds both, so those two namespaces permanently double-buffer; the negated-counter column order that makes `getCurrentID`'s `setLimit(5)` correct; the 330 ms claim and the ~9,090 vertices/s/pool it implies; and `renewalThreads = 3*partitionIdBound+2` = 98 at defaults against a live-pool ceiling of 32 (`ids.num-partitions = 10`). Daily Diff: the **2026-11-06** edition (52 stories), found via `/archive/` while the front page still served 2026-11-05 — deep dive on Infino's coordinator-free 128-bit ids, whose 40-bit random writer id is JanusGraph's 4-bit conflict-avoidance tag with 36 more bits of budget.
@@ -80,7 +81,7 @@ Newest first.
 - [x] 09 — `VertexIDAssigner` and the ID authority: block allocation from the ids store without per-insert coordination
 - [x] 10 — `EdgeSerializer.writeRelation`: the column layout for edges and properties, direction, sort keys
 - [x] 11 — `EdgeSerializer.parseRelation` and `RelationCache`: decoding columns back into relations
-- [ ] 12 — `StandardSerializer`: attribute encodings, order-preserving serializers, and custom types
+- [x] 12 — `StandardSerializer`: attribute encodings, order-preserving serializers, and custom types
 - [ ] 13 — System types and schema storage: schema vertices, `BaseKey`/`BaseLabel`, and how a property-key definition is persisted
 
 ### Part III — The write path (`core`, `graphdb/transaction`, `graphdb/database`, `diskstorage/locking`)
@@ -113,18 +114,22 @@ Newest first.
 ## Notes For The Next Run
 
 **Syllabus unchanged this run. No items added, split, merged or reordered; the 28 stand as written on
-2026-10-30.** Lesson 11 is mid-Part, so the re-pin question was not available and was not raised:
-**stay on `a59ae8d8`**. The next boundary where re-pinning is allowed is **Part II/III, after lesson
-13** — one run away. At that point either re-pin and record the new commit in the front-matter and
-here, or state explicitly that it is staying, as lessons 08-11 did.
+2026-10-30.** Lesson 11's note said lesson 12 would decide whether PR candidate 20 was reachable, and it
+did — it is not, in-tree — so the candidate was rewritten rather than the syllabus. Lesson 12 is
+mid-Part, so the re-pin question was not available and was not raised: **stay on `a59ae8d8`**.
+**The re-pin decision is due NEXT RUN.** Lesson 13 closes Part II, so the Part II/III boundary is
+available for the first time since lesson 08 declined it. At that point either re-pin and record the new
+commit in the front-matter and here, or state explicitly that it is staying, as lessons 08-12 did. Do not
+skip the question: it has now been deferred five runs in a row, legitimately each time.
 
 **The roll-off rule applied again this run.** The root README states that `TRACK.md` keeps the notes
 for the three most recent lessons and older ones roll off into git history. The three most recent are
-now 09, 10 and 11, so: **lesson 08's compressed block is removed** (it remains verbatim in git history
-at `8af5383f23dca6b67f6ec56ca71c8164bc38000f`), **lesson 09's block is now compressed** to the facts
-lessons 12-13, 16, 18 and 27 were promised — the full block is preserved verbatim in git history at
-`1bbfec7cd08bbf33182dcc883135c9b7ba4e84e7` — and lessons 10 and 11 keep their blocks in full. Next
-run, lesson 10's block becomes the oldest of the three and the same rule applies to it.
+now 10, 11 and 12, so: **lesson 09's compressed block is removed** (it remains verbatim in git history
+at `1bbfec7cd08bbf33182dcc883135c9b7ba4e84e7`, and its compressed form in the commit immediately
+preceding this one), **lesson 10's block is now compressed** to the facts lessons 13, 17, 20 and 27 were
+promised — the full block is preserved verbatim in git history at the 2026-11-08 commit — and lessons 11
+and 12 keep their blocks in full. Next run, lesson 11's block becomes the oldest of the three and the
+same rule applies to it.
 
 - **The mode question is closed. Do not reopen it unprompted.** Four consecutive empty `My Notes`
   triggered the switch recorded in the front-matter. Entries from lesson 05 on write in `lesson` mode
@@ -133,26 +138,151 @@ run, lesson 10's block becomes the oldest of the three and the same rule applies
 - **Never touch an earlier entry's `## My Notes`.** Sessions 01-04 keep their templates. They are his
   to fill at any time; if a future run finds content in any of them, answer those questions in that
   run's entry regardless of mode.
-- **Part II is nearly done; two items left.** Lessons 08-11 cover the id bit layout, the id supply, the
-  column layout and the parse. **Lesson 12 is `StandardSerializer`**, which owns the attribute bytes
-  lessons 10 and 11 both treated as opaque, and which now has a specific job: lesson 11's PR candidate 20
-  is only worth filing if some `readObjectByteOrder` implementation can consume a different number of
-  bytes than it wrote, because that is the only way the unbounded ASC sort-key read becomes reachable.
-  Lesson 13 is schema persistence, and should verify rather than assume that schema-definition relations
-  land in bands 0 and 1 — and additionally that a schema vertex's own row is decodable without
-  `getExistingRelationType` recursing forever, since `parseRelation:113` performs that lookup before it
-  knows anything else about the cell.
-- **Entry size.** Lesson 05 ≈35 KB, 06 ≈63 KB, 07 ≈78 KB, 08 ≈67 KB, 09 ≈61 KB, 10 ≈70 KB, 11 ≈56 KB
-  (a large share of each is permalink URLs, which are not prose). In line with the SQLite and PostgreSQL
-  lessons. The old 5-9 KB budget was a `contributor-reading` constraint and does not apply.
+- **Part II has ONE item left, and it is the last one before the re-pin boundary.** Lessons 08-12 cover
+  the id bit layout, the id supply, the column layout, the parse and the attribute bytes. **Lesson 13 is
+  schema persistence**, and it carries three specific obligations rather than a blank page: (a) verify
+  rather than assume that schema-definition relations land in bands **0 and 1** (`BaseRelationType
+  .isInvisibleType()` returns an unconditional `true` and `BaseKey`/`BaseLabel` ids are system ids, but
+  `ImplicitKey.isInvisibleType()` returns `false`, so implicit keys are user-band); (b) find where
+  `tx.getExistingRelationType(typeId)` bottoms out, since `parseRelation:113` performs that lookup
+  before it knows anything else about the cell and a schema vertex's own row must therefore be decodable
+  without it — that is the one place the format *is* self-describing; and (c) establish which
+  `TypeDefinitionCategory` values are persisted by **ordinal** through `EnumSerializer`, because lesson
+  12 found that an enum sort key is ordered by declaration order with nothing in the format recording
+  it, and 17 internal enums ride that encoding. Lesson 13 also owns the re-pin decision.
+- **Entry size.** Lesson 05 ≈35 KB, 06 ≈63 KB, 07 ≈78 KB, 08 ≈67 KB, 09 ≈61 KB, 10 ≈70 KB, 11 ≈56 KB,
+  12 ≈91 KB (a large share of each is permalink URLs, which are not prose; lesson 12 cites 37 files and is
+  the most link-dense yet). In line with the SQLite and PostgreSQL lessons. The old 5-9 KB budget was a
+  `contributor-reading` constraint and does not apply.
 - **Method note, carried and used again.** Lesson 10's byte sequences came from re-implementing the pure
   encoding functions line-for-line from the pinned sources and running them, paired with an in-tree
   exercise that runs the real code. Lesson 11 did the same for the **backward** encoding
   (`unsignedBackwardLength`, `writeUnsignedBackward`, `readUnsignedBackward`) and specified Hands-On §8.3
-  as the in-tree check. Keep both halves for lesson 12's order-preserving serializers: state the method,
-  and always pair it with an exercise that runs the real code.
+  as the in-tree check. **Lesson 12 did it a third time** and it was the most productive use of the method
+  so far: re-implementing the eleven `writeByteOrder` bodies, `readByteOrder` for `String`, `NumericUtils`
+  and `VariableLong`'s forward encodings gave 0 inversions over ~1.07M values and 73,606 strings, 0
+  violations of the `< 0xff` bound, exact `3 + 2n` read/write symmetry over 20,000 strings, and the
+  10,070/20,000 UUID disagreement figure — and it paired with three in-tree exercises (`Lesson12Scratch`,
+  the `Instant` rejection, the open-range missing-value check) that run the real code. **Keep both halves
+  for lesson 13**: state the method, and always pair it with an exercise that runs the real code. Note
+  the one trap lesson 12 hit: the first re-implementation pass *omitted the dispatcher's flag byte* and
+  reported 13 false order violations. The model has to include the layer above the serializer, not just
+  the serializer.
 
-### Verified by lesson 11, for lessons 12-13, 19, 20 and 27 to cite rather than re-derive
+### Verified by lesson 12, for lessons 13, 17, 20, 21 and 26 to cite rather than re-derive
+
+- **Three positions, three encodings, one enum.** `EdgeSerializer`'s private `InlineType` (`:383-394`)
+  has two orthogonal booleans over three cases: `writeInlineKey()` is true only for `NORMAL`,
+  `writeByteOrdered()` only for `KEY`. So a sort key is `writeObjectByteOrder`, a signature key is
+  `writeObject` with no id (position implies the key), and a remaining property is
+  `IDHandler.writeInlineRelationType` + `writeObject`. `writePropertyValue:419-427` and
+  `readPropertyValue:250-259` are exact mirrors. A fourth path, `writeClassAndObject`
+  (`varint(registrationNo)` + body), is reached only when `InternalAttributeUtil.hasGenericDataType(key)`
+  — `dataType == Object.class` — and `StandardRelationTypeMaker.checkSignature` bans `Object.class` from
+  **both** sort keys and signatures, so it is structurally confined to a `NORMAL` position and a sort key
+  is never untyped. Lesson 17 needs this: `IndexRecordUtil` makes the same `hasGenericDataType` branch
+  for graphindex fields.
+- **The flag byte, and why it is not about null.** `StandardSerializer.writeObjectInternal` prepends
+  `0x00` for a value and writes a bare `0xff` for null, **unless** the serializer is a
+  `SupportsNullSerializer`, in which case the serializer handles it. Only two order-preserving serializers
+  are: `StringSerializer`, which writes the **same** `0x00`/`0xff` flag itself, and the private inner
+  `ClassSerializer`, which writes none and encodes null as registration 0 (`80000000` after the int bias)
+  so missing values sort **first**. That is the whole content of
+  `writesMissingValuesLast = isOrderPreservingDatatype && (!supportsNullSerialization || instanceof
+  StringSerializer)` — read it as *"does the first byte come from the two-valued flag protocol?"*
+- **The flag is load-bearing for order at the top of every fixed-width type.** `ByteSerializer`'s body
+  for `Byte.MAX_VALUE` is `0xff`, identical to the marker; `Short.MAX_VALUE` is `ffff`, `Long.MAX_VALUE`
+  eight `ff`, `Double.NaN` `fff8…`, `new UUID(-1,-1)` sixteen `ff`. Lesson 10's missing-value range trick
+  (`EdgeSerializer:504-507`, `colEnd.putByte((byte) -1)` with `endInclusive = false`) is sound **only**
+  because of the flag. Sweep: 0 violations of `value < 0xff` across all eleven types.
+- **The complete order-preserving set.** Thirteen classes implement `OrderPreservingSerializer`:
+  `Byte Short Integer Long Character Boolean Date Float Double String UUID`, `EnumSerializer<E>`, and the
+  private `ClassSerializer` — **29 of the 51 registered datatypes** (12 concrete + 17 enums).
+  `SerializerTest:595-603` pins the user-facing count at **10** over a `TYPES` map of 21, so `Geoshape`,
+  all nine array types and a plain custom serializer are **not** order-preserving; `UUID` is
+  order-preserving but **absent from `TYPES`**, so it is outside the 3,000,000-trial check.
+- **Byte-order widths, all fixed except one.** Byte 1 · Boolean 1 · Short 2 · Character 2 · Integer 4 ·
+  Float 4 · Long 8 · Double 8 · Date 8 · UUID 16 · enum 4 · Class 4 · **String `3 + 2n`**. Every
+  whole-number encoding is "add the bias, write big-endian"; `Byte`, `Short`, `Long` and `Date` delegate
+  `readByteOrder`/`writeByteOrder` straight to `read`/`write`. **`Integer` and `EnumSerializer` are the
+  asymmetric pair**: their `read`/`write` use `VariableLong` (1-5 bytes / 1 byte for a small ordinal)
+  while their byte-order form is a fixed biased `putInt`. `CharacterSerializer`'s two biases annihilate,
+  so a `Character` in byte order is the **raw UTF-16 code unit, big-endian, unbiased** — which is why
+  `'\u0000'` is `00 00`, exactly the string terminator.
+- **`VariableLong.write` is sign-magnitude, not standard zig-zag**: `Math.abs(v) << 1 | (v < 0 ? 1 : 0)`.
+  Lengths for `Integer`: 1 byte for `|v| ≤ 63`, 2 for `≤ 8191`, 5 at the extremes. Two incidental dead
+  spots, neither reachable from the serializers: unsigned `0` and `1` both decode to `0` and only `0` is
+  emitted; and `convert2Unsigned` asserts `v > Long.MIN_VALUE` because `Math.abs(Long.MIN_VALUE)` is
+  itself — `LongSerializer` never touches `VariableLong`, so nothing can reach it.
+- **Float/Double: Lucene's bit flip, and NaN collapses one layer up.** `NumericUtils.sortableDoubleBits`
+  is `bits ^ (bits >> 63) & 0x7fff…` — self-inverse, unchanged for non-negatives, magnitude inverted for
+  negatives — then `LongSerializer`'s bias on top. The single-NaN behaviour
+  (`SerializerTest:158-173`) is **not** in `NumericUtils`: `doubleToSortableLong` calls
+  `Double.doubleToLongBits`, which by specification canonicalises every NaN to `0x7ff8000000000000`
+  (`doubleToRawLongBits` would not). Stored order: `−∞ < … < −0.0 < 0.0 < … < +∞ < NaN`, which is
+  `Double.compare`'s total order. Note `-0.0 < 0.0` **strictly** in the bytes.
+- **`Date` is order-preserving, `Instant` and `Duration` are not.** `InstantSerializer` implements plain
+  `AttributeSerializer` only, so `checkSortKey` rejects an `Instant` sort key with *"Key must have an
+  order-preserving data type"* — while `StandardRelationTypeMaker.sortKey`'s javadoc offers *"a property
+  key with a timestamp data type"* as its canonical example. The fix is a new 12-byte
+  `[8-byte biased seconds][4-byte biased nanos]`, not a marker interface, because the nanos field rides
+  `VariableLong`'s non-order-preserving zig-zag.
+- **`UUID` is order-preserving against a different comparator, on purpose.** Both `write` and
+  `writeByteOrder` are two **unbiased** `putLong`s, so bytes sort by unsigned bits while `UUID.compareTo`
+  compares each half signed: **10,070 of 20,000** random pairs disagree, **0** disagree with string order.
+  `AttributeUtils` (in **`janusgraph-driver`**, not core) holds `compareValues` — natural order except
+  UUIDs, which go to `compareUnsigned` — and that is the comparator the bytes implement. Lessons 21 and 26
+  need this: commit `46f9d249` (fixes #5087) pointed `OrderList`, `RelationComparator`, `RangeInterval`
+  and `Cmp` at it, and says explicitly that TinkerPop's own comparisons still use `UUID.compareTo`.
+- **Three comparators, three disagreements.** The bytes implement `compareValues`; `AttributeUtils
+  .compare` is lenient and diverges on exactly three things — `-0.0` vs `0.0` (returns 0; bytes are
+  strictly ordered), a one-NaN pair (returns `null`; bytes put NaN last), and cross-numeric-type
+  comparison (works via `doubleValue()`; `compareValues` throws `ClassCastException`).
+  `RelationComparator.compareValues` is a third entry point. **Which one answers a given predicate is
+  lesson 21's job** — that is where this becomes a bug or stops being one.
+- **`String` has two encodings that share no code.** Byte order: `[0x00 flag][2 bytes per UTF-16 code
+  unit][00 00]` = `3 + 2n`, no compression, no length header; it is exactly `String.compareTo` order
+  (0 inversions over 73,606 random strings) and therefore **UTF-16 code-unit order, not code-point
+  order** — U+1F600 sorts before U+FFFF, U+10000 before U+E000. Value order: one
+  `VariableLong.writePositive` header with the compressor id in the low 3 bits, the full-UTF flag in bit
+  3, and a length-or-marker above — ASCII writes marker `2 << 4` (or `1 << 4` for empty) and **stores no
+  length at all**, recovering it from the `0x80` stop bit; full UTF stores the **char** count; GZIP stores
+  the **byte** count and triggers only above `LONG_COMPRESSION_THRESHOLD = 16000`. `'alice'` is 13 bytes
+  as a sort key and 6 as a value.
+- **The sort-key premium.** Zero for every fixed-width type; `Integer` 5 vs 2 for small values; `String`
+  `3 + 2n` vs `1 + n`. Carry this into lesson 17's graphindex cost comparison and lesson 20's VCI
+  arithmetic: a 20-character string sort key on an edge label with two vertex-centric indexes is
+  **258 bytes of sort key for one edge** once lesson 10's `2 + N` columns and both endpoint rows are
+  counted.
+- **Enums are persisted by ordinal and the format does not record declaration order.** 17 internal enums
+  (`TypeDefinitionCategory`, `JanusGraphSchemaCategory`, `Multiplicity`, `Cardinality`, `SchemaStatus`,
+  `ConsistencyModifier`, `Mapping`, `Order`, `Direction`, …) ride `EnumSerializer`. `getValue`'s
+  `ordinal < values.length` check catches a **removal**, loudly; it cannot catch a **swap**. Lesson 13
+  owns the consequences.
+- **The registration table is an on-disk format with 28 slots left.** Ids in use: `1`, `10`-`21`,
+  `22`-`30`, `41`-`57`, `60`-`71` = **51**, gaps at `2`-`9`, `31`-`40`, `58`-`59`.
+  `CLASS_REGISTRATION_OFFSET = 100` ("may NEVER EVER be changed"), `MAX_REGISTRATION_NO = 100000`, and
+  `registerClass(n)` stores at `100 + n` — so **72 through 99** are the only internal slots left.
+- **The custom-serializer extension point is add-only.** `registerClassInternal`'s
+  `!handlers.containsKey(datatype)` precondition makes replacing a built-in serializer impossible through
+  configuration, with **one** hard-coded exception at the top of `registerClass` for `HashMap` (from #306,
+  a Titan migration collision; registration 68 is `SerializableSerializer`, i.e. Java native
+  serialization through `commons-lang3`, so a `HashMap` property value is an `ObjectInputStream` payload
+  in the edgestore). Both `attributes.custom.attribute[X]` options are **`GLOBAL_OFFLINE`**
+  (`GraphDatabaseConfiguration:1365-1375`), because the registration number is persisted.
+  `GraphDatabaseConfiguration.getSerializer:1971` builds a **fresh** `StandardSerializer` per call, so the
+  serializer is not a singleton and a stateful custom serializer is a hazard (cf. #2429).
+- **`ObjectSerializer` (registration 1) is a placeholder, not a serializer**: `write` emits one `0x01`
+  byte and `read` returns `new Object()`. It is never reached for a property value, because
+  `hasGenericDataType` diverts those to `writeClassAndObject`.
+- **`VariableString.writeBackward` puts `STRING_ID_MARKER` at the HIGH address** and the `0x80` stop bit
+  at the low one, so `readBackward`'s `getByte(--position)` peek is correct and the string comes out in
+  order without reversing. Closes lesson 11's assumption. There are **three** near-duplicate in-tree ASCII
+  codecs — `StringSerializer.write`'s ASCII path, `StringEncoding.writeAsciiString`, and
+  `VariableString.write` — differing on the marker and on the empty string (header-only / a lone `0x80` /
+  rejected outright).
+
+### Verified by lesson 11, for lessons 13, 19, 20 and 27 to cite rather than re-derive
 
 - **The bytes are not self-describing; the schema is part of the format.** `parseRelation:113-116` looks
   up `tx.getExistingRelationType(typeId)` and reads `multiplicity()`, `getSortKey()`, `getSignature()`
@@ -240,185 +370,61 @@ run, lesson 10's block becomes the oldest of the three and the same rule applies
   and the reason the #4995 fix cannot reach the OLAP path. Any future consumer that is handed a
   `RelationReader` instead of an `EdgeSerializer` is excluded from the cache by construction.
 
-### Verified by lesson 10, for lessons 12-13, 17 and 20 to cite rather than re-derive
+### Verified by lesson 10 — compressed; full block in git history at the 2026-11-08 commit
 
-- **`writeRelation` writes one buffer and returns one offset.** `EdgeSerializer:288-381` produces a
-  `StaticArrayEntry(buffer, valuePosition)`; there is no second buffer. `valuePosition` is assigned in
-  **six** places and each assignment is a different storage contract. The full table (P = relation-type
-  prefix, S = byte-ordered sort-key values, `→` forward-readable, `←` backward-readable):
-  edge `MULTI` → col `P S vid← rid←`, val signature+props (`:325-327`); edge `SIMPLE` → col `P vid→`,
-  val `rid`+… (`:320-322`); edge unique-in-dir (`MANY2ONE` at OUT, `ONE2MANY` at IN, `ONE2ONE` either)
-  → col `P`, val `vid→ rid`+… (`:317-318`); property `SINGLE` → col `P`, val `value rid`+… (`:338-339`);
-  property `SET` → col `P value`, val `rid`+… (`:341-342`); property `LIST` → col `P S rid←`, val
-  `value`+… (`:347-349`). `Multiplicity.convert`: `LIST→MULTI`, `SET→SIMPLE`, `SINGLE→MANY2ONE`.
-- **The column *is* the uniqueness constraint.** A bare-prefix column means one physical cell per
-  `(vertex, type)`, so a second `MANY2ONE` out-edge **overwrites** the first with no read, no lock and
-  no check; `SET`'s `P value` column is set semantics for free; `MULTI`/`LIST` put the relation id in
-  the column so nothing is ever overwritten. This is why `isDirectColumnByStartOnlyAllowed:566-577`
-  returns true **only** for `Cardinality.SINGLE` property keys (and only for a `PropertyKeyVertex`,
-  reading `TypeDefinitionCategory.MULTIPLICITY` out of the definition map rather than calling
-  `multiplicity()`), and why `ManagementSystem:348-349` refuses to index a constrained direction.
-  **"Sort key ⟺ unconstrained multiplicity" is enforced three times in three files** —
-  `ManagementSystem:348`, `StandardEdgeLabelMaker:103-105`, and `EdgeSerializer:302`, the only one in
-  the write path and a **bare `assert`**.
-- **THE finding: lesson 09's four tag bits cost one byte in every cell.** `writePositiveWithPrefix`
-  (`VariableLong:160-186`) with `PREFIX_BIT_LEN = 3` lays the first byte out as
-  `[band(3) | continue(1) | top 0-4 bits of (count<<1 | dirBit)]`, so a **1-byte** prefix needs
-  `count << 1 | dir ≤ 15`, i.e. **count ≤ 7**. The smallest count a default graph can assign is **16**
-  (lesson 09: tag-bits `FIXED` at 4, tag always 0), so **the 1-byte prefix is unreachable on every
-  default graph** and is not reachable later either. Exact prefixes at count 16: `50 a0` (property),
-  `70 a0` (edge OUT), `70 a1` (edge IN). The **2-byte prefix holds counts ≤ 1023 → exactly 63
-  multiples of 16** (16..1008); count 1024 is 3 bytes. ~200 MB of pure padding on a 100M-edge graph.
-- **Columns are grouped by relation type, NOT sorted by relation-type id.** Sweeping counts 1-5000:
-  exactly **one** inversion, `1023 → 1024` (`7f fe` vs `70 10 80`); at the default stride of 16 it is
-  **1008 → 1024**. Cause is structural — `writeUnsigned:60-70` sets `STOP_MASK` on the **last** byte,
-  so a longer encoding's second byte is always `< 0x80` and a 2-byte encoding's is always `≥ 0x80`.
-  Inversions sit at every length boundary (`131071 → 131072` next). **Nothing in the read path depends
-  on the stronger property**, and the same STOP bit is why: `getBounds` compares only the first byte's
-  top 3 bits; `getQuery(type, dir, sortKey)` writes the same prefix bytes with the same function for
-  both ends, so a per-type slice is an exact byte-prefix match; and a 3-byte prefix sharing a first byte
-  can never land inside a 2-byte `Direction.BOTH` window (`70 a0`..`70 a2`) because its second byte is
-  `< 0x80`. **Untested and undocumented** — `IDManagementTest.edgeTypeIDTest:141-201` runs 1,000,000
-  trials and asserts round trip, `DirectionID`, full consumption, inline round trip, `DataOutput`
-  equality and both `getBounds` bracketings, and never compares two different counts. PR candidate 15.
-- **Six prefix bands; `getBounds` reaches four.** `DirectionID.getPrefix:93-96` is
-  `((systemType?0:invisible?2:1)<<1) + (id>>>1)`, and the direction does **not** affect the band:
-  0 = system property (`0x00`-`0x1f`), 1 = system edge (`0x20`-`0x3f`), 2 = user property
-  (`0x40`-`0x5f`), 3 = user edge, **OUT and IN interleaved per type** (`0x60`-`0x7f`), 4 =
-  invisible-non-system property (`0x80`-`0x9f`), 5 = invisible-non-system edge (`0xa0`-`0xbf`), 6-7
-  unreachable. `getBounds:185-206` only ever passes `getPrefix(systemTypes, systemTypes)`, so it emits
-  `[0x00,0x40)` or `[0x40,0x80)` and **never touches bands 4-5**. `IDManagementTest.testDirectionPrefix`
-  asserts both bounds are exactly 1 byte and `< 0xff`.
-- **Bands 4-5 are the vertex-centric index bands, and that is deliberate.**
-  `ManagementSystem.buildRelationTypeIndex:340-393` creates a **whole new relation type** named
-  `<baseTypeId>:<indexName>`, with `maker.invisible()` (`:368`), `Multiplicity.MULTI` (`:369`), the sort
-  keys, the sort order, and a signature pruned of the sort keys (`:374-385`); it is linked to the base
-  type by a `RELATIONTYPE_INDEX` schema edge (`:387`). `RelationTypeVertex.getRelationIndexes:109-117`
-  returns `[this] ++ indexTypes`, and `StandardJanusGraph:1124-1149` calls `writeRelation(edge, type,
-  pos, tx)` once per (index type × covered position). **Invisibility is structurally required**, not
-  just convenient: `ManagementSystem:355` can pass `Direction.IN` to `lm.unidirected`, and
-  `StandardEdgeLabelMaker:106` forbids an IN-only unidirected label unless `INVISIBLE` is set. A
-  unidirected index type fails the `isUnidirected` check at `StandardJanusGraph:1127-1128` for the other
-  position, so **an edge with *N* vertex-centric indexes is 2 + N full columns**, each with its own
-  prefix, sort-key window, tail ids, signature and inline properties — and each index type burns a
-  schema count, i.e. 16 at default stride, out of the same 63-type 2-byte window.
-  `IndexRepairJob:211-219` re-runs the identical loop, which is why reindexing needs no new code path;
-  `JanusGraphVertexDeserializer:124-128` filters bands 4-5 in application code because it scans whole
-  rows instead of issuing band-bounded slices.
-- **`TYPE_LEN_RESERVE = 3` IS `IDHandler.PREFIX_BIT_LEN`, and `MAX_PADDING_BITWIDTH = 6` IS one shift.**
-  `stripEntireRelationTypePadding:701-704` is `UserEdgeLabel.removePadding` = `id >>> 6`; all four proper
-  relation-type suffixes are 6 bits (`000101`, `100101`, `010101`, `110101`) so one shift strips any of
-  them, and `readRelationType:143-155` **reconstructs** those 6 bits from the 3-bit band plus the 1
-  direction bit. `SCHEMA_COUNT_BOUND = 1L << (63 - 6 - 3) = 1 << 54` (`IDManager:410`) is sized so
-  `count << 1` plus a 3-bit prefix still fits a positive long. **Lesson 08's and 09's loose ends,
-  closed.** The inline path differs by two bits on purpose: `writeInlineRelationType:168-171` uses
-  `stripRelationTypePadding` = `>>> 4`, keeping property-vs-edge and user-vs-system, because an inline
-  key id has no band to rebuild itself from.
-- **The "different first-bit convention" needs no reconciling.** In a **row key** the high bits are the
-  partition and the low bits are the type suffix (`getKeyID`'s javadoc, `IDManager:523-529`); in a
-  **column** the high bits are the band and the **low bit of the encoded value** is the direction. The
-  `writeRelationType` javadoc (`IDHandler:120-128`) lists the *logical* field order, not the byte order.
-  Two different address spaces, same 64-bit vocabulary. Lesson 08's question, answered.
-- **`BufferUtil.nextBiggerBuffer:193-212` cannot overflow on a type prefix**, and `padBuffer` never
-  touches columns. `nextBiggerBuffer` increments **in place, no length change**, carrying right-to-left,
-  and throws on carry-out unless `allowOverflow`; byte 0's top 3 bits are the band, which maxes at 5, so
-  byte 0 ≤ `0xbf` and the carry always stops. A prefix *can* end in `0xff` (count 63, `EDGE_IN_DIR` →
-  `70 ff`) and then yields `71 00`, still a correct exclusive bound. `padBuffer:180-187`'s only caller is
-  `OrderedKeyValueStoreAdapter:143`, padding **row keys** in the lesson-05 OKVS adapter. Both items
-  owed to lesson 10, closed.
-- **Everything the reader needs after the sort keys is written backward.** `writePositiveBackward:217`
-  and `writeVertexId(out, id, false)` lay bytes down so a reader walking from the **tail** of the column
-  finds the relation id, then the adjacent vertex id, leaving the middle as the sort-key window with no
-  length header. The `forward` flag tracks exactly whether the id is in the value (`true`, parsed front
-  to back) or in the column (`false`); `readVertexId:218-234` peeks `getByte(position-1)` for
-  `STRING_ID_MARKER` when reading backward. This is what makes `ImplicitKey.ADJACENT_ID` and
-  `ImplicitKey.JANUSGRAPHID` addressable as pseudo-sort-keys in `getQuery:484-496`: they are the
-  backward-written tail fields, and `:466-471` pins their only legal positions — `ADJACENT_ID` exactly
-  at `i == sortKeyIDs.length`, `JANUSGRAPHID` at `sortKeyIDs.length` or `+1`, both only for non-unique
-  directions. That is the contract `BasicVertexCentricQueryBuilder:683-690`'s extended sort key must
-  satisfy — **lesson 20's starting point.**
-- **`InlineType` is two independent booleans, not three cases.** `KEY` = no inline key id + byte-ordered
-  (sort keys, in the column); `SIGNATURE` = no inline key id, not byte-ordered (in the value); `NORMAL`
-  = inline key id, not byte-ordered (everything else). `:406`'s assert means a generically typed key
-  (`dataType() == Object.class`, written with `writeClassAndObject`) can **only** be a `NORMAL` inline
-  property — never a sort key, never a signature field. Remaining properties are `Arrays.sort`ed by id
-  (`:369-371`) so that two serializations of the same relation are byte-identical, which
-  `acquireEdgeLock` (`StandardJanusGraph:900-901`) depends on.
-- **`DESC` is a one's complement over exactly `[keyStartPos, keyEndPos)`.**
-  `WriteByteBuffer.getStaticBufferFlipBytes:146-153` is `b.put(i,(byte)~b.get(i))` over that half-open
-  window only — not the prefix (so a DESC type stays in its band and its slice stays an exact prefix
-  match), not the tail (so tail-reading is order-independent). For a constrained type
-  `keyStartPos == keyEndPos` and the flip is a no-op; `getStaticBuffer()` **is**
-  `getStaticBufferFlipBytes(0,0)` (`:142`), so `EdgeSerializer:378-380`'s ternary is cosmetic.
-- **The missing-value marker is correct in both sort orders.** `StandardSerializer.writesMissingValuesLast:264-267`
-  plus `SerializerTest:139-155`: a missing value of any order-preserving type is the single byte `0xff`,
-  above every real value (and `Class`, `Instant`, `byte[]` are excluded). ASC (`:511-516`):
-  `sliceEnd = [prefix][0xff]` with `endInclusive = false`, so missing values are excluded at the top.
-  DESC (`:518-523`): the `0xff` is **inside the flipped window** and becomes `0x00`, so missing values
-  sort **first**, and `if (!endInclusive) sliceStart = nextBiggerBuffer(...)` bumps the lower bound to
-  `[prefix][0x01]` — excluded at the bottom. The javadoc at `:554-561` is order-neutral and right; only
-  the inline comment at `:504-505` ("written as -1 after the values") is ASC-phrased.
-- **`EdgeSerializer:481-483` is dead code with a bad failure mode.** `RangeInterval.isEmpty():110-115`
-  means *unsatisfiable*; breaking out leaves `sliceStart == null`, which falls into `:533` and produces a
-  slice over the **whole type band** — maximum over-read instead of nothing. It never fires:
-  `BasicVertexCentricQueryBuilder:607-610` returns `BaseVertexCentricQuery.emptyQuery()` for any empty
-  interval before `getQuery` is ever called. PR candidate 17.
-- **Two columns per edge, two different shapes.** `EdgeDirection.fromPosition`: **0 → OUT, 1 → IN**.
-  `StandardJanusGraph:1126-1149` loops `pos` over `edge.getArity()` and writes only the position whose
-  endpoint is the row's vertex — which is where the data-model doc's "each edge has to be stored twice"
-  physically happens. For a `MANY2ONE` edge the OUT column is bare-prefix and the IN column carries the
-  adjacent vertex id: **same edge, two layouts.** Three other callers write a column outside the commit
-  path: `TransactionLogHeader:86-93` (always `position = 0`), `IndexRecordUtil:454-462` (inline index
-  fields, always `0`), and `IndexRepairJob:211-219`.
-
-### Verified by lesson 09 — compressed; full block in git history at `1bbfec7c`
-
-- **The default conflict-avoidance tag is 4 bits wide, `FIXED`, and always zero.**
-  `ids.authority.conflict-avoidance-tag-bits` = **4** (`ConfigOption.Type.FIXED`),
-  `conflict-avoidance-mode` = `NONE`, `conflict-avoidance-tag` = **0**, so
-  `ConsistentKeyIDAuthority:191/:200` set `randomizeUniqueId = false`, `uniqueId = 0` and
-  `ConsistentKeyIDBlock.getId:486-491` returns `((start+i) << 4) + 0`. **Every count JanusGraph assigns
-  is a multiple of 16.** At pb=5 with `NormalVertex`: count 16 → id **4096** at partition 0, **4232** at
-  partition 17; counts 32/48/64 → 8192/12288/16384. Consecutive vertices in one partition are **128**
-  apart, not 8. At tag-bits 0 the first id would be 256. Lessons 10 and 11 both chain off this (one byte
-  of prefix per cell; the 3-byte backward floor paid on the very first id), and **lesson 27 must assume
-  it** when reasoning about CQL token distribution.
-- **The reachable count space, exact.** `claimIDBlock:287-290`:
-  `maxAvailableBits = (unsignedBitLength(idUpperBound) - 1) - uniqueIdBitWidth`. At pb=5, tag-bits 4:
-  `NORMAL_VERTEX`/`UNMODIFIABLE_VERTEX`/`PARTITIONED_VERTEX` **2^51** of 2^55; `RELATION` **2^54** of
-  2^58; `SCHEMA` **2^50** of 2^54. **15/16 of every space is unreachable**, and the option is `FIXED`, so
-  it cannot be reclaimed.
-- **Five namespaces, and the namespace byte is an enum ordinal.** `PoolType.getIDNamespace()` is
-  `ordinal()` (`VertexIDAssigner:458-460`): 0 `NORMAL_VERTEX`, 1 `UNMODIFIABLE_VERTEX`,
-  2 `PARTITIONED_VERTEX`, 3 `RELATION`, 4 `SCHEMA`. **Reordering the enum reinterprets every existing
-  graph's id rows.** `hasOnePerPartition()` is true for 0, 1 and 3 only, hence
-  `renewalThreads = 3 * partitionIdBound + 2` (`:123`) = **98** at `cluster.max-partitions = 32` against
-  a live-pool ceiling of **32**, and **196,610** at 65536 (lazily created, `allowCoreThreadTimeOut(true)`).
-- **`BASE_ID = 1`** (`AbstractIDAuthority:45`), so **no count 0 is ever offered** — which is what
-  actually protects `EDGESTORE_MIN_KEY`'s unreachability (lesson 08's question), not `addPadding`.
-- **`SCHEMA` (block 50) and `PARTITIONED_VERTEX` (block 100) permanently double-buffer**, because
-  `renewBlockIndex = max(0, numIds - max(RENEW_ID_COUNT=100, round(numIds*0.3)))` is 0 when
-  `RENEW_ID_COUNT = 100` exceeds the block size. Defaults: `ids.block-size = 10000`,
-  `ids.renew-percentage = 0.3`, `ids.renew-timeout = 120 s`, `ids.authority.wait-time = 300 ms`,
-  `ids.num-partitions = 10`.
-- **Owed to lesson 27, still owed:** the ids-store column layout — `[-(end)][timestamp][uid]` with an
-  empty value, slice bounds `zeroBuffer(1)` to `oneBuffer(17)` — is the smallest real column layout in
-  the codebase and the cleanest thing to compare against `CQLKeyColumnValueStore`. The negated counter is
-  what makes `getCurrentID`'s `setLimit(5)` correct.
-- **PR candidates 11-14 all come from this lesson** and carry forward unchanged: the
-  `timeout.getNano()` give-up message that prints 0 for any whole-second `Duration` (11), the rollback
-  path's character-for-character duplicate `TransactionalProvider` (12), `IDAuthorityTest`'s two
-  contiguity assertions that have never executed because no `configs()` parameterization sets tag-bits to
-  0 (13), and `accessed()`'s 33.0 ns/op `volatile` write for a `getLastAccess()` with no caller (14).
+- **`writeRelation` writes one buffer and returns one offset**, `valuePosition`, assigned in **six**
+  places, and each assignment is a different storage contract: `MANY2ONE`-at-OUT and `SINGLE` get a
+  **bare-prefix** column (so a second write overwrites with no read, no lock, no check — the column *is*
+  the uniqueness constraint); `SET` puts the value in the column (set semantics for free); `MULTI`/`LIST`
+  put the relation id in the column so nothing is overwritten. The same edge produces **two columns of
+  two different shapes**, one per endpoint row.
+- **The relation-type prefix costs one byte more than it should on every default graph.**
+  `IDHandler.writePositiveWithPrefix` with `PREFIX_BIT_LEN = 3` gives a 1-byte prefix only for schema
+  count ≤ 7, and lesson 09's four conflict-avoidance bits make **16** the smallest count a default graph
+  can assign — so the cheapest case is unreachable, permanently (`FIXED`). The 2-byte prefix holds
+  exactly **63** relation types (counts 16..1008); the 64th spills to 3.
+- **Columns are grouped by relation type, not sorted by relation-type id.** Exactly one inversion in a
+  5,000-count sweep, `1023 → 1024` (`7f fe` vs `70 10 80`), at the default stride `1008 → 1024` — because
+  the STOP bit marks the **last** byte. Nothing in the read path needs the stronger property
+  (`getBounds` compares only the top 3 bits, per-type slices are exact byte-prefix matches, and the STOP
+  bit keeps different-length prefixes from interleaving inside a `Direction.BOTH` window) and **no test
+  asserts any of it**. PR candidate 15.
+- **Six prefix bands exist and `getBounds` can reach four.** It passes `getPrefix(systemTypes,
+  systemTypes)`, so it emits `(0,1)` or `(2,3)` and never `(4,5)` — the invisible-non-system bands, which
+  is exactly where every vertex-centric index replica lives. `ManagementSystem.buildRelationTypeIndex:368`
+  calls `maker.invisible()`, and `StandardEdgeLabelMaker:106` makes invisibility *structurally required*
+  (an IN-only unidirected label is otherwise illegal). **An edge with *N* vertex-centric indexes is
+  `2 + N` full columns**, each a complete re-serialization. Carry this into lessons 17 and 20.
+- **`DESC` is a one's complement over exactly `[keyStartPos, keyEndPos)`** —
+  `WriteByteBuffer.getStaticBufferFlipBytes:146-153`, not the prefix (so a DESC type stays in its band and
+  its slice stays an exact prefix match) and not the tail (so tail-reading is order-independent). For a
+  constrained type the window is empty and the flip is a no-op; `getStaticBuffer()` **is**
+  `getStaticBufferFlipBytes(0,0)`.
+- **The missing-value marker is correct in both sort orders.** A missing value of any
+  `writesMissingValuesLast` type is the single byte `0xff`: ASC puts `sliceEnd = [prefix][0xff]` with
+  `endInclusive = false`, excluding them at the top; DESC has the `0xff` **inside** the flipped window
+  where it becomes `0x00`, so they sort first, and `nextBiggerBuffer` bumps the lower bound to
+  `[prefix][0x01]`. Lesson 12 established *why* this is safe (the dispatcher's flag byte) and which types
+  qualify.
+- **`EdgeSerializer:481-483`'s `interval.isEmpty()` branch is dead** —
+  `BasicVertexCentricQueryBuilder:607-610` returns `emptyQuery()` first — and if reached it widens the
+  slice to the whole type band. PR candidate 17.
+- **Closed:** `TYPE_LEN_RESERVE = 3` **is** `IDHandler.PREFIX_BIT_LEN`; `MAX_PADDING_BITWIDTH = 6` **is**
+  the one shift in `stripEntireRelationTypePadding`; the row-key-vs-column first-bit conventions need no
+  reconciling (different address spaces); `BufferUtil.nextBiggerBuffer` cannot overflow on a type prefix
+  (band maxes at 5, so byte 0 ≤ `0xbf`) and `padBuffer` pads **row keys**, never columns.
 
 ### PR candidates, all verified at the pinned commit
 
 Numbering is **stable** — earlier entries reference these numbers, so new candidates are appended rather
-than inserted in size order. **Candidates 18-20 are new this run** (lesson 11); **18 is the most
-substantial the track has found** and 20 should wait on lesson 12. **11 is still the smallest.**
-Candidates 1-17 carry forward and were **not** re-verified this run: 15-17 were verified at this pinned
-commit on 2026-11-08, 11-14 on 2026-11-07, 8-10 on 2026-11-06, 1 and 7 on 2026-11-05, 2-4 and 6 on
-2026-11-04, and 5 still needs its experiment run.
+than inserted in size order. **Candidates 21-23 are new this run** (lesson 12), and **candidate 20 was
+rewritten** rather than dropped: lesson 12 established that its failure mode is unreachable with any
+in-tree serializer, so the framing changed from "silent corruption" to a one-line hardening against a
+third-party `OrderPreservingSerializer`. **18 is still the most substantial the track has found; 21 is now
+the smallest and the best first contribution** — doc-only, no code risk, and it forces a maintainer to
+confirm a claim the docs make that the code does not implement. Candidates 1-20 carry forward; 18-20 were
+verified at this pinned commit on 2026-11-09, 15-17 on 2026-11-08, 11-14 on 2026-11-07, 8-10 on
+2026-11-06, 1 and 7 on 2026-11-05, 2-4 and 6 on 2026-11-04, and 5 still needs its experiment run.
 
 1. **`KCVSProxy.java:67`** passes `txh` where every sibling method passes `unwrapTx(txh)`. One token.
    Fix the same omission in the test double at `KCVSCacheTest.java:242` and add a `KCVSCacheTest` case
@@ -577,19 +583,68 @@ commit on 2026-11-08, 11-14 on 2026-11-07, 8-10 on 2026-11-06, 1 and 7 on 2026-1
     three. Throw `IllegalStateException("relation was parsed header-only")` from each, with a
     `RelationCacheTest` case per method. Smallest of the three new candidates, and it is the guard that
     makes 18 safe to write.
-20. **Bound the ASC sort-key read as the DESC read is bounded — but wait for lesson 12.**
-    `EdgeSerializer:165-175` sends DESC through `in.subrange(keyLength, true)`, whose `limit` is exactly
-    the sort-key window, so `StaticArrayBuffer.require` throws past it; ASC reads **in place** out of
-    `in` itself and nothing compares the bytes consumed against `keyLength`, so an over-reading sort-key
-    serializer would read into the `vid←`/`rid←` tail and return silently wrong values, with
-    `in.movePositionTo(currentPos)` discarding the evidence. The fix is one line —
-    `in.subrange(keyLength, def.getSortOrder() == Order.DESC)`, since the non-inverting `subrange`
-    returns a **view** with no byte copy — at the cost of two short-lived objects where ASC currently
-    allocates none. **Only worth filing if the failure mode is reachable**, which is lesson 12's job to
-    establish: if every `isOrderPreservingDatatype` serializer is length-unambiguous, this is a style
-    change. Note the inverting `subrange` *does* allocate (`new byte[length]` + arraycopy + `(byte)~b`
-    loop + `StaticArrayBuffer` + `ReadArrayBuffer`), so every DESC index replica — which can never be
-    complete at the header — pays three allocations and a copy on its first property read.
+20. **Bound the ASC sort-key read as the DESC read is bounded — REWRITTEN by lesson 12; the trigger is
+    a third-party serializer, not an in-tree one.** `EdgeSerializer:169-174` sends DESC through
+    `in.subrange(keyLength, true)`, whose `limit` is exactly the sort-key window, so
+    `StaticArrayBuffer.require` throws past it; ASC reads **in place** out of `in` itself and nothing
+    compares the bytes consumed against `keyLength`. **Lesson 12 settled reachability: no.** Ten of the
+    eleven in-tree order-preserving datatypes are fixed-width in byte order, and the eleventh (`String`,
+    `3 + 2n`) is self-delimiting by a `00 00` terminator that `writeByteOrder`'s
+    `Preconditions.checkArgument(c > 0)` refuses to let into the payload — read length equals write
+    length over 20,000 strings. **What survives** is that `StandardRelationTypeMaker.checkSortKey`'s only
+    gate is `instanceof OrderPreservingSerializer`, with no width or symmetry check, so a **custom**
+    serializer registered through `attributes.custom.attribute[X].serializer-class` can be accepted as a
+    sort key and read past its window — silently wrong on ASC, a loud `ArrayIndexOutOfBoundsException` on
+    DESC. File it as *"bound the ASC sort-key read so a third-party `OrderPreservingSerializer` cannot
+    read past the sort-key window"*: one line,
+    `in.subrange(keyLength, def.getSortOrder() == Order.DESC)` (the non-inverting `subrange` returns a
+    **view** with no byte copy), plus a test that registers a deliberately over-reading serializer and
+    asserts the exception rather than garbage. Low priority, trivially reviewable, no behaviour change for
+    any in-tree type. **If reviewers prefer, drop it — but record that decision rather than leaving it
+    open a fourth lesson.** Note the inverting `subrange` *does* allocate (`new byte[length]` +
+    arraycopy + `(byte)~b` loop + two wrappers), so every DESC index replica pays three allocations and a
+    copy on its first property read.
+21. **Fix `docs/advanced-topics/serializer.md`'s *Custom Object Serialization* section. Doc-only,
+    smallest candidate in the list, and the best first contribution this track has found.** The page
+    states that *"JanusGraph will test both serialization and deserialization of a custom class before
+    persisting data to disk"* and that the attribute class must implement `AttributeSerializer`, have a
+    no-argument constructor and implement `equals(Object)`. Reading the whole registration path —
+    `RegisteredAttributeClassesConverter.convert` → `RegisteredAttributeClass.registerWith` →
+    `StandardSerializer.registerClass` → `registerClassInternal` — **there is no such round trip**: the
+    registration validates the number, the non-nullity of the type and serializer and the absence of a
+    collision, then puts two map entries. No instance is constructed, nothing is serialized, `equals` is
+    never called. The no-arg-constructor requirement is real but applies to the **serializer**
+    (`Class.forName(serializerName).newInstance()`), not the attribute class, which the paragraph
+    conflates. Four edits: delete the round-trip claim, split the two requirements, drop the stale
+    `equals` requirement, and add the two facts the page omits — that a **built-in** type's serializer
+    cannot be replaced through configuration (with the hard-coded `HashMap` exception, from #306) and that
+    both options are `GLOBAL_OFFLINE`. Zero code risk, and the review forces a maintainer to confirm the
+    finding.
+22. **Document the sort-key datatype restrictions where they are discoverable, and clear three dead
+    spots in the same area.** `StandardRelationTypeMaker.sortKey`'s javadoc gives as its example *"the
+    edge label friend has the sort key (since), which is a property key with a timestamp data type"* —
+    and `InstantSerializer` is **not** an `OrderPreservingSerializer`, so the canonical example in the API
+    documentation is precisely the case `checkSortKey` rejects. Replace it with `Long`/`Date`, list the
+    eleven permitted types, and note that a `String` sort key forbids `U+0000` (enforced only at
+    serialization time by `StringSerializer.writeByteOrder`; `verifyAttribute` checks only `MAX_LENGTH`).
+    Bundle, or split if reviewers prefer one concern per PR: remove `StringSerializer`'s
+    `TEXT_COMPRESSION_THRESHOLD`, which is `public static final`, never read by `StringSerializer`, and
+    read only by a test to size random strings; remove `normalizeDataType`'s `Instant` branch, which is
+    unconditionally dead (`java.time.Instant` is `final`, and the branch returns exactly what the
+    fallthrough returns); and collapse `makeDefinition`'s triple `checkSortKey`/`checkSignature` calls to
+    one each.
+23. **Make `InstantSerializer` and `DurationSerializer` order-preserving.** Largest of the three new
+    candidates and the most useful — `Instant` is the type users reach for first for a time-ordered
+    vertex-centric index, and today it is rejected outright. The encoding has to be
+    `[8-byte biased seconds][4-byte biased nanos]` = 12 bytes in byte order, leaving `read`/`write`
+    untouched for on-disk compatibility, because the current nanos field rides `VariableLong`'s
+    sign-magnitude zig-zag, which is **not** order-preserving (lesson 10's STOP-bit inversion applies).
+    Tests: add both to `SerializerTest`'s `TYPES` (which moves `testSerializedOrder`'s
+    `assertEquals(10, sortTypes.size())` to 12 — and that count is itself a fragile assertion worth
+    replacing with a set comparison in the same PR) and to
+    `testMissingValuesOfTheTypesWhichWriteThemLastComeAfterTheirValues`. **Search for an existing issue
+    first**; #948 (UUID) is the precedent for how such a request is framed, and #1248 is the
+    user-facing symptom report for the UUID version of the same complaint.
 
 ### Still open, and who owns it
 
@@ -602,16 +657,44 @@ commit on 2026-11-08, 11-14 on 2026-11-07, 8-10 on 2026-11-06, 1 and 7 on 2026-1
   `EdgeSerializerTest.checkParsedOnce`, which pins that a full parse is the one instance every later read
   returns); `readInlineTypes`/`hasPropertyMetaData`; and that `SIMPLE` is constrained, correcting lesson
   10's arrow on that row.
-- **Owed to lesson 12 by lesson 11, and it decides a PR:** is any `readObjectByteOrder` implementation
-  length-ambiguous, i.e. can it consume a different number of bytes than `writeObjectByteOrder` wrote? If
-  not, PR candidate 20 is a style change and should be dropped. Second question, independent: does
-  `VariableString.writeBackward` place its high-bit marker at the **high** address? `readVertexId(in,
-  false)` peeks `getByte(position-1)` for `STRING_ID_MARKER`, and the long side is safe because a
-  backward long's last byte is always `≤ 0x7f` — the string side is assumed, not verified.
+- **Closed by lesson 12:** both questions lesson 11 owed it. **No in-tree `readObjectByteOrder` is
+  length-ambiguous** — ten of eleven order-preserving datatypes are fixed-width in byte order and
+  `String` is self-delimiting by a terminator its own writer refuses to let into the payload — so PR
+  candidate 20's silent-corruption framing is unreachable and the candidate was **rewritten**, not
+  dropped: the surviving trigger is a custom third-party `OrderPreservingSerializer`, which
+  `checkSortKey` accepts on nothing but an `instanceof`. And **`VariableString.writeBackward` does put
+  `STRING_ID_MARKER` at the high address**, with the `0x80` stop bit at the low one, so
+  `readBackward`'s `getByte(--position)` peek is correct for the string case as it is for the long case.
+  Also closed from lesson 10's list: `writeObjectByteOrder` vs `writeObject` vs `writeClassAndObject`
+  (three positions selected by `InlineType`, plus a fourth path confined to `Object.class` keys),
+  `writesMissingValuesLast` (a question about the flag byte, excluding exactly `ClassSerializer`), and
+  **is every `isOrderPreservingDatatype` also fixed-width? — no, `String` is not, but it does not matter,
+  because it is self-delimiting**.
 - **Owed to lesson 13 by lesson 11:** `parseRelation:113` calls `tx.getExistingRelationType(typeId)`
   before it knows anything else about the cell, so a schema vertex's own row must be decodable without
   that lookup recursing forever. Find where the recursion bottoms out; it is the one place the format
   *is* self-describing.
+- **Owed to lesson 13 by lesson 12, and it is a migration question:** seventeen internal enums are
+  persisted **by ordinal** through `EnumSerializer`, and `getValue`'s bounds check catches a removed
+  constant but never a reordered one. Establish which `TypeDefinitionCategory` values reach disk by
+  ordinal, whether any upgrade path has ever reordered one, and whether `TypeDefinitionDescriptionSerializer`
+  adds any versioning of its own. Also: `writeClassAndObject`'s self-describing form is how a generic
+  value survives, and lesson 13 should say whether schema values ever use it.
+- **Owed to lessons 21 and 26 by lesson 12, and it decides whether an inconsistency is a bug:** three
+  comparators disagree — the stored bytes (`-0.0 < 0.0` strictly, NaN last), `AttributeUtils.compareValues`
+  (same, via `Double.compareTo`), and `AttributeUtils.compare` (returns 0 for `-0.0` vs `0.0`, `null` for
+  a one-NaN pair, and compares across numeric types where `compareValues` throws), plus
+  `RelationComparator.compareValues` as a third entry point. Establish which one answers a `Cmp` range,
+  which one `GraphCentricQueryBuilder` scores an index with, and whether any of the three divergences is
+  reachable from a user query. Related: #5120, a mixed index given an order by a TEXT key no backend can
+  sort by, is the same shape one layer up. And the string byte order is **UTF-16 code-unit order, not
+  code-point order**, which is the UUID bug's twin waiting in `String` — Elasticsearch, OpenSearch and
+  Solr sort strings by code point.
+- **Owed to lesson 17 by lesson 12:** `IndexRecordUtil` makes the same `hasGenericDataType` →
+  `writeClassAndObject` branch that `EdgeSerializer` does, so graphindex field values take the
+  **non**-byte-ordered path. Establish whether a composite index key is byte-ordered at all, and if not,
+  what gives a composite index its range behaviour. Carry lesson 12's cost table: the sort-key premium is
+  zero for fixed-width types and `3 + 2n` vs `1 + n` for strings.
 - **Owed to lessons 19-20 by lesson 11:** `RelationCache`'s header-only state is what
   `tx.getConfiguration().isLazyLoadRelations()` and `JanusGraphLazyRelationConstructor` trade on
   (`RelationConstructor`'s entry iterator branches on it). Establish which Gremlin steps settle for a
@@ -624,12 +707,6 @@ commit on 2026-11-08, 11-14 on 2026-11-07, 8-10 on 2026-11-06, 1 and 7 on 2026-1
   a type prefix) and `padBuffer` (pads row keys, never columns); and where lesson 09's stride of 16 and
   the edge/endpoint co-location actually show up in the column layout — the stride as one byte of prefix
   in every cell, the co-location as the reason a vertex-centric index slice is local.
-- **Owed to lesson 12 by lesson 10:** `writeObjectByteOrder` vs `writeObject` vs `writeClassAndObject`,
-  the order-preserving serializers, and `writesMissingValuesLast`. The question that matters for the
-  column layout: **is every `isOrderPreservingDatatype` also fixed-width?** A variable-width
-  order-preserving sort key would make the sort-key window's end ambiguous without the backward-tail
-  trick, so the two mechanisms are coupled. `SerializerTest:139-170` (the `0xff` missing-value marker and
-  the single-value NaN encoding after `+∞`) is the entry point.
 - **Owed to lesson 13 by lesson 10:** verify rather than assume that a schema vertex's own row uses the
   same six bands. `BaseRelationType.isInvisibleType():62-64` returns an unconditional `true` and
   `BaseKey`/`BaseLabel` ids are system ids, so schema-definition relations should land in bands **0 and
@@ -688,20 +765,19 @@ commit on 2026-11-08, 11-14 on 2026-11-07, 8-10 on 2026-11-06, 1 and 7 on 2026-1
   `nextBiggerBuffer`-exclusive, and the missing-value marker relies on exclusivity on the ASC upper bound
   and the DESC lower bound. Lesson 27 adds CQL as the fourth implementation. The contract is in
   `KeyColumnValueStore`'s javadoc and **none** of the enforcement is.
-- **tdd.cat, 2026-11-09: the two skipped days published, and the fallback precedent paid off.** At
-  ~03:40 UTC the front page served **2026-11-08** (22 stories), labelled *Latest*, and `/archive/`
-  reported **133 editions** with 2026-11-08 as the newest and the 9th shown unlinked. So **no 2026-11-09
-  edition exists**, and the two days lesson 10 found missing (2026-11-07, 2026-11-08) have both since
-  been published — the archive count went 131 → 133. Lesson 11 therefore digested the **2026-11-08**
-  edition, which no run had covered, rather than falling back a second time. **Practical consequence for
-  the next run:** the site is running roughly a day behind and backfills, so (a) always check
-  `/archive/`'s maximum, not just the front page; (b) before digesting, check the session log for the
-  newest edition already covered — a date the front page serves may be one a previous run digested, and a
-  date a previous run reported as non-existent may now exist; (c) the uncovered-item fallback remains the
-  last resort, and the 2026-11-06 edition now has two items spent (Infino ids, Postgres `SKIP LOCKED`
-  queues). The front-page-vs-archive lag has now shown three different patterns in four days; neither
-  source is dependable alone. The filter-bar rendering bug ("No stories match the selected filters")
-  was **not** observed this run.
+- **tdd.cat, 2026-11-10: the simple case, for the first time in four runs.** At ~03:45 UTC the front
+  page served **2026-11-09** (50 stories) and `/archive/` reported **134 editions** with 2026-11-09 as
+  the newest and the November 10 cell unlinked — front page and archive **agreed**, which is the first
+  time since lesson 09. So no 2026-11-10 edition exists, 2026-11-09 was uncovered (lesson 11 digested
+  2026-11-08), and lesson 12 digested it with no fallback. **The procedure that has now worked four runs
+  running, keep it:** (a) fetch the front page and `/archive/` and take the maximum, never the front page
+  alone; (b) before digesting, check this session log for the newest edition already covered — a date the
+  front page serves may be one a previous run digested, and a date a previous run reported as
+  non-existent may now exist (2026-11-07 and 2026-11-08 both did); (c) the uncovered-item fallback is the
+  last resort, and the 2026-11-06 edition has two items spent (Infino ids, Postgres `SKIP LOCKED`
+  queues). Edition sizes are volatile — 22 stories on 2026-11-08, 50 on 2026-11-09 — so a small edition
+  is not evidence of a partial publish. The filter-bar rendering bug ("No stories match the selected
+  filters") was **not** observed this run.
 
 ## Paused Subjects
 
