@@ -24,7 +24,7 @@ Reading `JanusGraph/janusgraph` at commit [`a59ae8d8`](https://github.com/JanusG
 
 ---
 
-## 1. There is no catalog: five system keys, two system labels, one subgraph
+## 1. There is no catalog: six system keys, two system labels, one subgraph
 
 [`BaseKey`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/types/system/BaseKey.java#L41-L58) declares exactly six property keys, and [`BaseLabel`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/types/system/BaseLabel.java) exactly two. That is the whole vocabulary in which JanusGraph describes itself.
 
