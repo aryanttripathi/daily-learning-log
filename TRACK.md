@@ -5,12 +5,12 @@ mode: lesson
 mode-history: contributor-reading 2026-10-30 .. 2026-11-02 (sessions 01-04); lesson from 2026-11-03 (lesson 05 on)
 started: 2026-10-30
 lessons-total: 28
-lessons-done: 13
+lessons-done: 14
 pinned-commit: a59ae8d8024207598eada34998d867617df51adf
 pinned-commit-date: 2026-10-28
 pinned-commit-reviewed: 2026-11-11 at the Part II/III boundary (lesson 13) — a59ae8d8 is still the tip of
-  JanusGraph/janusgraph master, so there is nothing to re-pin to; staying. Re-check at the Part III/IV
-  boundary, after lesson 18.
+  JanusGraph/janusgraph master, so there is nothing to re-pin to; staying. Not re-raised by lesson 14
+  (mid-Part, by design). Re-check at the Part III/IV boundary, after lesson 18.
 upstream: JanusGraph/janusgraph
 reader-fork: aryanttripathi/janusgraph
 paused-tracks: PostgreSQL (resume at lesson 11; full state in tracks/postgresql.md)
@@ -58,6 +58,9 @@ From lesson 05, `janusgraph-berkeleyje` is also needed:
 
 Newest first.
 
+- **14 — 2026-11-12** · [`2026/11/2026-11-12-janusgraph-open-path-config-merge/README.md`](2026/11/2026-11-12-janusgraph-open-path-config-merge/README.md) · **Part III opens. All three obligations lesson 13 handed this run are discharged, and one of lesson 13's own notes is corrected.** Read `JanusGraphFactory` (whole), `GraphFactoryUtils` (whole), `SchemaInitializationManager` (whole), `GraphDatabaseConfigurationBuilder` (whole), `ReadConfigurationBuilder` (whole), `ModifiableConfigurationBuilder` (whole), `ConfigOption` (whole), `BasicConfiguration` (whole), `ModifiableConfiguration` (whole), `MixedConfiguration` (whole), `MergedConfiguration` (whole), `KCVSConfiguration` (whole), `KCVSConfigurationBuilder` (whole), `JanusGraphConstants` (whole), `janusgraph.internal.properties` (whole), `MetricInstrumentedSchemaCache` (whole), `ReadConfigurationBuilderTest` (whole), plus `GraphDatabaseConfiguration` (the option declarations 140-189, 1027-1030, 1157-1159, 1363-1375, 417-423; the class body 1604-1680; `getIDAssigner` 1934-1936, `getBackend` 1951-1956, `getSerializer` 1967-1981, `getTypeCache` 1983-1986, `getLocalConfiguration` 1988-1996, `preLoadConfiguration` 2034-2120, `selectExactConfig` 2122-2126), `StandardJanusGraph` (the constructor 264-360, `closeInternal` 422-470, `getSchemaCache` 554-556, `newTransaction` 588-603, `typeCacheRetrieval` 611-644, `getGlobalSystemConfig` 745-749), `Backend` (the constructor 236-280, `initialize` 333-417, `getGlobalSystemConfig` 478-479, `getStorageManager` 522-545), `ManagementSystem` (fields and constructor 145-188, `configVerifier` 190-207, `getOpenInstancesInternal` 209-213, `forceCloseInstance` 225-234) and `StandardSerializer` again (the registration table 113-171, for the 13 config datatypes).
+  **Findings.** The global configuration is **one row** in `system_properties`, row key UTF-8 `"configuration"` (13 bytes), columns the dotted option paths, values `writeClassAndObject`; `hidden.frozen` is a column in that same row and is excluded from `getAll()` by a swallowed `ConfigElement.parse` failure logged at debug. `ConfigOption.ACCEPTED_DATATYPES` is a closed set of **13** classes whose registration numbers top out at 65, so **every config value's registration prefix is exactly one byte** — and the set is closed because `KCVSConfiguration:75` builds its own bare `new StandardSerializer()`, which no `attributes.custom.*` registration ever reaches. **Obligation (b), answered:** at open time `FIXED`, `GLOBAL_OFFLINE` and `GLOBAL` are **indistinguishable** — every open-path site uses `isGlobal()`/`isManaged()`/`isLocal()`, and the only two places in the tree that switch on the constant are `ModifiableConfiguration.set:37-44` and `ManagementSystem`'s `configVerifier:190-207`. The resolution order is three rows wide (`MergedConfiguration(overwrite, MixedConfiguration(global, local))`). **The MASKABLE surprise:** `getGlobalSubset` filters on `isGlobal()`, which *includes* `MASKABLE`, so every MASKABLE option in the first instance's properties file is frozen into the global row, never updated, never discrepancy-checked (`getManagedSubset` excludes MASKABLE), and inherited by every later instance that omits it — **PR candidate 26**. **Obligation (a), answered:** `system_properties` needs nothing but a `KeyColumnValueStoreManager`, which is why the open path creates store manager #1, reads and freezes the row through it, and **closes it** (try-with-resources → `KCVSConfiguration.close` → `txProvider.close` → `manager.close()`) before `getBackend()` opens store manager #2 and a *second* `KCVSConfiguration` on the same row; in the constructor, `schemaCache` is wired at `:308` but its retriever cannot run until `isOpen` at `:320`, and that invariant holds by ordering alone with no assertion or test. **Obligation (c), answered:** `MetricInstrumentedSchemaCache` is a `StandardSchemaCache` with a counting retriever — behaviour identical, no HIT counter, `MISS` incremented before the store call, `expireSchemaElement` uncounted, counters under the JVM-global system prefix; lesson 13's `isCacheable` asymmetry means a permanent 100% miss rate on repeated lookups of a non-existent type is correct rather than a misconfiguration. Also: six FIXED options exactly, three of them escapable via `graph.allow-upgrade` from a list parsed out of a jar resource (`storage-version,janusgraph-version,titan-version`; `STORAGE_VERSION=2`), and a successful upgrade writes `allow-upgrade=false` back into the database, disarming itself. **Correction to lesson 13's note:** `attributes.custom.*` is `GLOBAL_OFFLINE`, not FIXED. New PR candidates **26**, **27**, **28**. No syllabus revisions.
+
 - **13 — 2026-11-11** · [`2026/11/2026-11-11-janusgraph-system-types-schema-storage/README.md`](2026/11/2026-11-11-janusgraph-system-types-schema-storage/README.md) · **Part II complete; re-pin reviewed and declined — `a59ae8d8` is still the tip of `master`, so there is nothing to re-pin to.** Read `BaseKey` (whole), `BaseLabel` (whole), `BaseRelationType` (whole), `EmptyRelationType` (whole), `SystemTypeManager` (whole), `Token` (whole), `JanusGraphSchemaCategory` (whole), `TypeDefinitionCategory` (whole), `TypeDefinitionMap` (whole), `TypeDefinitionDescription` (whole), `SchemaSource` (whole), `StandardRelationTypeMaker` (whole), `StandardPropertyKeyMaker` (whole), `JanusGraphSchemaVertex` (whole), `PropertyKeyVertex` (whole), `StandardSchemaCache` (whole), `TypeDefinitionDescriptionSerializer` (whole), `EnumSerializer` (whole), `StandardSerializer` again (the registration table, slots 41-57 and 63), `StandardSchemaCacheTest` (whole), plus `StandardJanusGraphTx` (`makeSchemaVertex` 1080-1112, `updateSchemaVertex` 1114-1116, `getSchemaVertex` 1216-1224, `getRelationType` 1231-1239, `getExistingRelationType` 1252-1262, the vertex constructor 641-664, `getOrLoadRelationTypeById` 488-497, `expireSchemaElement` 2253-2275, `newTypeCache` 282/337/341/1109/1217/2209), `StandardJanusGraph` (`typeCacheRetrieval` 611-643, `vertexExistenceQuery` 306, `getSchemaCache` 554-556, `edgeQuery` 682-685) and `IDManager` again (the bit-mask doc 36-62, the `VertexIDType` suffixes, `addPadding` 345-353, `getSchemaId` 691-694, `isSystemRelationTypeId` 717-719).
   **Findings.** The schema is a subgraph in the same `edgestore`: six system property keys and two system edge labels, whose ids are computed arithmetically (`(raw << 6) | 37` for system property keys, `| 53` for system edge labels) so there is no bootstrap read — `VertexExists`=101, `SchemaName`=2085, `SchemaDefinitionProperty`=2149, `SchemaCategory`=2213, `SchemaDefinitionDesc`=2277, `SchemaUpdateTime`=2341, `VertexLabelEdge`=181, `SchemaDefinitionEdge`=2357 (the last of those and `SchemaUpdateTime` share raw id 36 and are separated only by the suffix). A property key is 11 edgestore columns plus 2 graphindex entries; its definition is **exactly 7** `SchemaDefinitionProperty` columns, enforced by set *equality* in `TypeDefinitionMap.isValidDefinition`, and one ordinal byte (5 `DATATYPE` vs 6 `UNIDIRECTIONAL`) is the whole on-disk difference between a property key and an edge label. Property keys and edge labels deliberately share the `rt` namespace, which is why `getRelationType` hard-codes `EDGELABEL.getSchemaName(name)` and why the two kinds can never share a name. **Lesson 11's debt settled**: `getExistingRelationType` bottoms out at `SystemTypeManager`'s static 17-entry map for system ids and otherwise at the vertex constructor, which picks `PropertyKeyVertex`/`EdgeLabelVertex`/`VertexLabelVertex`/`JanusGraphSchemaVertex`/`CacheVertex` **from the id's suffix bits alone**, before any byte of the row is read. **Lesson 12's debt settled**: every `TypeDefinitionCategory` is persisted as its declaration-order ordinal via `EnumSerializer` (`VariableLong.writePositive`, one byte for all 25), with no version marker and only a disabled-by-default `assert` for type safety — the "Don't change the order" comment is the entire mitigation, and it applies to all seventeen registered enums. Also: `StandardSchemaCache`'s `isCacheable` asymmetry (an empty `SchemaDefinitionEdge` is cached, an empty definition is not, because the latter means "not visible here yet"); its two-bit `systemTypeId` field admitting only four cacheable system types; one-way primary-map overflow to the Caffeine backup; every cache miss costing a whole key-consistent transaction with the KCVS cache disabled; and a dead disjunct in `SystemTypeManager.throwIfSystemName` (the lowercased argument can never match the mixed-case system-name map; `Token.isSystemName` is what actually protects the namespace). New PR candidates **24** (fix that dead disjunct) and **25** (pin the ordinals of all seventeen persisted enums in a test). No syllabus revisions.
 - **12 — 2026-11-10** · [`2026/11/2026-11-10-janusgraph-standard-serializer-attribute-encodings/README.md`](2026/11/2026-11-10-janusgraph-standard-serializer-attribute-encodings/README.md) · **stayed on `a59ae8d8`** (mid-Part; the re-pin decision is due **next run**, after lesson 13 closes Part II). Read `StandardSerializer` (whole), `Serializer` (whole), `OrderPreservingSerializer` (whole), `SupportsNullSerializer` (whole), `InternalAttributeUtil` (whole), `AttributeSerializer` (whole), and every registered attribute serializer that matters: `ByteSerializer`, `ShortSerializer`, `IntegerSerializer`, `LongSerializer`, `CharacterSerializer`, `BooleanSerializer`, `FloatSerializer`, `DoubleSerializer`, `DateSerializer`, `InstantSerializer`, `DurationSerializer`, `UUIDSerializer`, `EnumSerializer`, `StringSerializer`, `ObjectSerializer`, `ArraySerializer`, `SerializableSerializer` (all whole), plus `NumericUtils` (whole), `StringEncoding` (whole), `VariableLong` (whole, now the forward signed path), `VariableString` (whole), `StandardRelationTypeMaker` (whole), `AttributeUtils` in **`janusgraph-driver`** (whole), `RegisteredAttributeClass` (whole), `RegisteredAttributeClassesConverter` (whole), `GraphDatabaseConfiguration` L1363-1375 / L1967-1980, `EdgeSerializer` again (the `InlineType` / `writePropertyValue` / `readPropertyValue` call sites), `SerializerTest` (whole, 840 lines), `UUIDSerializerTest` (whole), `docs/advanced-topics/serializer.md`, and commit `46f9d249` (2026-10-15, Oleksandr Porunov, fixes #5087). **THE finding: the `0x00` flag byte is load-bearing for *order*, not for null.** `ByteSerializer.writeByteOrder(Byte.MAX_VALUE)` is `putByte((byte)(127 - (-128)))` = **the single byte `0xff`** — byte-identical to the missing-value marker `EdgeSerializer:506` writes to end an open sort-key range. The same collision sits at the top of every fixed-width type (`Short.MAX_VALUE` = `ffff`, `Long.MAX_VALUE` = eight `ff`, `Double.NaN` = `fff8…`, `new UUID(-1,-1)` = sixteen `ff`), and the only thing separating "largest value" from "no value" is the flag `writeObjectInternal` prepends for every type that is not a `SupportsNullSerializer`. Verified: re-implementing all eleven `writeByteOrder` bodies line-for-line and sweeping gives **0 violations** of `value < 0xff` across all eleven types. That makes `writesMissingValuesLast`'s odd second clause exact rather than arbitrary — it is the question *"does the first byte come from the two-valued flag protocol?"* — and the clause exists to exclude **exactly one serializer in the tree**, the private inner `ClassSerializer`, which supports null, writes no flag, and encodes null as registration 0 = `80000000`, so a `Class` sort key's missing values sort **first** (`SerializerTest:152-154` pins `Class`, `Instant` and `byte[]`, three types for three different reasons). **Lesson 11's question answered, and it kills a PR as written: no in-tree `readObjectByteOrder` is length-ambiguous.** Ten of the eleven order-preserving datatypes are **fixed width** in byte order (Byte/Boolean 1, Short/Character 2, Integer/Float 4, Long/Double/Date 8, UUID 16, enum 4, Class 4); the eleventh, `String`, is `3 + 2n` and self-delimiting by a `00 00` terminator that `writeByteOrder`'s `Preconditions.checkArgument(c > 0)` refuses to let into the payload — verified read-length == write-length over 20,000 strings, and `3 + 2n` exactly. **PR candidate 20 is therefore downgraded** from "silent corruption" to a one-line hardening whose only trigger is a third-party `OrderPreservingSerializer`, since `checkSortKey`'s sole gate is `instanceof OrderPreservingSerializer` with no width or symmetry check. Second finding: **the same value is encoded three different ways depending on *where in the column* it sits**, selected by `EdgeSerializer`'s private `InlineType` enum (`:383-394`) and its two orthogonal booleans — `KEY` → `writeObjectByteOrder`, `SIGNATURE` → `writeObject`, `NORMAL` → inline relation-type id + `writeObject` — with `writeClassAndObject` as a fourth path reachable only for `dataType == Object.class`, which `checkSignature` bans from both sort keys and signatures, so a sort key is never untyped. The sort-key premium is **zero for every fixed-width type** and lands entirely on the two with variable value encodings: `Integer` is 5 bytes as a sort key against 2 for any `|v| ≤ 63` (its `read`/`write` use `VariableLong`'s **sign-magnitude** zig-zag, `Math.abs(v)<<1 | sign`, while `readByteOrder`/`writeByteOrder` use a fixed biased `putInt`), and `String` is `3 + 2n` against `1 + n` — `'alice'` is **13 bytes** as a sort key against **6** as a value, and that lands in the column a vertex-centric index stores a second full copy of in each of two endpoint rows (20-char sort key, 2 VCIs → **258 bytes of sort key for one edge**). Third: **`Date` is order-preserving and `Instant` is not** — `InstantSerializer` implements plain `AttributeSerializer` only, so `checkSortKey` rejects it, and `StandardRelationTypeMaker.sortKey`'s own javadoc offers *"a property key with a timestamp data type"* as its example. Fixing it is a new 12-byte `[8-byte biased seconds][4-byte biased nanos]` encoding, not a marker, because the nanos field currently rides `VariableLong`'s non-order-preserving zig-zag; `DurationSerializer` is identical. Fourth: **`UUIDSerializer` knowingly violates the `OrderPreservingSerializer` javadoc** — both `write` and `writeByteOrder` are two **unbiased** `putLong`s, so the bytes sort by unsigned bits while `UUID.compareTo` compares each half signed. Measured: **10,070 of 20,000** random pairs disagree with `compareTo`, **0** with string order. Which is why `UUID` is absent from `SerializerTest`'s `TYPES` and therefore from `testSerializedOrder`'s 3,000,000-trial `signum(compareTo) == signum(bytes)` check — it would fail by design — and is covered instead by `UUIDSerializerTest.testByteOrderIsTheOrderOfTheStringForms`. The arc: #948 added the interface in March 2018 reasoning *"supporting native sort order simply means implementing `Comparable`"*; commit `46f9d249` (merged 2026-10-21, fixes #5087) fixed the **comparators** instead, adding `AttributeUtils.compareValues`/`compareUnsigned` and pointing `OrderList`, `RelationComparator`, `RangeInterval` and `Cmp` at them, and says explicitly what it did not fix (TinkerPop's own comparisons, so keyset paging with an unfolded `order()` can still skip UUIDs). Fifth: **enum sort keys are ordered by declaration order and nothing records it** — 17 internal enums are persisted by ordinal, so reordering any of their constants silently reinterprets stored schema; `getValue`'s bounds check catches a removal, never a swap. Sixth: **the registration table has 51 slots used (1, 10-21, 22-30, 41-57, 60-71) and exactly 28 internal slots left (72-99)** before `CLASS_REGISTRATION_OFFSET = 100` — which the code says "may NEVER EVER be changed" — would collide with user attribute 0. Also: `new HashMap<>(60)` for 51 entries **still rehashes** during construction (threshold 48); `normalizeDataType`'s `Instant` branch is **unconditionally dead** (`Instant` is `final`, and the branch returns what the fallthrough returns); `TEXT_COMPRESSION_THRESHOLD = 48` is `public static final` and `StringSerializer` **never reads it** (only `LONG_COMPRESSION_THRESHOLD = 16000` gates the single GZIP compressor, in a 3-bit field with 8 slots and 2 used); the custom-serializer extension point can **add** types but never replace one, with `HashMap` the single hard-coded escape hatch (from #306, a Titan migration collision); both `attributes.custom` options are `GLOBAL_OFFLINE`; `newInstance()` is the deprecated reflective form and its unwrapped constructor exception escapes the `catch`; and the docs' *Custom Object Serialization* section promises a serialize/deserialize round-trip before persisting that **does not exist anywhere in the registration path**. **Lesson 11's second question, answered:** `VariableString.writeBackward` writes characters in reverse then the marker, so `STRING_ID_MARKER` is at the **high** address and the stop bit at the low one — `readBackward`'s `getByte(--position)` peek is correct, and it emits the string in order without reversing. Also found: three near-duplicate in-tree ASCII codecs (`StringSerializer.write`, `StringEncoding.writeAsciiString`, `VariableString.write`) that disagree on the empty string and the marker; the string byte order is **UTF-16 code-unit order, not code-point order** (U+1F600 sorts *before* U+FFFF, verified), i.e. the same class of mismatch as the UUID bug waiting in a different type; a `String` property containing `U+0000` is storable as a value (the UTF path) but throws at serialization time if the key is a sort key, and `verifyAttribute` does not check it; and **three in-tree comparators that disagree** — the bytes, `AttributeUtils.compareValues`, and `AttributeUtils.compare` (which returns 0 for `-0.0` vs `0.0`, `null` for a one-NaN pair, and compares across numeric types where `compareValues` throws). Daily Diff: the **2026-11-09** edition (50 stories) — deep dive on Turso implementing Tantivy's `Directory` trait against its own B-tree, so an immutable-segment FTS index lives in the database file as 512 KB chunks keyed by `(path, chunk_no)` and commits in the SQL transaction, at the price of `NoMergePolicy` — automatic merging disabled, because a background merge would either leave the transaction or hold the single writer open.
@@ -96,7 +99,7 @@ Newest first.
 
 ### Part III — The write path (`core`, `graphdb/transaction`, `graphdb/database`, `diskstorage/locking`)
 
-- [ ] 14 — `JanusGraphFactory.open` → `GraphDatabaseConfiguration` → `StandardJanusGraph` constructor: local vs global (fixed/masked) config
+- [x] 14 — `JanusGraphFactory.open` → `GraphDatabaseConfiguration` → `StandardJanusGraph` constructor: local vs global (fixed/masked) config
 - [ ] 15 — `StandardJanusGraphTx`: `addVertex`, `addEdge`, property writes, added/deleted relation containers, and the vertex cache
 - [ ] 16 — `StandardJanusGraph.commit` and `prepareCommit`: deletes, additions, mutations, and the order they are emitted in
 - [ ] 17 — Composite indexes on write: `IndexSerializer` and the graphindex entries
@@ -124,25 +127,23 @@ Newest first.
 ## Notes For The Next Run
 
 **Syllabus unchanged this run. No items added, split, merged or reordered; the 28 stand as written on
-2026-10-30.** Lesson 13 was handed three specific obligations by lessons 10, 11 and 12 and discharged all
-three (bands, the `getExistingRelationType` recursion, the enum ordinals), so nothing needed re-scoping.
+2026-10-30.** Lesson 14 was handed three specific obligations by lesson 13 and discharged all three, so
+nothing needed re-scoping. Part III's remaining four items (15-18) are mechanism, not reference material,
+and lesson 14's construction-order table is the input all four need.
 
-**The re-pin decision is CLOSED, and not in the way the last five runs expected.** Lesson 13 closed
-Part II, so the Part II/III boundary was available for the first time since lesson 08 declined it. The
-check this run: `master`'s three newest commits are `a59ae8d8` *Restore 1.3.0-SNAPSHOT version CTR*
-(2026-10-28), `9a30ff14` (2026-10-28) and `5e3e7bc7` *JanusGraph release 1.2.0* (2026-10-24) — i.e.
-**`a59ae8d8` is still the tip**, so there is nothing to re-pin to. The pin stays, the front-matter records
-the review date, and **the next review is the Part III/IV boundary, after lesson 18**. Do not re-raise it
-mid-Part; do re-run `list_commits` on `master` at that boundary rather than assuming the tip has moved or
-has not.
+**The re-pin decision stays closed until after lesson 18.** Lesson 13 reviewed it at the Part II/III
+boundary and found `a59ae8d8` still the tip of `master`. This run is mid-Part, so it was **not re-raised
+and `list_commits` was not run** — by design. The next review is the **Part III/IV boundary, after lesson
+18**, and it must re-run `list_commits` on `JanusGraph/janusgraph` `master` rather than assuming either
+answer.
 
-**The roll-off rule applied again this run.** The root README states that `TRACK.md` keeps the notes for
-the three most recent lessons and older ones roll off into git history. The three most recent are now 11,
-12 and 13, so: **lesson 10's compressed block is removed** (it remains verbatim in git history at the
-2026-11-08 commit, and in compressed form in the commit immediately preceding this one), **lesson 11's
-block is now compressed** to the facts lessons 19, 20 and 27 were promised — the full block is preserved
-verbatim in git history at the 2026-11-09 commit — and lessons 12 and 13 keep their blocks in full. Next
-run, lesson 12's block becomes the oldest of the three and the same rule applies to it.
+**The roll-off rule applied again this run.** `TRACK.md` keeps the notes for the three most recent
+lessons; older ones roll off into git history. The three most recent are now 12, 13 and 14, so:
+**lesson 11's compressed block is removed** (it remains verbatim in git history at the 2026-11-09 commit
+and in compressed form at the 2026-11-11 commit), **lesson 12's block is now compressed** to the facts
+lessons 17, 20, 21 and 26 were promised — the full block is preserved verbatim in git history at the
+2026-11-10 commit — and lessons 13 and 14 keep their blocks in full. Next run, lesson 12's block is the
+one that goes.
 
 - **The mode question is closed. Do not reopen it unprompted.** Four consecutive empty `My Notes`
   triggered the switch recorded in the front-matter. Entries from lesson 05 on write in `lesson` mode
@@ -151,31 +152,164 @@ run, lesson 12's block becomes the oldest of the three and the same rule applies
 - **Never touch an earlier entry's `## My Notes`.** Sessions 01-04 keep their templates. They are his
   to fill at any time; if a future run finds content in any of them, answer those questions in that
   run's entry regardless of mode.
-- **Part III opens next run, and lesson 14 is the one item in it that is mostly reference material.**
-  `GraphDatabaseConfiguration` is explicitly listed above as a class to visit only for the slices a
-  lesson needs, and lesson 14 is that lesson. Three concrete obligations rather than a blank page:
-  (a) establish the **construction order** in `StandardJanusGraph`'s constructor — `Backend`,
-  `IDManager`/`VertexIDAssigner`, `EdgeSerializer`, `indexSerializer`, `schemaCache` (`:308`),
-  `managementLogger` (`:344`) — and which of them must exist before a single value can be read out of
-  `system_properties`, given that lesson 13 found `typeCacheRetrieval` opens its own transactions;
-  (b) pin down what **FIXED**, **GLOBAL_OFFLINE**, **GLOBAL** and **MASKABLE** actually do differently at
-  open time, since lessons 09 and 12 have both now been bitten by a `FIXED` option
-  (`ids.authority.conflict-avoidance-tag-bits`, `attributes.custom.*`) whose value is unchangeable after
-  the first open; and (c) say whether `MetricInstrumentedSchemaCache` changes any of lesson 13 §7's
-  behaviour or only counts it — it wraps the same interface and lesson 13 did not read it.
+- **Lesson 15 (`StandardJanusGraphTx`) inherits a concrete starting point, not a blank page.** Three
+  obligations: (a) `newTransaction` (`StandardJanusGraph:588-598`) constructs the `StandardJanusGraphTx`
+  **before** calling `tx.setBackendTransaction(openBackendTransaction(tx))` at `:592`, so the object is
+  briefly alive with no backend handle — establish whether anything in `StandardJanusGraphTx`'s own
+  constructor can reach the backend in that window, and what `StandardTransactionBuilder` reads out of
+  the `GraphDatabaseConfiguration` (not the `Configuration`) when it is built at `:580`; (b) lesson 13
+  found that a schema vertex's id is assigned **eagerly** inside `makeSchemaVertex`, unlike a user
+  vertex — confirm from `addVertex` that a user vertex really can carry a temporary id past creation,
+  and what the added/deleted relation containers hold in the meantime; (c) the vertex cache's
+  interaction with `newTypeCache` (lesson 13: a per-transaction name → id map checked *before* the
+  global schema cache, swapped for `Collections.emptyMap()` on close).
 - **Entry size.** Lesson 05 ≈35 KB, 06 ≈63 KB, 07 ≈78 KB, 08 ≈67 KB, 09 ≈61 KB, 10 ≈70 KB, 11 ≈56 KB,
-  12 ≈91 KB, 13 ≈72 KB (a large share of each is permalink URLs, which are not prose). In line with the
-  SQLite and PostgreSQL lessons. The old 5-9 KB budget was a `contributor-reading` constraint and does not
-  apply.
-- **Method note, carried — and lesson 13 is the first entry where it was mostly NOT needed.** Lessons 10,
-  11 and 12 each re-implemented the pinned encoding functions line-for-line and ran them, which is what
-  produced the inversion counts and the UUID disagreement figure. Lesson 13's arithmetic is small enough
-  to do exactly (`(raw << 6) | 37`, the 25 ordinals, the two-byte description), so it was computed from
-  the read sources and stated as such in the entry's method note rather than simulated. **Keep the rule
-  that produced both:** compute or re-implement rather than assert, say which, and always pair it with an
-  exercise that runs the real code — here `StandardSchemaCacheTest`, which already exists and already
-  pins the asymmetry. One trap to remember from lesson 12: the first re-implementation pass omitted the
-  dispatcher's flag byte and reported 13 false order violations. Model the layer above, not just the unit.
+  12 ≈91 KB, 13 ≈72 KB, 14 ≈75 KB (a large share of each is permalink URLs, which are not prose). In
+  line with the SQLite and PostgreSQL lessons. The old 5-9 KB budget was a `contributor-reading`
+  constraint and does not apply.
+- **Method note, carried, and lesson 14 is the second entry where simulation was not needed.** Lessons
+  10-12 re-implemented the pinned encoding functions and ran them; lessons 13 and 14 computed from the
+  read sources instead and said so. Lesson 14's two arithmetic claims — that all 13 accepted config
+  datatypes have registration numbers below 128 (max 65, `Instant`) and therefore a one-byte
+  `VariableLong` prefix, and that `UPGRADEABLE_FIXED` is exactly three of the six FIXED options — are
+  both read directly off the registration table and the jar resource, with the derivation shown.
+  **Keep the rule that produced all of them:** compute or re-implement rather than assert, say which,
+  and always pair it with an exercise that runs the real code. Lesson 14's is
+  `ReadConfigurationBuilderTest`, a Mockito suite that already pins the managed/not-managed split as a
+  `@ParameterizedTest` and is the natural place to extend for PR candidate 26. One trap carried from
+  lesson 12: model the layer above, not just the unit.
+- **Daily Diff procedure, re-confirmed this run and now simpler than lesson 13 found it.** At ~03:45 UTC
+  on 2026-11-12 the front page and `/archive/` **agreed**: both newest at **2026-11-11** (58 stories),
+  archive reporting **136 editions**, and 12-30 November unlinked plain text. So the 2026-11-11 run's
+  front-page-ahead-of-archive case was a one-off, not a new steady state. **Keep the procedure as stated:**
+  (a) fetch both and take the **maximum of the two**, in either direction; (b) before digesting, check
+  this session log for the newest edition already covered — lesson 12 covered 2026-11-09, lesson 13
+  covered 2026-11-10, lesson 14 covered 2026-11-11, so each run has so far found exactly one uncovered
+  edition; (c) the uncovered-item fallback is the last resort, and the 2026-11-06 edition still has two
+  items spent (Infino ids, Postgres `SKIP LOCKED` queues). Edition sizes remain volatile — 22 stories on
+  2026-11-08, 50 on 11-09, 63 on 11-10, 58 on 11-11 — so a small edition is not evidence of a partial
+  publish. **The run fires at 03:30 UTC and the edition for that calendar day is not up yet**; every run
+  so far has digested the previous day's. Say the edition date explicitly in the digest rather than
+  implying it is today's. One practical note carried from lesson 13: the front page can exceed 100 KB,
+  which is about what one WebFetch returns, so the tail of a large edition's item list needs a second
+  call with an offset.
+
+### Verified by lesson 14, for lessons 15, 16, 17, 18 and 25 to cite rather than re-derive
+
+- **The open path is nine frames and three of them do work:** `JanusGraphFactory.open` →
+  `GraphFactoryUtils.defineSchemaAndStart` → **`GraphDatabaseConfigurationBuilder.build`** (the merge) →
+  **`ReadConfigurationBuilder.buildGlobalConfiguration`** (the freeze and the checks) →
+  `GraphDatabaseConfiguration` ctor + `preLoadConfiguration` (~45 fields resolved eagerly) →
+  `SchemaInitializationManager.initializeSchemaAndStart` → **`new StandardJanusGraph`**.
+- **One row, not a config file.** Store `system_properties`, row key UTF-8 `"configuration"` (13 bytes,
+  no id encoding), columns the full dotted option paths in UTF-8, values `writeClassAndObject`. A second
+  row `"userconfig"` in the same store holds `Graph.Variables` (`Backend:412`). `hidden.frozen`
+  (`BasicConfiguration:37`) is a column in the configuration row; it fails `ConfigElement.parse`, so
+  `getAll()` swallows the exception at debug and the marker never appears as an option.
+- **Every config value's registration prefix is one byte.** `ConfigOption.ACCEPTED_DATATYPES` is 13
+  classes — `Byte` 10, `Short` 11, `Integer` 12, `Long` 13, `Boolean` 15, `String` 18, `Float` 19,
+  `Double` 20, `String[]` 30, `TimestampProviders` 54, `ConflictAvoidanceMode` 57, `Duration` 64,
+  `Instant` 65 — all below 128. The set is closed by a bootstrap constraint, not taste:
+  `KCVSConfiguration:75` builds its own bare `new StandardSerializer()`, and `ConfigOption`'s static
+  block (`:96-98`) refuses to let the class load unless all 13 are `validDataType` on one. **Enums not
+  in that set must be declared `ConfigOption<String>` and converted by
+  `GraphDatabaseConfiguration.selectExactConfig:2122-2126`** — `has-step-mode`, `repeat-step-mode`,
+  `schema.default` and the index-selection strategy all take that route.
+- **Five types, three predicates, and that is the whole type system.** `isGlobal()` = everything but
+  `LOCAL`; `isManaged()` = `{FIXED, GLOBAL_OFFLINE, GLOBAL}`; `isLocal()` = `{MASKABLE, LOCAL}`.
+  Counts in `GraphDatabaseConfiguration.java`: FIXED **6**, GLOBAL_OFFLINE **15**, GLOBAL **8**,
+  MASKABLE **88**, LOCAL **34**.
+- **At open time FIXED, GLOBAL_OFFLINE and GLOBAL are indistinguishable.** Only two sites in the tree
+  switch on the constant, both post-open: `ModifiableConfiguration.set:37-44`
+  (`hasUpgradeableFixed(name) || !isFixed() || !isFrozen()`) and `ManagementSystem`'s
+  `configVerifier:190-207`, which rejects FIXED (unless upgradeable) and LOCAL outright and, for
+  `GLOBAL_OFFLINE`, requires exactly one open instance *which must be this one* and then sets
+  `graphShutdownRequired = true` at `:204`. **Lesson 18 and lesson 25 both need this.**
+- **Resolution order, three rows wide**, from `MergedConfiguration.get:39-47` over
+  `MixedConfiguration.get:49-58`: managed → overwrite, global row, default (**the local file is never
+  consulted**); MASKABLE → overwrite, local file, global row, default; LOCAL → overwrite, local file,
+  default. `overwrite` is not user-settable — only `LOCK_LOCAL_MEDIATOR_GROUP`, `UNIQUE_INSTANCE_ID`,
+  the tx/mgmt log forcings and the Titan id-store fallback write to it.
+- **`localConfiguration` (`GraphDatabaseConfigurationBuilder:72-73`) is NOT in the lookup path.** It is
+  an `isLocal()`-filtered projection kept only so `getLocalConfiguration()` can hand TinkerPop a
+  `Configuration` with `gremlin.graph` set. Do not read it as "the local config" when debugging.
+- **The MASKABLE leak.** `getGlobalSubset` (`ReadConfigurationBuilder:172-178`) filters on `isGlobal()`,
+  which includes MASKABLE, so first-open persists every MASKABLE option from the properties file into
+  the global row; it is never refreshed (that branch runs only when not frozen) and never
+  discrepancy-checked (`getManagedSubset:180-186` filters on `isManaged()`). A later instance that omits
+  the option gets the **first instance's value**, not the code default, with no log line. **PR
+  candidate 26.**
+- **Six FIXED options:** `graph.timestamps`, `graph.janusgraph-version` (hidden),
+  `graph.storage-version`, `graph.titan-version` (hidden), `cluster.max-partitions` (default 32, power
+  of 2 > 1), `ids.authority.conflict-avoidance-tag-bits` (default 4, range 0-16).
+  `JanusGraphConstants.UPGRADEABLE_FIXED` is parsed at class load from the jar resource
+  `janusgraph.internal.properties`: `storage-version,janusgraph-version,titan-version`, and
+  `janusgraph.storage-version=2`. **The other three can never be changed by anything.** Matching is on
+  `option.getName()` — the leaf name, not the path.
+- **A successful upgrade disarms itself:** `janusGraphVersionsWithDisallowedUpgrade:132-137` writes
+  `allow-upgrade=false` into the global row along with the three version values, and the equal-version
+  path emits a `log.warn` telling you to turn it off locally too.
+- **The discrepancy check compares against the DEFAULT when the row has no entry**
+  (`getOptionsWithDiscrepancies:262-267`), so setting a managed option locally to a non-default value on
+  a graph where it was never written fails the open even with no real conflict. `overwrite` wins the
+  comparison (`:270-273`), which is why `LOCK_LOCAL_MEDIATOR_GROUP` does not trip it.
+  `graph.allow-stale-config` downgrades **all** such errors to warnings; there is no per-option escape.
+  Both `allow-stale-config` and `allow-upgrade` are read by a hand-rolled local → global → default
+  ladder (`:236-251`), because `MixedConfiguration` does not exist yet at that point.
+- **Two store managers per open, and the first is closed before the second exists.**
+  `GraphDatabaseConfigurationBuilder:64` creates manager #1 from the **local file alone**;
+  `KCVSConfigurationBuilder:38-55` opens `system_properties` on it with a `TransactionalProvider` whose
+  `close()` is `manager.close()` (`:49`); `ReadConfigurationBuilder:70` holds it in try-with-resources,
+  so `KCVSConfiguration.close():225-234` closes the store **and** the manager. `Backend.initialize:384-399`
+  then opens `system_properties` again through `storeManagerLocking` and builds a **second**
+  `KCVSConfiguration` on the same row, this one with a deliberately empty `close()`. Consequence: any
+  MASKABLE or GLOBAL storage option whose authoritative value is in the row is **not applied to the
+  manager that reads the row**.
+- **Reads of the row are whole-row snapshots.** `asReadConfiguration()` calls `toMap()` **once**
+  (`:175-195`, slicing `[zeroBuffer(1), oneBuffer(128))`) and closes over the resulting `HashMap`.
+  Nothing re-reads it for the life of the graph — which is precisely why GLOBAL_OFFLINE must force a
+  shutdown and FIXED must be refused.
+- **`KCVSConfiguration.set(key, value, expectedValue, true)` calls `store.acquireLock(rowKey, column,
+  expectedValueBuffer, txh)` at `:153` before `store.mutate`.** The config row participates in the same
+  compare-and-set primitive as a composite index entry. **Lesson 18 should start here.**
+- **`getOpenInstancesInternal` (`ManagementSystem:209-213`) reads the open-instance set out of the same
+  config row** — `getContainedNamespaces(REGISTRATION_NS)`, i.e. the `graph.instance.[uid].startup-time`
+  entries that `StandardJanusGraph:341` writes. There is no separate registry, so the GLOBAL_OFFLINE
+  "no other instance is open" guard is only as accurate as the last clean shutdown.
+- **`StandardJanusGraph` construction order** (`:264-360`): config `:266` → cdc filters `:267-288` →
+  **`backend = getBackend()` `:289`** → `name` `:291` → `idAssigner`/`idManager` `:293-294` →
+  `wholeRowDeletionEnabled` `:295` → `cacheInvalidationService` `:297` → `serializer` `:301`
+  (**where `attributes.custom.*` is applied**) → `edgeSerializer` `:302` → `storeFeatures` `:303` →
+  `indexSerializer` `:304` → `vertexExistenceQuery` `:306` → `queryCache` `:307` →
+  **`schemaCache` `:308`** → `times`/`indexSelector` `:309-310` → `scriptEngine` `:312-318` →
+  **`isOpen = true` `:320`** → `computerJobs` `:326` → instance registration `:332-341` →
+  `managementLogger` + `registerReader` `:343-346` → metrics/shutdown hook `:351-358`.
+- **`:308` before `:320` is safe by ordering alone.** `typeCacheRetrieval` is a field initializer
+  (`:611-644`) and so exists before the constructor body, but both its methods call `newTransaction`,
+  which throws `graphShutdown` while `isOpen` is false. Nothing between `:308` and `:320` touches the
+  cache; the first code that can is `managementLog.registerReader` at `:346`. **There is no assertion
+  and no test pinning this.**
+- **A constructor failure after `:289` leaks the `Backend`.** Only `:351-358` is inside a
+  `try`/`catch (RuntimeException | Error)` that calls `closeInternal()` and rethrows.
+- **`getBackend()` (`GraphDatabaseConfiguration:1951-1956`) has no memoisation and no guard**, and is
+  reachable from three call sites, one of them configuration-driven: `SchemaInitializationManager:45-53`
+  constructs a whole `StandardJanusGraph` and hands it to `JanusGraphFactory.drop`, which calls
+  `getBackend()` again at `:228`. **PR candidate 5's experiment is now worth more than it was.**
+- **`MetricInstrumentedSchemaCache` counts and nothing else** — a `StandardSchemaCache` wrapping a
+  retriever that increments MISS before delegating (`:36-53`). No HIT counter (hits are
+  RETRIEVAL − MISS); a failed retrieval still counts as a miss; `expireSchemaElement` is uncounted;
+  counters live under `METRICS_SYSTEM_PREFIX_DEFAULT`, so **two graphs in one JVM share them**. Lesson
+  13's `isCacheable` asymmetry means a permanent 100% miss rate on repeated lookups of a type that does
+  not exist is the correct reading, not a misconfiguration.
+- **Correction to lesson 13's note:** `attributes.custom.[X].attribute-class` and `serializer-class`
+  (`GraphDatabaseConfiguration:1369-1375`) are **`GLOBAL_OFFLINE`, not FIXED**. They can be changed
+  through `ManagementSystem` with every other instance shut down, which then forces this instance's
+  shutdown.
+- **The freeze is not atomic.** `getGlobalSubset` + three `setup*` calls + `freezeConfiguration()` is
+  N+4 independent `BackendOperation.execute` calls. A crash between them leaves version entries with no
+  `hidden.frozen`, and the next open dies on
+  `Preconditions.checkArgument(!globalWrite.has(...), "Database has already been initialized but not
+  frozen")` with no repair path. The only fix is clearing the store.
 
 ### Verified by lesson 13, for lessons 14, 17, 18, 20 and 25 to cite rather than re-derive
 
@@ -280,175 +414,51 @@ run, lesson 12's block becomes the oldest of the three and the same rule applies
   protects the namespace, and `ADDITIONAL_RESERVED_NAMES` (`key vertex edge element property label`) is
   the only live half of `isSystemType`. **PR candidate 24.**
 
-### Verified by lesson 12, for lessons 17, 20, 21 and 26 to cite rather than re-derive
+### Verified by lesson 12 — compressed; full block in git history at the 2026-11-10 commit
 
-- **Three positions, three encodings, one enum.** `EdgeSerializer`'s private `InlineType` (`:383-394`)
-  has two orthogonal booleans over three cases: `writeInlineKey()` is true only for `NORMAL`,
-  `writeByteOrdered()` only for `KEY`. So a sort key is `writeObjectByteOrder`, a signature key is
-  `writeObject` with no id (position implies the key), and a remaining property is
-  `IDHandler.writeInlineRelationType` + `writeObject`. `writePropertyValue:419-427` and
-  `readPropertyValue:250-259` are exact mirrors. A fourth path, `writeClassAndObject`
-  (`varint(registrationNo)` + body), is reached only when `InternalAttributeUtil.hasGenericDataType(key)`
-  — `dataType == Object.class` — and `StandardRelationTypeMaker.checkSignature` bans `Object.class` from
-  **both** sort keys and signatures, so it is structurally confined to a `NORMAL` position and a sort key
-  is never untyped. Lesson 17 needs this: `IndexRecordUtil` makes the same `hasGenericDataType` branch
-  for graphindex fields.
-- **The flag byte, and why it is not about null.** `StandardSerializer.writeObjectInternal` prepends
-  `0x00` for a value and writes a bare `0xff` for null, **unless** the serializer is a
-  `SupportsNullSerializer`, in which case the serializer handles it. Only two order-preserving serializers
-  are: `StringSerializer`, which writes the **same** `0x00`/`0xff` flag itself, and the private inner
-  `ClassSerializer`, which writes none and encodes null as registration 0 (`80000000` after the int bias)
-  so missing values sort **first**. That is the whole content of
-  `writesMissingValuesLast = isOrderPreservingDatatype && (!supportsNullSerialization || instanceof
-  StringSerializer)` — read it as *"does the first byte come from the two-valued flag protocol?"*
-- **The flag is load-bearing for order at the top of every fixed-width type.** `ByteSerializer`'s body
-  for `Byte.MAX_VALUE` is `0xff`, identical to the marker; `Short.MAX_VALUE` is `ffff`, `Long.MAX_VALUE`
-  eight `ff`, `Double.NaN` `fff8…`, `new UUID(-1,-1)` sixteen `ff`. Lesson 10's missing-value range trick
-  (`EdgeSerializer:504-507`, `colEnd.putByte((byte) -1)` with `endInclusive = false`) is sound **only**
-  because of the flag. Sweep: 0 violations of `value < 0xff` across all eleven types.
-- **The complete order-preserving set.** Thirteen classes implement `OrderPreservingSerializer`:
-  `Byte Short Integer Long Character Boolean Date Float Double String UUID`, `EnumSerializer<E>`, and the
-  private `ClassSerializer` — **29 of the 51 registered datatypes** (12 concrete + 17 enums).
-  `SerializerTest:595-603` pins the user-facing count at **10** over a `TYPES` map of 21, so `Geoshape`,
-  all nine array types and a plain custom serializer are **not** order-preserving; `UUID` is
-  order-preserving but **absent from `TYPES`**, so it is outside the 3,000,000-trial check.
-- **Byte-order widths, all fixed except one.** Byte 1 · Boolean 1 · Short 2 · Character 2 · Integer 4 ·
-  Float 4 · Long 8 · Double 8 · Date 8 · UUID 16 · enum 4 · Class 4 · **String `3 + 2n`**. Every
-  whole-number encoding is "add the bias, write big-endian"; `Byte`, `Short`, `Long` and `Date` delegate
-  `readByteOrder`/`writeByteOrder` straight to `read`/`write`. **`Integer` and `EnumSerializer` are the
-  asymmetric pair**: their `read`/`write` use `VariableLong` (1-5 bytes / 1 byte for a small ordinal)
-  while their byte-order form is a fixed biased `putInt`. `CharacterSerializer`'s two biases annihilate,
-  so a `Character` in byte order is the **raw UTF-16 code unit, big-endian, unbiased** — which is why
-  `'\u0000'` is `00 00`, exactly the string terminator.
-- **`VariableLong.write` is sign-magnitude, not standard zig-zag**: `Math.abs(v) << 1 | (v < 0 ? 1 : 0)`.
-  Lengths for `Integer`: 1 byte for `|v| ≤ 63`, 2 for `≤ 8191`, 5 at the extremes. Two incidental dead
-  spots, neither reachable from the serializers: unsigned `0` and `1` both decode to `0` and only `0` is
-  emitted; and `convert2Unsigned` asserts `v > Long.MIN_VALUE` because `Math.abs(Long.MIN_VALUE)` is
-  itself — `LongSerializer` never touches `VariableLong`, so nothing can reach it.
-- **Float/Double: Lucene's bit flip, and NaN collapses one layer up.** `NumericUtils.sortableDoubleBits`
-  is `bits ^ (bits >> 63) & 0x7fff…` — self-inverse, unchanged for non-negatives, magnitude inverted for
-  negatives — then `LongSerializer`'s bias on top. The single-NaN behaviour
-  (`SerializerTest:158-173`) is **not** in `NumericUtils`: `doubleToSortableLong` calls
-  `Double.doubleToLongBits`, which by specification canonicalises every NaN to `0x7ff8000000000000`
-  (`doubleToRawLongBits` would not). Stored order: `−∞ < … < −0.0 < 0.0 < … < +∞ < NaN`, which is
-  `Double.compare`'s total order. Note `-0.0 < 0.0` **strictly** in the bytes.
-- **`Date` is order-preserving, `Instant` and `Duration` are not.** `InstantSerializer` implements plain
-  `AttributeSerializer` only, so `checkSortKey` rejects an `Instant` sort key with *"Key must have an
-  order-preserving data type"* — while `StandardRelationTypeMaker.sortKey`'s javadoc offers *"a property
-  key with a timestamp data type"* as its canonical example. The fix is a new 12-byte
-  `[8-byte biased seconds][4-byte biased nanos]`, not a marker interface, because the nanos field rides
-  `VariableLong`'s non-order-preserving zig-zag.
-- **`UUID` is order-preserving against a different comparator, on purpose.** Both `write` and
-  `writeByteOrder` are two **unbiased** `putLong`s, so bytes sort by unsigned bits while `UUID.compareTo`
-  compares each half signed: **10,070 of 20,000** random pairs disagree, **0** disagree with string order.
-  `AttributeUtils` (in **`janusgraph-driver`**, not core) holds `compareValues` — natural order except
-  UUIDs, which go to `compareUnsigned` — and that is the comparator the bytes implement. Lessons 21 and 26
-  need this: commit `46f9d249` (fixes #5087) pointed `OrderList`, `RelationComparator`, `RangeInterval`
-  and `Cmp` at it, and says explicitly that TinkerPop's own comparisons still use `UUID.compareTo`.
-- **Three comparators, three disagreements.** The bytes implement `compareValues`; `AttributeUtils
-  .compare` is lenient and diverges on exactly three things — `-0.0` vs `0.0` (returns 0; bytes are
-  strictly ordered), a one-NaN pair (returns `null`; bytes put NaN last), and cross-numeric-type
-  comparison (works via `doubleValue()`; `compareValues` throws `ClassCastException`).
-  `RelationComparator.compareValues` is a third entry point. **Which one answers a given predicate is
-  lesson 21's job** — that is where this becomes a bug or stops being one.
-- **`String` has two encodings that share no code.** Byte order: `[0x00 flag][2 bytes per UTF-16 code
-  unit][00 00]` = `3 + 2n`, no compression, no length header; it is exactly `String.compareTo` order
-  (0 inversions over 73,606 random strings) and therefore **UTF-16 code-unit order, not code-point
-  order** — U+1F600 sorts before U+FFFF, U+10000 before U+E000. Value order: one
-  `VariableLong.writePositive` header with the compressor id in the low 3 bits, the full-UTF flag in bit
-  3, and a length-or-marker above — ASCII writes marker `2 << 4` (or `1 << 4` for empty) and **stores no
-  length at all**, recovering it from the `0x80` stop bit; full UTF stores the **char** count; GZIP stores
-  the **byte** count and triggers only above `LONG_COMPRESSION_THRESHOLD = 16000`. `'alice'` is 13 bytes
-  as a sort key and 6 as a value.
-- **The sort-key premium.** Zero for every fixed-width type; `Integer` 5 vs 2 for small values; `String`
-  `3 + 2n` vs `1 + n`. Carry this into lesson 17's graphindex cost comparison and lesson 20's VCI
-  arithmetic: a 20-character string sort key on an edge label with two vertex-centric indexes is
-  **258 bytes of sort key for one edge** once lesson 10's `2 + N` columns and both endpoint rows are
-  counted.
-- **Enums are persisted by ordinal and the format does not record declaration order.** 17 internal enums
-  (`TypeDefinitionCategory`, `JanusGraphSchemaCategory`, `Multiplicity`, `Cardinality`, `SchemaStatus`,
-  `ConsistencyModifier`, `Mapping`, `Order`, `Direction`, …) ride `EnumSerializer`. `getValue`'s
-  `ordinal < values.length` check catches a **removal**, loudly; it cannot catch a **swap**. Lesson 13
-  owns the consequences.
-- **The registration table is an on-disk format with 28 slots left.** Ids in use: `1`, `10`-`21`,
-  `22`-`30`, `41`-`57`, `60`-`71` = **51**, gaps at `2`-`9`, `31`-`40`, `58`-`59`.
-  `CLASS_REGISTRATION_OFFSET = 100` ("may NEVER EVER be changed"), `MAX_REGISTRATION_NO = 100000`, and
-  `registerClass(n)` stores at `100 + n` — so **72 through 99** are the only internal slots left.
-- **The custom-serializer extension point is add-only.** `registerClassInternal`'s
-  `!handlers.containsKey(datatype)` precondition makes replacing a built-in serializer impossible through
-  configuration, with **one** hard-coded exception at the top of `registerClass` for `HashMap` (from #306,
-  a Titan migration collision; registration 68 is `SerializableSerializer`, i.e. Java native
-  serialization through `commons-lang3`, so a `HashMap` property value is an `ObjectInputStream` payload
-  in the edgestore). Both `attributes.custom.attribute[X]` options are **`GLOBAL_OFFLINE`**
-  (`GraphDatabaseConfiguration:1365-1375`), because the registration number is persisted.
-  `GraphDatabaseConfiguration.getSerializer:1971` builds a **fresh** `StandardSerializer` per call, so the
-  serializer is not a singleton and a stateful custom serializer is a hazard (cf. #2429).
-- **`ObjectSerializer` (registration 1) is a placeholder, not a serializer**: `write` emits one `0x01`
-  byte and `read` returns `new Object()`. It is never reached for a property value, because
-  `hasGenericDataType` diverts those to `writeClassAndObject`.
-- **`VariableString.writeBackward` puts `STRING_ID_MARKER` at the HIGH address** and the `0x80` stop bit
-  at the low one, so `readBackward`'s `getByte(--position)` peek is correct and the string comes out in
-  order without reversing. Closes lesson 11's assumption. There are **three** near-duplicate in-tree ASCII
-  codecs — `StringSerializer.write`'s ASCII path, `StringEncoding.writeAsciiString`, and
-  `VariableString.write` — differing on the marker and on the empty string (header-only / a lone `0x80` /
-  rejected outright).
-
-### Verified by lesson 11 — compressed; full block in git history at the 2026-11-09 commit
-
-- **The bytes are not self-describing; the schema is part of the format.** `parseRelation:113-116` looks
-  up `tx.getExistingRelationType(typeId)` and reads `multiplicity()`, `getSortKey()`, `getSignature()`
-  and `getSortOrder()` off it **before** it can classify any byte after the prefix, and nothing in the
-  cell records which schema version wrote it. So a sort-key or signature change is a storage-format
-  change, and there is one type lookup per cell on every read. **Lesson 13 closed the recursion
-  question**: the lookup bottoms out at `SystemTypeManager`'s static 17-entry map for system ids, and
-  otherwise at a vertex constructor that dispatches on the id's suffix bits alone.
-- **Ten (type × direction) rows, three parse shapes** (`→` forward, `←` backward):
-  `MANY2ONE`@OUT / `ONE2MANY`@IN / `ONE2ONE`@either → col `P`, val `vid→ rid→` (**forward-only**);
-  `MANY2ONE`@IN / `ONE2MANY`@OUT / `SIMPLE`@either → col `P vid←`, val `rid→` (**pivot at
-  `valuePosition`**); `MULTI`@either → col `P S vid← rid←`, val signature+props (**full backward walk**);
-  `SINGLE` property → col `P`, val `value rid→`; `SET` property → col `P value`, val `rid→`;
-  `LIST` property → col `P S rid←`, val `value`+props. `Multiplicity.isConstrained()` is `this != MULTI`,
-  so `SIMPLE` **is** constrained.
-- **THE finding: the backward encoding is order-preserving and the forward one is not.**
-  `writeUnsignedBackward` puts the length in bits 4-6 of the **first** byte, so a longer encoding sorts
-  after a shorter one — **zero inversions over `0..400000`**, against one per length boundary in
-  `writePositiveWithPrefix`. That, not readability, is why the tail ids are written backward: it is what
-  makes `ImplicitKey.ADJACENT_ID` and `JANUSGRAPHID` usable as extended sort-key positions in
-  `getQuery:466-496`, **lesson 20's starting point**. Capacity `4 + 7·(numBytes-1)` bits with a hard
-  3-byte floor; **+12%** over `NormalVertex` ids at counts 16..160,000,000; a default `MULTI` edge is an
-  **8-byte column with an empty value**. Lesson 27 should compare against CQL's clustering-key encoding.
-- **`valuePosition` is the only framing in the cell, and it is an origin as well as a boundary.** On the
-  pivot shape the parser jumps to it, reads the vertex id backward out of the column, jumps back, and
-  reads the relation id forward out of the value. `readPositiveBackward` leaves the cursor on the stop
-  byte, so `endKeyPos` is **exclusive** and `:169`'s comment is off by one in wording only.
-- **`RelationCache` is a three-state memo and the middle state is a `null`.** `properties == null` →
-  header-only; shared static `EMPTY` → fully parsed, found none; non-empty map → fully parsed with
-  properties. #4995 was the collision between the second and first states through `hasProperties()`, and
-  `29c0b18a` fixed it with a third state. **Lesson 19 needs this**: the header-only state is what
-  `isLazyLoadRelations()` and `JanusGraphLazyRelationConstructor` trade on. `EMPTY` is a shared
-  **mutable** `LongObjectHashMap`, which is why `propertyIterator()` refuses to iterate it.
-- **The completeness test, and why index replicas are permanently excluded.** `:201-202` returns a fully
-  parsed cache from a header-only parse iff `!in.hasRemaining() && keySignature.length == 0 &&
-  def.getSignature().length == 0 && !hasPropertyMetaData(data)`. Clause 2 is a real test for the
-  unconstrained shapes, so **every vertex-centric index replica fails it by construction**.
-  `EdgeSerializerTest` pins **17 of 50**. `hasPropertyMetaData` tests membership in
-  `ImplicitKey.MetaData2ImplicitKey`, not `hasMetaData`, so `TIMESTAMP`/`TTL` keep a parse header-only
-  while a grouped CQL read's `ROW_KEY` does not — **lesson 27 should check that against the CQL reader**.
-- **The memo is per-`Entry`-object and dies with it** (`transient volatile`, no CAS), and
-  **`RelationReader` declares only `parseRelation`** — the entry cache lives on
-  `EdgeSerializer.readRelation`, which is not on the interface. That is the structural cause of PR
-  candidate 18 and the reason the #4995 fix cannot reach the OLAP path.
+- **Three positions, three encodings, one enum.** `EdgeSerializer`'s private `InlineType` (`:383-394`):
+  a **sort key** is `writeObjectByteOrder`, a **signature key** is `writeObject` with no id (position
+  implies the key), a **remaining property** is `IDHandler.writeInlineRelationType` + `writeObject`.
+  `writePropertyValue:419-427` and `readPropertyValue:250-259` are exact mirrors. A fourth path,
+  `writeClassAndObject` (`varint(registrationNo)` + body), is reached only when
+  `InternalAttributeUtil.hasGenericDataType(key)` — `dataType == Object.class` — which
+  `StandardRelationTypeMaker.checkSignature` bans from both sort keys and signatures, so it is confined
+  to a `NORMAL` position and a sort key is never untyped. **Lesson 17 needs this:** `IndexRecordUtil`
+  makes the same `hasGenericDataType` branch for graphindex fields.
+- **The flag byte.** `StandardSerializer.writeObjectInternal` prepends `0x00` for a value and a bare
+  `0xff` for null **unless** the serializer is a `SupportsNullSerializer`. Only two order-preserving
+  serializers are: `StringSerializer` (writes the same flags itself) and the private inner
+  `ClassSerializer` (writes none; null is registration 0). `writesMissingValuesLast` excludes exactly
+  `ClassSerializer`. **Lesson 14 confirms the other side of this:** `writeClassAndObject` goes through
+  `writeObjectNotNullInternal`, which emits **no** flag byte — so a config value is
+  `[registration][serializer body]` with nothing between.
+- **No in-tree `readObjectByteOrder` is length-ambiguous.** Ten of eleven order-preserving datatypes are
+  fixed-width in byte order and `String` is self-delimiting by a terminator its own writer refuses to
+  let into the payload. PR candidate 20 was **rewritten**, not dropped: the surviving trigger is a
+  third-party `OrderPreservingSerializer`, which `checkSortKey` accepts on nothing but an `instanceof`.
+- **The registration table is the on-disk type dispatcher** and `StandardSerializer` is where custom
+  attribute serializers are added (`GraphDatabaseConfiguration.getSerializer:1971-1981`, called from
+  `StandardJanusGraph:301`). **Lesson 21 and lesson 26** need that the registration number, not the
+  Java class, is what reaches disk, and that user registrations are offset by
+  `CLASS_REGISTRATION_OFFSET = 100`.
+- **`VariableString.writeBackward` puts `STRING_ID_MARKER` at the high address** with the `0x80` stop
+  bit at the low one, so `readBackward`'s `getByte(--position)` peek is correct for strings as for
+  longs. There are **three** near-duplicate in-tree ASCII codecs — `StringSerializer.write`'s ASCII
+  path, `StringEncoding.writeAsciiString`, and `VariableString.write` — differing on the marker and on
+  the empty string (header-only / a lone `0x80` / rejected outright).
 
 ### PR candidates, all verified at the pinned commit
 
 Numbering is **stable** — earlier entries reference these numbers, so new candidates are appended rather
-than inserted in size order. **Candidates 24-25 are new this run** (lesson 13), and candidates 21-23 came
-from lesson 12, which also **rewrote** candidate 20 rather than dropping it. **18 is still the most
-substantial the track has found; 21 and 24 are now the smallest and the best first contributions** — 21 is
-doc-only and 24 is a two-line guard fix, and both force a maintainer to confirm a reading. Candidates 1-23
-carry forward; 24-25 were verified at this pinned commit on 2026-11-11, 21-23 on 2026-11-10, 18-20 on
-2026-11-09, 15-17 on 2026-11-08, 11-14 on 2026-11-07, 8-10 on 2026-11-06, 1 and 7 on 2026-11-05, 2-4 and 6
-on 2026-11-04, and 5 still needs its experiment run.
+than inserted in size order. **Candidates 26-28 are new this run** (lesson 14); 24-25 came from lesson 13
+and 21-23 from lesson 12, which also **rewrote** candidate 20 rather than dropping it. **18 is still the
+most substantial the track has found. The best first contributions are now 28, 21 and 24** — 28 is a
+one-line error message with no behavioural risk, 21 is doc-only and 24 is a two-line guard fix, and all
+three force a maintainer to confirm a reading. Candidates 1-25 carry forward; 26-28 were verified at this
+pinned commit on 2026-11-12, 24-25 on 2026-11-11, 21-23 on 2026-11-10, 18-20 on 2026-11-09, 15-17 on
+2026-11-08, 11-14 on 2026-11-07, 8-10 on 2026-11-06, 1 and 7 on 2026-11-05, 2-4 and 6 on 2026-11-04, and
+**5 still needs its experiment run — and is now worth more**, because lesson 14 found a second,
+configuration-driven call site for `getBackend()`.
 
 1. **`KCVSProxy.java:67`** passes `txh` where every sibling method passes `unwrapTx(txh)`. One token.
    Fix the same omission in the test double at `KCVSCacheTest.java:242` and add a `KCVSCacheTest` case
@@ -699,17 +709,80 @@ on 2026-11-04, and 5 still needs its experiment run.
     expensive version — a version field, or name-based encoding — is an on-disk format change and almost
     certainly out of scope; **propose the test first and say so in the PR body.**
 
+26. **A `MASKABLE` option set once, by the first instance, becomes the cluster default forever — silently.**
+    `ReadConfigurationBuilder.getGlobalSubset` (`:172-178`) filters on `ConfigOption.isGlobal()`, which
+    **includes `MASKABLE`** (`ConfigOption:182`), so first-open copies every MASKABLE option present in
+    that instance's properties file into the `system_properties` `"configuration"` row and then freezes
+    it. That copy is never refreshed — `getGlobalSubset` runs only in the not-frozen branch — and never
+    discrepancy-checked, because `getManagedSubset` (`:180-186`) filters on `isManaged()`, which
+    excludes MASKABLE. But `MixedConfiguration.get:49-58` *does* fall through to it when the option is
+    absent locally. Net effect: instance A creates the graph with `cache.db-cache-size=0.5`; instance B,
+    months later, omits the line entirely and gets **0.5, not the code default**, with no warning in any
+    log and nothing in the configuration reference that says so. Start doc-only plus a test: the
+    `@ParameterizedTest` pair in `ReadConfigurationBuilderTest` (`:301`/`:328`) already drives the
+    managed/not-managed split, and lesson 14's Hands-On §2 step 3 is the integration-level assertion
+    (open a temp BerkeleyJE graph with a MASKABLE option set, reopen without it, assert the value). Then
+    ask the maintainers which of the three fixes they want: document it, warn when a frozen MASKABLE
+    global value is used with no local value present, or stop persisting MASKABLE in `getGlobalSubset`
+    (a behaviour change, and the only one that is genuinely a fix).
+27. **`ModifiableConfiguration.set` has an `UPGRADEABLE_FIXED` escape hatch and `remove` does not.**
+    `set` (`:37-44`) guards with `hasUpgradeableFixed(option.getName()) || !option.isFixed() ||
+    !isFrozen()`; `remove` (`:54-59`) guards with only `!option.isFixed() || !isFrozen()`. So with
+    `graph.allow-upgrade=true` you may **set** `graph.storage-version` on a frozen graph but may not
+    **remove** it, and the failure is an `IllegalArgumentException` reading "Cannot change configuration
+    option" that does not mention the asymmetry. This may well be deliberate — removing a version marker
+    is not something an upgrade should do — but nothing says so, and the two guards sit nine lines apart
+    looking like a copy-paste divergence. The small, reviewable PR is a one-line comment on `remove`
+    stating the intent, plus a test pinning that `remove` of an upgradeable-fixed option throws even
+    under `allow-upgrade`. If a maintainer says it is a bug instead, the fix is one token. Either way
+    the review settles it.
+28. **`KCVSConfiguration.asReadConfiguration()` throws a message-less `IllegalArgumentException` on a
+    datatype mismatch.** `:202` is
+    `Preconditions.checkArgument(!entries.containsKey(key) || dataType.isAssignableFrom(entries.get(key).getClass()));`
+    — no message, no format arguments. This fires at open time, from
+    `MixedConfiguration.has`/`get`, whenever a value stored in the `"configuration"` row does not match
+    the `ConfigOption`'s current datatype — which is exactly what happens if an option's declared type
+    changes across releases, or if a custom backend option collides on a path. The user sees a bare
+    `java.lang.IllegalArgumentException` from inside a lambda, with no key, no expected type and no
+    actual type. The whole fix is adding a message:
+    `"Configuration value for key [%s] is a %s, not the expected %s"`. Zero behavioural risk, improves
+    every support thread that ever hits it, and small enough to be a clean first PR. Worth pairing with
+    a one-line test that stores a `Long` under a `String`-typed option's path and asserts the message
+    names the key.
+
 ### Still open, and who owns it
 
-- **Closed by lesson 11:** lesson 10's carried question (the layout does not decide completeness; the
-  four-way test at `:201-202` does, and index replicas are excluded by clause 2 forever); why the tail
-  ids are written backward (order preservation, not readability — zero inversions over 400,000 values);
-  `endKeyPos`'s exclusivity and the off-by-one in `:169`'s comment; the `TIMESTAMP`-vs-`ROW_KEY`
-  asymmetry (`hasPropertyMetaData` tests `ImplicitKey.MetaData2ImplicitKey` membership, not
-  `hasMetaData`); the `RelationCache` identity assertions (`assertSame` throughout
-  `EdgeSerializerTest.checkParsedOnce`, which pins that a full parse is the one instance every later read
-  returns); `readInlineTypes`/`hasPropertyMetaData`; and that `SIMPLE` is constrained, correcting lesson
-  10's arrow on that row.
+- **Closed by lesson 14 — all three obligations lesson 13 handed it.** (a) **Construction order:**
+  established line by line for `StandardJanusGraph:264-360`; the answer to "what must exist before a
+  value can be read out of `system_properties`" is **a `KeyColumnValueStoreManager` and nothing else** —
+  the config row is never read through `typeCacheRetrieval`, which is why the open path can create,
+  use and close an entire store manager before `getBackend()` runs. `schemaCache` at `:308` is safe
+  before `isOpen` at `:320` only because nothing in that window touches it; there is no assertion and
+  no test. (b) **FIXED / GLOBAL_OFFLINE / GLOBAL / MASKABLE at open time:** the first three are
+  **indistinguishable** — every open-path site uses `isGlobal()`/`isManaged()`/`isLocal()`, and the only
+  two sites in the tree that read the constant are `ModifiableConfiguration.set:37-44` and
+  `ManagementSystem`'s `configVerifier:190-207`. MASKABLE is the only type whose handling differs at
+  open, in `MixedConfiguration.get`'s precedence and in its exclusion from the discrepancy check — and
+  that exclusion combined with its inclusion in `getGlobalSubset` is PR candidate 26. (c)
+  **`MetricInstrumentedSchemaCache` counts and nothing else**, confirmed by reading all 74 lines: a
+  `StandardSchemaCache` with a MISS-incrementing retriever, no HIT counter, no counted eviction, and
+  JVM-global counter names. Also corrected lesson 13's note that `attributes.custom.*` is FIXED — it is
+  `GLOBAL_OFFLINE`.
+- **Owed to lesson 15 by lesson 14:** the `newTransaction:588-598` window in which a
+  `StandardJanusGraphTx` exists without a `BackendTransaction` (`setBackendTransaction` is called at
+  `:592`, after construction) — can anything in the transaction's own constructor reach the backend?
+  And what does `StandardTransactionBuilder` read out of the `GraphDatabaseConfiguration` at `:580`?
+- **Owed to lesson 18 by lesson 14:** `KCVSConfiguration.set(..., checkExpectedValue=true)` calls
+  `store.acquireLock` at `:153` on the config row — who calls that overload, and does the config row
+  therefore go through `ConsistentKeyLocker` exactly as a `SchemaName` graphindex entry does? Related
+  and unanswered: `StandardJanusGraph:341`'s `REGISTRATION_TIME` write goes through
+  `ModifiableConfiguration.set`, i.e. the **non**-expected-value overload, so provisionally the instance
+  registration is **unlocked** and `ManagementSystem`'s `openInstances.size() < 2` guard for
+  GLOBAL_OFFLINE is racing it. Confirm or refute.
+- **Owed to lesson 25 by lesson 14:** `ManagementSystem`'s `modifyConfig` is a `ModifiableConfiguration`
+  with `Restriction.GLOBAL` over a `TransactionalConfiguration` (`:175-177`), so the whole
+  `JanusGraphManagement` config surface is writes to the one `"configuration"` row. `graphShutdownRequired`
+  (`:204`) is the GLOBAL_OFFLINE consequence — trace where it is honoured.
 - **Closed by lesson 12:** both questions lesson 11 owed it. **No in-tree `readObjectByteOrder` is
   length-ambiguous** — ten of eleven order-preserving datatypes are fixed-width in byte order and
   `String` is self-delimiting by a terminator its own writer refuses to let into the payload — so PR
@@ -736,12 +809,6 @@ on 2026-11-04, and 5 still needs its experiment run.
   adds **no** versioning of its own, and schema values do use `writeClassAndObject` — `SchemaDefinitionDesc`
   has datatype `Object.class`, so every definition value is self-describing at the *type* level and
   unversioned at the *value* level. New PR candidates 24 and 25.
-- **Owed to lesson 14 by lesson 13:** `schemaCache` is assigned at `StandardJanusGraph:308` from
-  `configuration.getTypeCache(typeCacheRetrieval)`, and `typeCacheRetrieval` opens its own transactions
-  with `getKeyConsistentTxConfig()` — so establish the constructor's exact ordering and which components
-  must exist before `system_properties` can be read. Also whether `MetricInstrumentedSchemaCache` changes
-  any of lesson 13's cache behaviour or only counts it, and what `FIXED` / `GLOBAL_OFFLINE` / `GLOBAL` /
-  `MASKABLE` do differently at open time (lessons 09 and 12 were each bitten by a `FIXED` option).
 - **Owed to lesson 17 by lesson 13:** the eight **edge** `TypeDefinitionCategory` values (ordinals 17-24)
   are the whole of what hangs off `SchemaDefinitionEdge`. Establish which carry a real modifier
   (`INDEX_FIELD` with `Parameter[]`, `CONNECTION_EDGE` with a `String` are the two with datatypes) and
@@ -838,22 +905,9 @@ on 2026-11-04, and 5 still needs its experiment run.
   `UPPER_SLICE = oneBuffer(17)`). **Lesson 10 adds a third consumer:** every `getQuery` slice end is
   `nextBiggerBuffer`-exclusive, and the missing-value marker relies on exclusivity on the ASC upper bound
   and the DESC lower bound. Lesson 27 adds CQL as the fourth implementation. The contract is in
-  `KeyColumnValueStore`'s javadoc and **none** of the enforcement is.
-- **tdd.cat, 2026-11-11: the front page ran AHEAD of the archive, which is new.** At ~03:40 UTC the
-  front page served **2026-11-10** (63 stories, heading *"Tuesday, November 10, 2026"*) while
-  `/archive/` still reported **134 editions** with **2026-11-09** as its newest *link* and the November
-  10 cell unlinked. So for the first time in the five runs that have tracked this, the maximum came from
-  the **front page**, not the archive — the previous four runs all had the archive equal to or ahead of
-  the front page (lesson 09 found 2026-11-06 in the archive while the front page served 2026-11-05).
-  **The procedure still works and is still the right one, but state it correctly now:** (a) fetch both
-  the front page and `/archive/` and take the **maximum of the two**, in either direction; (b) before
-  digesting, check this session log for the newest edition already covered — lesson 12 digested
-  2026-11-09, so 2026-11-10 was the uncovered one; (c) the uncovered-item fallback is the last resort,
-  and the 2026-11-06 edition has two items spent (Infino ids, Postgres `SKIP LOCKED` queues). Two
-  practical notes: the front page is now large enough (~107 KB on 2026-11-10) that **one WebFetch covers
-  only about 100 KB** and the tail of the item list needs a second call with an offset; and edition sizes
-  remain volatile — 22 stories on 2026-11-08, 50 on 2026-11-09, 63 on 2026-11-10 — so a small edition is
-  not evidence of a partial publish. The filter-bar rendering bug was not observed this run.
+  `KeyColumnValueStore`'s javadoc and **none** of the enforcement is. **Lesson 14 adds a fifth:**
+  `KCVSConfiguration.get` builds `KeySliceQuery(rowKey, column, nextBiggerBuffer(column))` for a
+  single-column point lookup, which is correct only because the upper bound is exclusive.
 
 ## Paused Subjects
 
