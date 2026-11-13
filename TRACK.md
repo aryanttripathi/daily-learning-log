@@ -5,12 +5,13 @@ mode: lesson
 mode-history: contributor-reading 2026-10-30 .. 2026-11-02 (sessions 01-04); lesson from 2026-11-03 (lesson 05 on)
 started: 2026-10-30
 lessons-total: 28
-lessons-done: 14
+lessons-done: 15
 pinned-commit: a59ae8d8024207598eada34998d867617df51adf
 pinned-commit-date: 2026-10-28
 pinned-commit-reviewed: 2026-11-11 at the Part II/III boundary (lesson 13) — a59ae8d8 is still the tip of
-  JanusGraph/janusgraph master, so there is nothing to re-pin to; staying. Not re-raised by lesson 14
-  (mid-Part, by design). Re-check at the Part III/IV boundary, after lesson 18.
+  JanusGraph/janusgraph master, so there is nothing to re-pin to; staying. Not re-raised by lessons 14
+  or 15 (both mid-Part, by design; list_commits was deliberately not run). Re-check at the Part III/IV
+  boundary, after lesson 18, and re-run list_commits there rather than assuming either answer.
 upstream: JanusGraph/janusgraph
 reader-fork: aryanttripathi/janusgraph
 paused-tracks: PostgreSQL (resume at lesson 11; full state in tracks/postgresql.md)
@@ -56,17 +57,25 @@ From lesson 05, `janusgraph-berkeleyje` is also needed:
 
 ## Session Log
 
-Newest first.
+Newest first. **Session-log roll-off, new this run:** the full `**Findings.**` paragraph is kept for the
+three most recent lessons only — the same window as the `Verified by lesson NN` blocks below. Lessons
+09-12 were compressed to their headline finding on 2026-11-13; their full paragraphs remain verbatim in
+git history at the commit each line names, and their substance is carried forward either in the surviving
+`Verified by` blocks or in the root `README.md`'s per-lesson narrative. Next run, lesson 13's paragraph is
+the one that goes.
+
+- **15 — 2026-11-13** · [`2026/11/2026-11-13-janusgraph-tx-write-path-containers/README.md`](2026/11/2026-11-13-janusgraph-tx-write-path-containers/README.md) · **All three obligations lesson 14 handed this run are discharged.** Read `StandardJanusGraphTx` (whole, 2278 lines; written up for `:193-1135` and `:2137-2278`), `StandardTransactionBuilder` (whole, 759), `StandardJanusGraph` (whole, 1490; cited at `:570-612`, `:750-762`, `:1215-1240`), `GraphDatabaseConfiguration` (whole, 2192; cited at `:115-132`, `:664-700`, `:1060-1070`, `:2055-2070`), `ElementLifeCycle` (whole), `StandardVertex` (whole), `CaffeineVertexCache` (whole), `SimpleAddedRelations` (whole), `ConcurrentAddedRelations` (whole), `AddedRelationsContainer` (whole), `AddedPropertiesSingleValue` / `SetValue` / `ListValue` (all whole), `RemovedVertexTrackingTest` (whole), plus the directory listings for `graphdb/transaction/`, `.../addedrelations/`, `.../vertexcache/`, `graphdb/vertices/` and the in-memory test package. Also read [JanusGraph/janusgraph#893](https://github.com/JanusGraph/janusgraph/pull/893) with `issue_read` and the [Transaction Handling](https://docs.janusgraph.org/basics/transactions/) doc page.
+  **Findings.** Every data write funnels through `connectRelation:945` and fans out to **three** destinations (each endpoint's own container, the transaction's container, the vertex cache for non-new endpoints only) plus a fourth for properties (`addedPropertyIndex`). The per-transaction and per-vertex relation containers are **the same class with opposite `groupPropertiesByKey`**, which makes `propertiesSize` permanently 0 at transaction level and `propertiesContainer` permanently empty at vertex level, and means `getView(types, filter)` **ignores `types`** at transaction level. `ids.flush` defaults **true**, so a user vertex's temporary id lives for three statements; `makeSchemaVertex:1098` assigns unconditionally, so a schema vertex never has one. `ElementLifeCycle` is a six-state machine (three constants `private`) whose predicates are **range tests on the numeric ordering**, with `New` and `Modified` absorbing and `isModified()` excluding both `New` and `Removed`. `ConcurrentAddedRelations.getAllUnsafe()` is the one method **not** passed through `copyView` — it returns a live view, which is the whole meaning of the name, and `commit:2145` hands it to `graph.commit`. `MIN_VERTEX_CACHE_SIZE = 100` is a probability reduction, not a fix, for a non-atomic tier-2/tier-3 sequence in `CaffeineVertexCache.get` — **and the `#893` it cites is a 2018 Elasticsearch-TTL documentation PR, not a vertex-cache bug** (PR candidate 29). New PR candidates **29 and 30**. Daily Diff: the **2026-11-12** edition (66 stories) — PostgreSQL's 52-CVE security release and CVE-2026-6460, the composite-attribute type-confusion umbrella fix.
 
 - **14 — 2026-11-12** · [`2026/11/2026-11-12-janusgraph-open-path-config-merge/README.md`](2026/11/2026-11-12-janusgraph-open-path-config-merge/README.md) · **Part III opens. All three obligations lesson 13 handed this run are discharged, and one of lesson 13's own notes is corrected.** Read `JanusGraphFactory` (whole), `GraphFactoryUtils` (whole), `SchemaInitializationManager` (whole), `GraphDatabaseConfigurationBuilder` (whole), `ReadConfigurationBuilder` (whole), `ModifiableConfigurationBuilder` (whole), `ConfigOption` (whole), `BasicConfiguration` (whole), `ModifiableConfiguration` (whole), `MixedConfiguration` (whole), `MergedConfiguration` (whole), `KCVSConfiguration` (whole), `KCVSConfigurationBuilder` (whole), `JanusGraphConstants` (whole), `janusgraph.internal.properties` (whole), `MetricInstrumentedSchemaCache` (whole), `ReadConfigurationBuilderTest` (whole), plus `GraphDatabaseConfiguration` (the option declarations 140-189, 1027-1030, 1157-1159, 1363-1375, 417-423; the class body 1604-1680; `getIDAssigner` 1934-1936, `getBackend` 1951-1956, `getSerializer` 1967-1981, `getTypeCache` 1983-1986, `getLocalConfiguration` 1988-1996, `preLoadConfiguration` 2034-2120, `selectExactConfig` 2122-2126), `StandardJanusGraph` (the constructor 264-360, `closeInternal` 422-470, `getSchemaCache` 554-556, `newTransaction` 588-603, `typeCacheRetrieval` 611-644, `getGlobalSystemConfig` 745-749), `Backend` (the constructor 236-280, `initialize` 333-417, `getGlobalSystemConfig` 478-479, `getStorageManager` 522-545), `ManagementSystem` (fields and constructor 145-188, `configVerifier` 190-207, `getOpenInstancesInternal` 209-213, `forceCloseInstance` 225-234) and `StandardSerializer` again (the registration table 113-171, for the 13 config datatypes).
   **Findings.** The global configuration is **one row** in `system_properties`, row key UTF-8 `"configuration"` (13 bytes), columns the dotted option paths, values `writeClassAndObject`; `hidden.frozen` is a column in that same row and is excluded from `getAll()` by a swallowed `ConfigElement.parse` failure logged at debug. `ConfigOption.ACCEPTED_DATATYPES` is a closed set of **13** classes whose registration numbers top out at 65, so **every config value's registration prefix is exactly one byte** — and the set is closed because `KCVSConfiguration:75` builds its own bare `new StandardSerializer()`, which no `attributes.custom.*` registration ever reaches. **Obligation (b), answered:** at open time `FIXED`, `GLOBAL_OFFLINE` and `GLOBAL` are **indistinguishable** — every open-path site uses `isGlobal()`/`isManaged()`/`isLocal()`, and the only two places in the tree that switch on the constant are `ModifiableConfiguration.set:37-44` and `ManagementSystem`'s `configVerifier:190-207`. The resolution order is three rows wide (`MergedConfiguration(overwrite, MixedConfiguration(global, local))`). **The MASKABLE surprise:** `getGlobalSubset` filters on `isGlobal()`, which *includes* `MASKABLE`, so every MASKABLE option in the first instance's properties file is frozen into the global row, never updated, never discrepancy-checked (`getManagedSubset` excludes MASKABLE), and inherited by every later instance that omits it — **PR candidate 26**. **Obligation (a), answered:** `system_properties` needs nothing but a `KeyColumnValueStoreManager`, which is why the open path creates store manager #1, reads and freezes the row through it, and **closes it** (try-with-resources → `KCVSConfiguration.close` → `txProvider.close` → `manager.close()`) before `getBackend()` opens store manager #2 and a *second* `KCVSConfiguration` on the same row; in the constructor, `schemaCache` is wired at `:308` but its retriever cannot run until `isOpen` at `:320`, and that invariant holds by ordering alone with no assertion or test. **Obligation (c), answered:** `MetricInstrumentedSchemaCache` is a `StandardSchemaCache` with a counting retriever — behaviour identical, no HIT counter, `MISS` incremented before the store call, `expireSchemaElement` uncounted, counters under the JVM-global system prefix; lesson 13's `isCacheable` asymmetry means a permanent 100% miss rate on repeated lookups of a non-existent type is correct rather than a misconfiguration. Also: six FIXED options exactly, three of them escapable via `graph.allow-upgrade` from a list parsed out of a jar resource (`storage-version,janusgraph-version,titan-version`; `STORAGE_VERSION=2`), and a successful upgrade writes `allow-upgrade=false` back into the database, disarming itself. **Correction to lesson 13's note:** `attributes.custom.*` is `GLOBAL_OFFLINE`, not FIXED. New PR candidates **26**, **27**, **28**. No syllabus revisions.
 
 - **13 — 2026-11-11** · [`2026/11/2026-11-11-janusgraph-system-types-schema-storage/README.md`](2026/11/2026-11-11-janusgraph-system-types-schema-storage/README.md) · **Part II complete; re-pin reviewed and declined — `a59ae8d8` is still the tip of `master`, so there is nothing to re-pin to.** Read `BaseKey` (whole), `BaseLabel` (whole), `BaseRelationType` (whole), `EmptyRelationType` (whole), `SystemTypeManager` (whole), `Token` (whole), `JanusGraphSchemaCategory` (whole), `TypeDefinitionCategory` (whole), `TypeDefinitionMap` (whole), `TypeDefinitionDescription` (whole), `SchemaSource` (whole), `StandardRelationTypeMaker` (whole), `StandardPropertyKeyMaker` (whole), `JanusGraphSchemaVertex` (whole), `PropertyKeyVertex` (whole), `StandardSchemaCache` (whole), `TypeDefinitionDescriptionSerializer` (whole), `EnumSerializer` (whole), `StandardSerializer` again (the registration table, slots 41-57 and 63), `StandardSchemaCacheTest` (whole), plus `StandardJanusGraphTx` (`makeSchemaVertex` 1080-1112, `updateSchemaVertex` 1114-1116, `getSchemaVertex` 1216-1224, `getRelationType` 1231-1239, `getExistingRelationType` 1252-1262, the vertex constructor 641-664, `getOrLoadRelationTypeById` 488-497, `expireSchemaElement` 2253-2275, `newTypeCache` 282/337/341/1109/1217/2209), `StandardJanusGraph` (`typeCacheRetrieval` 611-643, `vertexExistenceQuery` 306, `getSchemaCache` 554-556, `edgeQuery` 682-685) and `IDManager` again (the bit-mask doc 36-62, the `VertexIDType` suffixes, `addPadding` 345-353, `getSchemaId` 691-694, `isSystemRelationTypeId` 717-719).
   **Findings.** The schema is a subgraph in the same `edgestore`: six system property keys and two system edge labels, whose ids are computed arithmetically (`(raw << 6) | 37` for system property keys, `| 53` for system edge labels) so there is no bootstrap read — `VertexExists`=101, `SchemaName`=2085, `SchemaDefinitionProperty`=2149, `SchemaCategory`=2213, `SchemaDefinitionDesc`=2277, `SchemaUpdateTime`=2341, `VertexLabelEdge`=181, `SchemaDefinitionEdge`=2357 (the last of those and `SchemaUpdateTime` share raw id 36 and are separated only by the suffix). A property key is 11 edgestore columns plus 2 graphindex entries; its definition is **exactly 7** `SchemaDefinitionProperty` columns, enforced by set *equality* in `TypeDefinitionMap.isValidDefinition`, and one ordinal byte (5 `DATATYPE` vs 6 `UNIDIRECTIONAL`) is the whole on-disk difference between a property key and an edge label. Property keys and edge labels deliberately share the `rt` namespace, which is why `getRelationType` hard-codes `EDGELABEL.getSchemaName(name)` and why the two kinds can never share a name. **Lesson 11's debt settled**: `getExistingRelationType` bottoms out at `SystemTypeManager`'s static 17-entry map for system ids and otherwise at the vertex constructor, which picks `PropertyKeyVertex`/`EdgeLabelVertex`/`VertexLabelVertex`/`JanusGraphSchemaVertex`/`CacheVertex` **from the id's suffix bits alone**, before any byte of the row is read. **Lesson 12's debt settled**: every `TypeDefinitionCategory` is persisted as its declaration-order ordinal via `EnumSerializer` (`VariableLong.writePositive`, one byte for all 25), with no version marker and only a disabled-by-default `assert` for type safety — the "Don't change the order" comment is the entire mitigation, and it applies to all seventeen registered enums. Also: `StandardSchemaCache`'s `isCacheable` asymmetry (an empty `SchemaDefinitionEdge` is cached, an empty definition is not, because the latter means "not visible here yet"); its two-bit `systemTypeId` field admitting only four cacheable system types; one-way primary-map overflow to the Caffeine backup; every cache miss costing a whole key-consistent transaction with the KCVS cache disabled; and a dead disjunct in `SystemTypeManager.throwIfSystemName` (the lowercased argument can never match the mixed-case system-name map; `Token.isSystemName` is what actually protects the namespace). New PR candidates **24** (fix that dead disjunct) and **25** (pin the ordinals of all seventeen persisted enums in a test). No syllabus revisions.
-- **12 — 2026-11-10** · [`2026/11/2026-11-10-janusgraph-standard-serializer-attribute-encodings/README.md`](2026/11/2026-11-10-janusgraph-standard-serializer-attribute-encodings/README.md) · **stayed on `a59ae8d8`** (mid-Part; the re-pin decision is due **next run**, after lesson 13 closes Part II). Read `StandardSerializer` (whole), `Serializer` (whole), `OrderPreservingSerializer` (whole), `SupportsNullSerializer` (whole), `InternalAttributeUtil` (whole), `AttributeSerializer` (whole), and every registered attribute serializer that matters: `ByteSerializer`, `ShortSerializer`, `IntegerSerializer`, `LongSerializer`, `CharacterSerializer`, `BooleanSerializer`, `FloatSerializer`, `DoubleSerializer`, `DateSerializer`, `InstantSerializer`, `DurationSerializer`, `UUIDSerializer`, `EnumSerializer`, `StringSerializer`, `ObjectSerializer`, `ArraySerializer`, `SerializableSerializer` (all whole), plus `NumericUtils` (whole), `StringEncoding` (whole), `VariableLong` (whole, now the forward signed path), `VariableString` (whole), `StandardRelationTypeMaker` (whole), `AttributeUtils` in **`janusgraph-driver`** (whole), `RegisteredAttributeClass` (whole), `RegisteredAttributeClassesConverter` (whole), `GraphDatabaseConfiguration` L1363-1375 / L1967-1980, `EdgeSerializer` again (the `InlineType` / `writePropertyValue` / `readPropertyValue` call sites), `SerializerTest` (whole, 840 lines), `UUIDSerializerTest` (whole), `docs/advanced-topics/serializer.md`, and commit `46f9d249` (2026-10-15, Oleksandr Porunov, fixes #5087). **THE finding: the `0x00` flag byte is load-bearing for *order*, not for null.** `ByteSerializer.writeByteOrder(Byte.MAX_VALUE)` is `putByte((byte)(127 - (-128)))` = **the single byte `0xff`** — byte-identical to the missing-value marker `EdgeSerializer:506` writes to end an open sort-key range. The same collision sits at the top of every fixed-width type (`Short.MAX_VALUE` = `ffff`, `Long.MAX_VALUE` = eight `ff`, `Double.NaN` = `fff8…`, `new UUID(-1,-1)` = sixteen `ff`), and the only thing separating "largest value" from "no value" is the flag `writeObjectInternal` prepends for every type that is not a `SupportsNullSerializer`. Verified: re-implementing all eleven `writeByteOrder` bodies line-for-line and sweeping gives **0 violations** of `value < 0xff` across all eleven types. That makes `writesMissingValuesLast`'s odd second clause exact rather than arbitrary — it is the question *"does the first byte come from the two-valued flag protocol?"* — and the clause exists to exclude **exactly one serializer in the tree**, the private inner `ClassSerializer`, which supports null, writes no flag, and encodes null as registration 0 = `80000000`, so a `Class` sort key's missing values sort **first** (`SerializerTest:152-154` pins `Class`, `Instant` and `byte[]`, three types for three different reasons). **Lesson 11's question answered, and it kills a PR as written: no in-tree `readObjectByteOrder` is length-ambiguous.** Ten of the eleven order-preserving datatypes are **fixed width** in byte order (Byte/Boolean 1, Short/Character 2, Integer/Float 4, Long/Double/Date 8, UUID 16, enum 4, Class 4); the eleventh, `String`, is `3 + 2n` and self-delimiting by a `00 00` terminator that `writeByteOrder`'s `Preconditions.checkArgument(c > 0)` refuses to let into the payload — verified read-length == write-length over 20,000 strings, and `3 + 2n` exactly. **PR candidate 20 is therefore downgraded** from "silent corruption" to a one-line hardening whose only trigger is a third-party `OrderPreservingSerializer`, since `checkSortKey`'s sole gate is `instanceof OrderPreservingSerializer` with no width or symmetry check. Second finding: **the same value is encoded three different ways depending on *where in the column* it sits**, selected by `EdgeSerializer`'s private `InlineType` enum (`:383-394`) and its two orthogonal booleans — `KEY` → `writeObjectByteOrder`, `SIGNATURE` → `writeObject`, `NORMAL` → inline relation-type id + `writeObject` — with `writeClassAndObject` as a fourth path reachable only for `dataType == Object.class`, which `checkSignature` bans from both sort keys and signatures, so a sort key is never untyped. The sort-key premium is **zero for every fixed-width type** and lands entirely on the two with variable value encodings: `Integer` is 5 bytes as a sort key against 2 for any `|v| ≤ 63` (its `read`/`write` use `VariableLong`'s **sign-magnitude** zig-zag, `Math.abs(v)<<1 | sign`, while `readByteOrder`/`writeByteOrder` use a fixed biased `putInt`), and `String` is `3 + 2n` against `1 + n` — `'alice'` is **13 bytes** as a sort key against **6** as a value, and that lands in the column a vertex-centric index stores a second full copy of in each of two endpoint rows (20-char sort key, 2 VCIs → **258 bytes of sort key for one edge**). Third: **`Date` is order-preserving and `Instant` is not** — `InstantSerializer` implements plain `AttributeSerializer` only, so `checkSortKey` rejects it, and `StandardRelationTypeMaker.sortKey`'s own javadoc offers *"a property key with a timestamp data type"* as its example. Fixing it is a new 12-byte `[8-byte biased seconds][4-byte biased nanos]` encoding, not a marker, because the nanos field currently rides `VariableLong`'s non-order-preserving zig-zag; `DurationSerializer` is identical. Fourth: **`UUIDSerializer` knowingly violates the `OrderPreservingSerializer` javadoc** — both `write` and `writeByteOrder` are two **unbiased** `putLong`s, so the bytes sort by unsigned bits while `UUID.compareTo` compares each half signed. Measured: **10,070 of 20,000** random pairs disagree with `compareTo`, **0** with string order. Which is why `UUID` is absent from `SerializerTest`'s `TYPES` and therefore from `testSerializedOrder`'s 3,000,000-trial `signum(compareTo) == signum(bytes)` check — it would fail by design — and is covered instead by `UUIDSerializerTest.testByteOrderIsTheOrderOfTheStringForms`. The arc: #948 added the interface in March 2018 reasoning *"supporting native sort order simply means implementing `Comparable`"*; commit `46f9d249` (merged 2026-10-21, fixes #5087) fixed the **comparators** instead, adding `AttributeUtils.compareValues`/`compareUnsigned` and pointing `OrderList`, `RelationComparator`, `RangeInterval` and `Cmp` at them, and says explicitly what it did not fix (TinkerPop's own comparisons, so keyset paging with an unfolded `order()` can still skip UUIDs). Fifth: **enum sort keys are ordered by declaration order and nothing records it** — 17 internal enums are persisted by ordinal, so reordering any of their constants silently reinterprets stored schema; `getValue`'s bounds check catches a removal, never a swap. Sixth: **the registration table has 51 slots used (1, 10-21, 22-30, 41-57, 60-71) and exactly 28 internal slots left (72-99)** before `CLASS_REGISTRATION_OFFSET = 100` — which the code says "may NEVER EVER be changed" — would collide with user attribute 0. Also: `new HashMap<>(60)` for 51 entries **still rehashes** during construction (threshold 48); `normalizeDataType`'s `Instant` branch is **unconditionally dead** (`Instant` is `final`, and the branch returns what the fallthrough returns); `TEXT_COMPRESSION_THRESHOLD = 48` is `public static final` and `StringSerializer` **never reads it** (only `LONG_COMPRESSION_THRESHOLD = 16000` gates the single GZIP compressor, in a 3-bit field with 8 slots and 2 used); the custom-serializer extension point can **add** types but never replace one, with `HashMap` the single hard-coded escape hatch (from #306, a Titan migration collision); both `attributes.custom` options are `GLOBAL_OFFLINE`; `newInstance()` is the deprecated reflective form and its unwrapped constructor exception escapes the `catch`; and the docs' *Custom Object Serialization* section promises a serialize/deserialize round-trip before persisting that **does not exist anywhere in the registration path**. **Lesson 11's second question, answered:** `VariableString.writeBackward` writes characters in reverse then the marker, so `STRING_ID_MARKER` is at the **high** address and the stop bit at the low one — `readBackward`'s `getByte(--position)` peek is correct, and it emits the string in order without reversing. Also found: three near-duplicate in-tree ASCII codecs (`StringSerializer.write`, `StringEncoding.writeAsciiString`, `VariableString.write`) that disagree on the empty string and the marker; the string byte order is **UTF-16 code-unit order, not code-point order** (U+1F600 sorts *before* U+FFFF, verified), i.e. the same class of mismatch as the UUID bug waiting in a different type; a `String` property containing `U+0000` is storable as a value (the UTF path) but throws at serialization time if the key is a sort key, and `verifyAttribute` does not check it; and **three in-tree comparators that disagree** — the bytes, `AttributeUtils.compareValues`, and `AttributeUtils.compare` (which returns 0 for `-0.0` vs `0.0`, `null` for a one-NaN pair, and compares across numeric types where `compareValues` throws). Daily Diff: the **2026-11-09** edition (50 stories) — deep dive on Turso implementing Tantivy's `Directory` trait against its own B-tree, so an immutable-segment FTS index lives in the database file as 512 KB chunks keyed by `(path, chunk_no)` and commits in the SQL transaction, at the price of `NoMergePolicy` — automatic merging disabled, because a background merge would either leave the transaction or hold the single writer open.
-- **11 — 2026-11-09** · [`2026/11/2026-11-09-janusgraph-parse-relation-relation-cache/README.md`](2026/11/2026-11-09-janusgraph-parse-relation-relation-cache/README.md) · **stayed on `a59ae8d8`** (mid-Part; the re-pin decision is due after lesson 13, one run away). Read `EdgeSerializer` again (whole, 591 lines, now from the read side), `RelationCache` (whole), `RelationReader` (whole, 10 lines and the point is what it does **not** declare), `VariableLong` (whole, this time the backward section), `IDHandler` (whole), `StaticArrayEntry` (whole), `StaticArrayBuffer` (whole), `ReadArrayBuffer` (whole), `CacheEdge` (whole), `RelationConstructor` (whole), `ModificationDeserializer` (whole), `Multiplicity` (whole), `JanusGraphVertexDeserializer` (whole), `EdgeSerializerTest` (whole, new this autumn), `RelationReparseBenchmark` (whole, new this autumn), plus commit `29c0b18a` (2026-10-02, Oleksandr Porunov, fixes #4995) and fragments of `CacheVertexProperty` and `RelationCacheTest` via code search. **THE finding: the backward encoding is the only genuinely order-preserving varint in the tree, and that — not readability — is why the tail ids are written backward.** `writeUnsignedBackward` puts the length in bits 4-6 of the **first** byte, the mirror image of `writeUnsigned`'s STOP-bit-on-the-**last**-byte, so a longer encoding's first byte is strictly greater: re-implementing `unsignedBackwardLength`/`writeUnsignedBackward`/`readUnsignedBackward` line-for-line and sweeping `0..400000` finds **zero** order inversions, against lesson 10's one at every length boundary in the forward prefix encoding. `262143 → 262144` is `8f 7f 7f → 90 10 00 00`. That is what makes `ImplicitKey.ADJACENT_ID` and `JANUSGRAPHID` legal sort-key positions in `getQuery`. The price is exact: capacity is **`4 + 7·(n-1)`** bits, not `7n`, and there is a **hard 3-byte floor** from `Math.max(3, ...)`, so the first vertex id a default graph assigns (**4096**, lesson 09) costs **3 bytes backward against 2 forward** (`80 20 00` vs `20 80`); beyond the floor the length field costs +1 byte for 3 of every 7 bit-lengths (bitLength ≡ 5, 6, 0 mod 7; boundaries at 19, 26, 33, 40, 47, 54, 61). Over `NormalVertex` ids at counts 16..160,000,000: **38 bytes backward against 34 forward, +12%**. A plain `MULTI` edge — the default multiplicity — is an **8-byte column with an empty value** (2 prefix + 3 `vid←` + 3 `rid←`) against a 6-byte forward ideal, i.e. ~400 MB of length fields on a 100M-edge graph stored twice, on top of lesson 10's ~200 MB of prefix padding from the same four tag bits. Round trip and the capacity law verified over `0..299999` plus `2^k ± {0,1,2}` for k=5..62, 0 failures. **Lesson 10's carried question, answered: the layout does not decide.** `parseRelation` completes the relation for all ten (type × direction) rows; what decides whether a header-only parse is as good as a full one is the four-way test at `:201-202` — `!in.hasRemaining() && keySignature.length == 0 && def.getSignature().length == 0 && !hasPropertyMetaData(data)`. The layout constrains it in one direction only: the two unconstrained rows are the only ones that can carry a sort key, so **every vertex-centric index replica fails clause 2 by construction** and is re-parsed on its first property read, permanently — the #4995 fix helps base columns and cannot help replicas. `EdgeSerializerTest.testRelationIsFullyParsedOnce` pins it at **17 of 50** entries, and the 17 and the 50 both reconstruct exactly. Also: `SIMPLE` **is** constrained (`isConstrained()` is literally `this != MULTI`), so lesson 10's six layouts are ten (type × direction) rows collapsing into **three** parse shapes — forward-only, pivot-at-`valuePosition`, full backward walk — and `SET` is the one constrained case that reads straight *through* `valuePosition` without jumping. **Second finding (PR candidate 18, the most substantial this lesson found): the OLAP path cannot reach the entry cache at all.** `RelationReader` declares only `parseRelation`; `readRelation` — which reads and writes `StaticArrayEntry`'s `transient volatile RelationCache cache` — is a method on `EdgeSerializer` alone. `JanusGraphVertexDeserializer` holds a `RelationReader` from `setup.getRelationReader()` and iterates the same `Iterable<Entry>` **twice**, calling `parseRelation(data, false, typeManager)` both times, so **every edgestore column in a Hadoop/Spark scan is fully parsed twice and memoised never** — and the first loop reads only `relation.typeId` and `getOtherVertexId()`, for which a header-only parse, or `EdgeSerializer.parseTypeId`, would do. Third finding (PR candidate 20): **the ASC sort-key read is unbounded and the DESC read is not.** `:172` sends DESC through `in.subrange(keyLength, true)`, which **allocates** (`new byte[length]` + arraycopy + `(byte)~b` loop + two wrappers) and whose `limit` makes `StaticArrayBuffer.require` throw past the sort-key window; ASC reads in place out of `in` itself, so an over-reading sort-key serializer would walk into the `vid←`/`rid←` tail and `in.movePositionTo(currentPos)` would discard the evidence — silently wrong values on ASC, a loud `ArrayIndexOutOfBoundsException` on DESC. Fourth (PR candidate 19): `RelationCache.get`, `numProperties` and `propertyIterator` all dereference a `null` `properties` on a header-only cache — a bare NPE, documented only in the `isFullyParsed()` javadoc, with exactly **three** hand-written guards behind it (`EdgeSerializer:85`, `CacheEdge.getPropertyMap`, `CacheVertexProperty.getPropertyMap`) and no test. Fifth: the shared static `EMPTY` map is a **mutable** `LongObjectHashMap` and `propertyIterator()` refuses to iterate it because HPPC writes an iteration seed on `iterator()` — a shared immutable sentinel that turns out not to be immutable. Sixth, cosmetic: `unsignedBackwardLength`'s `bitLength <= 4 ? 0 : ...` ternary is **dead** — `Math.max(3, ...)` discards the computed value for every bitLength 1..11 (11 of 64), and the whole function equals `max(3, ceil((bitLength+3)/7))`, verified for all 64 bit lengths. Also closed: `endKeyPos` is **exclusive** and `:169`'s comment ("we are on the last byte of the key") is off by one in wording while the arithmetic is right; `hasPropertyMetaData` is **not** `hasMetaData` (membership in `ImplicitKey.MetaData2ImplicitKey`, so `TIMESTAMP` keeps a parse header-only and a grouped read's `ROW_KEY` does not); `readVertexId(in, false)`'s string/long peek can never misfire on a long, because a backward long's last byte is always `≤ 0x7f` while its stop bit sits at the low address; and `ModificationDeserializer`'s `hasProperties()` is **not** a repeat of the #4995 mistake — it follows an explicit full `readRelation`, so it means "are there any". Daily Diff: the **2026-11-08** edition (22 stories), which lesson 10's run could not see — deep dive on a Postgres replication slot that cannot advance because its captured tables are idle while the server keeps writing WAL (~680 MB held over 25 quiet minutes at defaults), and on why the obvious fix silently loses half the rows on restart.
-- **10 — 2026-11-08** · [`2026/11/2026-11-08-janusgraph-edge-serializer-column-layout/README.md`](2026/11/2026-11-08-janusgraph-edge-serializer-column-layout/README.md) · **stayed on `a59ae8d8`** (mid-Part; the re-pin decision is due after lesson 13, not available this run). Read `EdgeSerializer` (whole, 591 lines), `IDHandler` (whole), `VariableLong` L56-235, `EdgeDirection` (whole), `IDManager` L60-340 / L372-420 / L691-723, `Multiplicity` L35-120, `BufferUtil` L178-212, `WriteByteBuffer` L140-154, `StandardJanusGraph` L896-904 / L999-1006 / L1100-1156, `ManagementSystem` L330-400, `RelationTypeVertex` L54-117, `StandardEdgeLabelMaker` L90-110, `StandardRelationTypeMaker` L61-67 / L119-126 / L196-199, `TypeDefinitionCategory` L40-86, `BaseRelationType` L59-68, `ImplicitKey` L151-160, `InternalRelationType` L30-38, `Serializer` L38-44, `StandardSerializer` L262-272, `Interval`/`PointInterval`/`RangeInterval`, `BasicVertexCentricQueryBuilder` L498-723, `IndexRepairJob` L211-219, `TransactionLogHeader` L86-93, `IndexRecordUtil` L454-462, `AbstractTypedRelation` L101-110, `JanusGraphLazyRelation` L157-166, `JanusGraphVertexDeserializer` L124-133, plus `EdgeSerializerTest`, `IDManagementTest` L141-265, `SerializerTest` L139-170, `JanusGraphTest` L973-982 and `docs/advanced-topics/data-model.md`. **THE finding: lesson 09's four conflict-avoidance bits cost one byte in every single cell of every row.** `writePositiveWithPrefix` with `PREFIX_BIT_LEN = 3` gives a **1-byte** relation-type prefix only for `count << 1 | dir ≤ 15`, i.e. **schema count ≤ 7** — and the smallest count a default graph can assign is **16**, so **the cheapest case in the encoding is unreachable on every default deployment**, permanently (`FIXED` option). The 2-byte prefix then holds exactly **63** relation types (counts 16..1008); the 64th (count 1024) spills to 3 bytes. Second finding: **columns are grouped by relation type, not sorted by relation-type id.** Re-implementing `writeUnsigned` / `writePositiveWithPrefix` / `getPrefix` line-for-line and sweeping counts 1-5000 finds exactly **one** inversion — `1023 → 1024` (`7f fe` vs `70 10 80`), and at the default stride of 16 it is **1008 → 1024**, so the 63rd type sorts *after* the 64th. Inversions sit at every byte-length boundary because the STOP bit marks the **last** byte. Nothing in the read path depends on the stronger property — `getBounds` compares only the top 3 bits, per-type slices are exact byte-prefix matches, and the same STOP bit keeps different-length prefixes from interleaving inside a `Direction.BOTH` window — and **no test asserts any of it** (`IDManagementTest.edgeTypeIDTest`'s 1,000,000 trials never compare two type prefixes). PR candidate 15. Third: **six prefix bands exist, and `getBounds` can reach only four of them** — it passes `getPrefix(systemTypes, systemTypes)`, so it emits `(0,1)` or `(2,3)` and never `(4,5)`; bands 4 (`0x80`-`0x9f`) and 5 (`0xa0`-`0xbf`) are the **invisible-non-system** bands, which is exactly where every vertex-centric index replica lives. `ManagementSystem.buildRelationTypeIndex:368`'s `maker.invisible()` is what puts them there, and `StandardEdgeLabelMaker:106` makes invisibility *structurally required* (an IN-only unidirected label is illegal otherwise). An edge with *N* vertex-centric indexes is **2 + N full columns**, each a complete re-serialization. Fourth: **the column *is* the uniqueness constraint** — `valuePosition` is assigned in six places and `MANY2ONE`-at-OUT and `SINGLE` get a bare-prefix column, so last-write-wins needs no read; `SET` puts the value in the column (set semantics for free); `MULTI`/`LIST` put the relation id in the column so nothing is overwritten. Fifth: `EdgeSerializer:481-483`'s `interval.isEmpty()` branch is **dead** — `BasicVertexCentricQueryBuilder:607-610` returns `emptyQuery()` first — and if reached it widens the slice to the whole type band (PR candidate 17). **Closed lesson 08's and 09's loose ends:** `TYPE_LEN_RESERVE = 3` **is** `IDHandler.PREFIX_BIT_LEN`, `MAX_PADDING_BITWIDTH = 6` **is** the one shift in `stripEntireRelationTypePadding`, the "different first-bit convention" needs no reconciling (row keys put the partition at the top, columns put the band at the top — different address spaces), and `BufferUtil.nextBiggerBuffer` **cannot overflow on a type prefix** (band maxes at 5, so byte 0 ≤ `0xbf`) while `padBuffer` turns out never to touch columns at all (its only caller pads **row keys** in the OKVS adapter). Also verified: the missing-value `0xff` marker sorts last in ASC and, flipped to `0x00`, first in DESC, with the exclusive bound applied on the matching side in each case. Daily Diff: **no 2026-11-08 or 2026-11-07 edition exists** — front page and `/archive/` both top out at 2026-11-06, which lesson 09 already digested — so one uncovered item from that edition instead: Postgres `SKIP LOCKED` queues saturating 1 vCPU at 64 connections against a `max_connections` of 100.
-- **09 — 2026-11-07** · [`2026/11/2026-11-07-janusgraph-id-authority-block-allocation/README.md`](2026/11/2026-11-07-janusgraph-id-authority-block-allocation/README.md) · **stayed on `a59ae8d8`** (mid-Part, no decision available). Read `VertexIDAssigner` (whole, 545 lines), `StandardIDPool` (whole), `IDBlockSizer` (whole), `ConsistentKeyIDAuthority` (whole, 500 lines), `AbstractIDAuthority` (whole), `ConflictAvoidanceMode` (whole), `IDBlock` (whole), `SimpleBulkPlacementStrategy` (whole), `IDManager` L60-130 / L370-430 / L450-460 / L545-565 / L610-650 / L715-725, `GraphDatabaseConfiguration` L1040-1180, `VariableLong` L77-92, `IDAuthorityTest` L75-295, plus the test inventories of `IDPoolTest`, `VertexIDAssignerTest`, `InMemoryIDAuthorityTest`, `CQLIDAuthorityTest`, `HBaseIDAuthorityTest`, `PropertyPlacementStrategy` L95-110, `docs/changelog.md` L2041-2058, `docs/configs/janusgraph-cfg.md` L88-113, `docs/operations/bulk-loading.md` L78-91. **THE finding: `ids.authority.conflict-avoidance-tag-bits` defaults to 4, is `ConfigOption.Type.FIXED`, and its tag defaults to 0 with mode `NONE` — so `ConsistentKeyIDBlock.getId:486-491` returns `count << 4` with a zero tag and every count JanusGraph assigns is a multiple of 16.** The first `NormalVertex` id in a fresh default graph is **4096** at partition 0 (count 16), not 256; the stride between consecutive vertices in one partition is 128, not 8; and `maxAvailableBits = unsignedBitLength(idUpperBound)-1-uniqueIdBitWidth` takes the four bits straight off every namespace's ceiling, so **2^51 of 2^55 vertex counts, 2^54 of 2^58 relation counts and 2^50 of 2^54 schema counts are reachable — 15/16 of each space is not**, on every graph created with the defaults, unchangeably. Second finding: the give-up message at `:420-421` prints `timeout.getNano()`, which is **0** for any whole-second `Duration`, including the 120 s `ids.renew-timeout` default — "Reached timeout 0" on every default deployment (PR candidate 11). Third: the rollback path's anonymous `TransactionalProvider` (`:392-399`) is commented "Use normal consistency level" and builds a transaction config **character-for-character identical** to `openTx()` at `:223-225` (PR candidate 12). Fourth: `IDAuthorityTest`'s two contiguity assertions (`checkBlock:207-209`, `testSimpleIDAcquisition:247-251`) are gated on `hasEmptyUid` and **none of the three `configs()` parameterizations sets tag-bits to 0**, so neither has ever executed (PR candidate 13). Fifth: `accessed()` writes a `volatile long` via `System.currentTimeMillis()` on every element id (`:378`) for a `getLastAccess()` that has **no caller in the tree** — measured **33.0 ns/op** against 0.30 ns for an empty loop under OpenJDK 21 (PR candidate 14, bundled with the `SimpleBulkPlacementStrategy` items). **Closed lesson 08's `count == 0` question properly:** `BASE_ID = 1` (`AbstractIDAuthority:45`), so no count 0 is ever offered — `addPadding`'s refusal was never the thing protecting it. Also: five pools with `getIDNamespace() == ordinal()`, three per partition (`hasOnePerPartition()`); `renewBlockIndex = 0` for `SCHEMA` (block 50) and `PARTITIONED_VERTEX` (block 100) because `RENEW_ID_COUNT = 100` exceeds both, so those two namespaces permanently double-buffer; the negated-counter column order that makes `getCurrentID`'s `setLimit(5)` correct; the 330 ms claim and the ~9,090 vertices/s/pool it implies; and `renewalThreads = 3*partitionIdBound+2` = 98 at defaults against a live-pool ceiling of 32 (`ids.num-partitions = 10`). Daily Diff: the **2026-11-06** edition (52 stories), found via `/archive/` while the front page still served 2026-11-05 — deep dive on Infino's coordinator-free 128-bit ids, whose 40-bit random writer id is JanusGraph's 4-bit conflict-avoidance tag with 36 more bits of budget.
+- **12 — 2026-11-10** · [`2026/11/2026-11-10-janusgraph-standard-serializer-attribute-encodings/README.md`](2026/11/2026-11-10-janusgraph-standard-serializer-attribute-encodings/README.md) · **stayed on `a59ae8d8`** · read `StandardSerializer`, the `Serializer`/`OrderPreservingSerializer`/`SupportsNullSerializer` interfaces, all seventeen registered attribute serializers, `NumericUtils`, `StringEncoding`, `VariableLong`, `VariableString`, `StandardRelationTypeMaker` and `SerializerTest`. **THE finding: `StandardSerializer` has four write entry points and `EdgeSerializer` chooses between them by *where in the column the value sits*, not by its type — and the whole difference is one flag byte.** Also: eleven order-preserving datatypes, three in-tree comparators that disagree, and PR candidate 20 rewritten rather than dropped. Daily Diff: the **2026-11-09** edition (50 stories) — Turso implementing Tantivy's `Directory` trait against its own B-tree. *(Full entry in git history at the 2026-11-10 commit; the facts later lessons need survive in the lesson-13 block below and in the root README's narrative.)*
+- **11 — 2026-11-09** · [`2026/11/2026-11-09-janusgraph-parse-relation-relation-cache/README.md`](2026/11/2026-11-09-janusgraph-parse-relation-relation-cache/README.md) · **stayed on `a59ae8d8`** · read `EdgeSerializer` from the read side, `RelationCache`, `RelationReader`, `VariableLong`'s backward section, `IDHandler`, the `StaticArrayBuffer`/`ReadArrayBuffer` pair, `CacheEdge`, `RelationConstructor`, `ModificationDeserializer`, `EdgeSerializerTest` and `RelationReparseBenchmark`, plus commit `29c0b18a`. **THE finding: the backward encoding is the only genuinely order-preserving varint in the tree, and that — not readability — is why the tail ids are written backward.** `parseRelation` walks one cursor back and forth across a cell rather than streaming it. Daily Diff: the **2026-11-08** edition (22 stories) — a Postgres replication slot that cannot advance while its captured tables are idle. *(Full entry in git history at the 2026-11-09 commit.)*
+- **10 — 2026-11-08** · [`2026/11/2026-11-08-janusgraph-edge-serializer-column-layout/README.md`](2026/11/2026-11-08-janusgraph-edge-serializer-column-layout/README.md) · **stayed on `a59ae8d8`** · read `EdgeSerializer` (whole, 591 lines), `IDHandler`, `VariableLong`, `EdgeDirection`, slices of `IDManager`, `Multiplicity`, `BufferUtil`, `StandardJanusGraph`, `ManagementSystem`, `RelationTypeVertex`, `BasicVertexCentricQueryBuilder` and the data-model doc. **THE finding: lesson 09's four conflict-avoidance bits cost one byte in every single cell of the database** — the relation-type prefix gets a 1-byte encoding only for a schema count of 7 or less, and the smallest count a default graph can assign is 16. `writeRelation` writes one buffer and returns one integer, `valuePosition`. Daily Diff: **no 2026-11-08 or 2026-11-07 edition existed** — one uncovered item from 2026-11-06 instead (Postgres `SKIP LOCKED` queues). *(Full entry in git history at the 2026-11-08 commit.)*
+- **09 — 2026-11-07** · [`2026/11/2026-11-07-janusgraph-id-authority-block-allocation/README.md`](2026/11/2026-11-07-janusgraph-id-authority-block-allocation/README.md) · **stayed on `a59ae8d8`** · read `VertexIDAssigner` (whole, 545 lines), `StandardIDPool`, `IDBlockSizer`, `ConsistentKeyIDAuthority` (whole, 500 lines), `AbstractIDAuthority`, `ConflictAvoidanceMode`, `IDBlock`, `SimpleBulkPlacementStrategy`, `IDAuthorityTest` and the bulk-loading docs. **THE finding: `ids.authority.conflict-avoidance-tag-bits` defaults to 4, is `FIXED`, and its tag defaults to 0 with mode `NONE` — so every count JanusGraph assigns is a multiple of 16**, and the first `NormalVertex` id in a fresh default graph is **4096**, not 256. Coordination is amortised, not eliminated. Daily Diff: the **2026-11-06** edition (52 stories) — Infino's coordinator-free 128-bit ids. *(Full entry in git history at the 2026-11-07 commit.)*
 - **08 — 2026-11-06** · [`2026/11/2026-11-06-janusgraph-id-bit-layout/README.md`](2026/11/2026-11-06-janusgraph-id-bit-layout/README.md) · **Part II opens; stayed on `a59ae8d8` deliberately** so Part II's byte offsets stay comparable with lessons 02-07. Read `IDManager` (whole, 754 lines), `BufferUtil`, `NumberUtil`, `VertexIDAssigner`, `ManagementSystem`, `IDManagementTest`, `JanusGraphPartitionGraphTest`, `InMemoryPartitionGraphTest`, `docs/advanced-topics/data-model.md`, `docs/advanced-topics/custom-vertex-id.md`. **THE finding: the vertex id and the edgestore row key are two different 64-bit words** — `constructId:450` builds `[0 | count | partition | suffix]`, `getKey:502` rebuilds it as `(partition << partitionOffset) | addPadding(count)`, rotating the partition to the **top**. Second: **every default graph runs at `partitionBits = 5`, not 0.** Third: **`fromVertexId` accepts a temporary (negative) id and returns garbage** (PR candidate 8). Closed lesson 07's `EDGESTORE_MAX_KEY` question (PR candidate 9). Daily Diff: no 2026-11-06 edition at the time; digested **2026-11-05** (62 stories) — GitHub's "Rubicon" Git storage architecture.
 - **07 — 2026-11-05** · [`2026/11/2026-11-05-janusgraph-backend-store-wiring/README.md`](2026/11/2026-11-05-janusgraph-backend-store-wiring/README.md) · **Part I complete.** Read `Backend` (775 lines), `BackendTransaction` (568), `BackendOperation`, `CacheTransaction`, `KCVSCache`, `NoKCVSCache`, `KCVSProxy`, `ExpectedValueCheckingStoreManager`, `ExpirationKCVSCache`, `ExpirationCacheTest`, and slices of `GraphDatabaseConfiguration`. **THE finding: the retry backoff is a coin flip, not a ±20% jitter** — `(int)(2.0 / (1 + (rand*2-1)*0.2))` truncates to 1 or 2, measured median **14** attempts (max 38) against the 10 s read budget and **21** (max 48) against the 100 s write budget. Second: **`KCVSProxy.java:67` omits `unwrapTx`** (PR candidate 1). Daily Diff: the **2026-11-04** edition, 56 stories — PostgreSQL 19's `REPACK CONCURRENTLY`.
 - **06 — 2026-11-04** · [`2026/11/2026-11-04-janusgraph-test-harness/README.md`](2026/11/2026-11-04-janusgraph-test-harness/README.md) · read the harness: `JanusGraphBaseTest`, `JanusGraphTest` (12,258 lines), `KeyColumnValueStoreTest`, the `@FeatureFlag` machinery, the BerkeleyJE suites, root `pom.xml`, `CONTRIBUTING.md`. Taught the src/main-not-src/test inversion, the one-abstract-hook-per-level contract, the **four** opt-out idioms and their four different reporting semantics, `@FeatureFlag`'s 4-of-24 coverage and its post-`@BeforeEach` ordering. Hands-on: read the Surefire XML rather than the console — 31 bare `<skipped/>` on `InMemoryGraphTest`, `testConcurrentGetSlice` as a 0 ms **pass**. Daily Diff: the **2026-11-03** edition, 52 stories — Spiral's *Statistics are aggregates*.
@@ -100,7 +109,7 @@ Newest first.
 ### Part III — The write path (`core`, `graphdb/transaction`, `graphdb/database`, `diskstorage/locking`)
 
 - [x] 14 — `JanusGraphFactory.open` → `GraphDatabaseConfiguration` → `StandardJanusGraph` constructor: local vs global (fixed/masked) config
-- [ ] 15 — `StandardJanusGraphTx`: `addVertex`, `addEdge`, property writes, added/deleted relation containers, and the vertex cache
+- [x] 15 — `StandardJanusGraphTx`: `addVertex`, `addEdge`, property writes, added/deleted relation containers, and the vertex cache
 - [ ] 16 — `StandardJanusGraph.commit` and `prepareCommit`: deletes, additions, mutations, and the order they are emitted in
 - [ ] 17 — Composite indexes on write: `IndexSerializer` and the graphindex entries
 - [ ] 18 — Locking: `ExpectedValueCheckingStore` and `ConsistentKeyLocker`, and how uniqueness survives an eventually consistent store
@@ -127,23 +136,23 @@ Newest first.
 ## Notes For The Next Run
 
 **Syllabus unchanged this run. No items added, split, merged or reordered; the 28 stand as written on
-2026-10-30.** Lesson 14 was handed three specific obligations by lesson 13 and discharged all three, so
-nothing needed re-scoping. Part III's remaining four items (15-18) are mechanism, not reference material,
-and lesson 14's construction-order table is the input all four need.
+2026-10-30.** Lesson 15 was handed three obligations by lesson 14 and discharged all three, so nothing
+needed re-scoping. Part III's remaining three items (16, 17, 18) are mechanism, and lesson 15's
+three-destination fan-out plus its two container tables are the input all three need.
 
 **The re-pin decision stays closed until after lesson 18.** Lesson 13 reviewed it at the Part II/III
-boundary and found `a59ae8d8` still the tip of `master`. This run is mid-Part, so it was **not re-raised
-and `list_commits` was not run** — by design. The next review is the **Part III/IV boundary, after lesson
-18**, and it must re-run `list_commits` on `JanusGraph/janusgraph` `master` rather than assuming either
-answer.
+boundary and found `a59ae8d8` still the tip of `master`. Lessons 14 and 15 were both mid-Part, so it was
+**not re-raised and `list_commits` was not run** in either — by design. The next review is the **Part
+III/IV boundary, after lesson 18**, and it must re-run `list_commits` on `JanusGraph/janusgraph` `master`
+rather than assuming either answer.
 
 **The roll-off rule applied again this run.** `TRACK.md` keeps the notes for the three most recent
-lessons; older ones roll off into git history. The three most recent are now 12, 13 and 14, so:
-**lesson 11's compressed block is removed** (it remains verbatim in git history at the 2026-11-09 commit
-and in compressed form at the 2026-11-11 commit), **lesson 12's block is now compressed** to the facts
-lessons 17, 20, 21 and 26 were promised — the full block is preserved verbatim in git history at the
-2026-11-10 commit — and lessons 13 and 14 keep their blocks in full. Next run, lesson 12's block is the
-one that goes.
+lessons; older ones roll off into git history. The three most recent are now 13, 14 and 15, so:
+**lesson 12's compressed block is removed** (it remains verbatim in git history at the 2026-11-10 commit
+and in compressed form at the 2026-11-11 and 2026-11-12 commits), **lesson 13's block is now compressed**
+to the facts lessons 17, 18, 20 and 25 were promised — the full block is preserved verbatim in git
+history at the 2026-11-11 commit — and lessons 14 and 15 keep their blocks in full. Next run, lesson 13's
+block is the one that goes.
 
 - **The mode question is closed. Do not reopen it unprompted.** Four consecutive empty `My Notes`
   triggered the switch recorded in the front-matter. Entries from lesson 05 on write in `lesson` mode
@@ -152,49 +161,208 @@ one that goes.
 - **Never touch an earlier entry's `## My Notes`.** Sessions 01-04 keep their templates. They are his
   to fill at any time; if a future run finds content in any of them, answer those questions in that
   run's entry regardless of mode.
-- **Lesson 15 (`StandardJanusGraphTx`) inherits a concrete starting point, not a blank page.** Three
-  obligations: (a) `newTransaction` (`StandardJanusGraph:588-598`) constructs the `StandardJanusGraphTx`
-  **before** calling `tx.setBackendTransaction(openBackendTransaction(tx))` at `:592`, so the object is
-  briefly alive with no backend handle — establish whether anything in `StandardJanusGraphTx`'s own
-  constructor can reach the backend in that window, and what `StandardTransactionBuilder` reads out of
-  the `GraphDatabaseConfiguration` (not the `Configuration`) when it is built at `:580`; (b) lesson 13
-  found that a schema vertex's id is assigned **eagerly** inside `makeSchemaVertex`, unlike a user
-  vertex — confirm from `addVertex` that a user vertex really can carry a temporary id past creation,
-  and what the added/deleted relation containers hold in the meantime; (c) the vertex cache's
-  interaction with `newTypeCache` (lesson 13: a per-transaction name → id map checked *before* the
-  global schema cache, swapped for `Collections.emptyMap()` on close).
+- **Lesson 16 (`StandardJanusGraph.commit` / `prepareCommit`) inherits three collections, not a blank
+  page.** (a) `addedRelations.getAllUnsafe()` is a **live, uncopied view** over the transaction-level
+  `SimpleAddedRelations(false)` — `ConcurrentAddedRelations` overrides it as `synchronized` but
+  deliberately does **not** route it through `copyView` as it does every other view method; the
+  interface javadoc says it "may only be invoked at the end of the transaction after there are no
+  additional changes". `hppc`'s iterators are not fail-fast, so a violation is silent. (b)
+  `deletedRelations` is a `Map<Long, InternalRelation>` keyed by `relation.longId()`, lazily allocated
+  on first `removeRelation` of a **loaded** relation; a new relation removed in the same transaction is
+  pulled out of `addedRelations` instead and never appears here. (c) `removedVertexCanonicalIds` is a
+  `Set<Object>` of **canonical** ids (partition representatives collapsed), skipping new vertices
+  entirely, and is what `wholeRowDeletionEnabled` consumes. Lesson 16 also owns the `upsert` flag set at
+  `StandardJanusGraphTx:1035` and what `ChangedSchemaVertices.of(addedRelations, deletedRelations)`
+  (`StandardJanusGraph:1236`) extracts.
 - **Entry size.** Lesson 05 ≈35 KB, 06 ≈63 KB, 07 ≈78 KB, 08 ≈67 KB, 09 ≈61 KB, 10 ≈70 KB, 11 ≈56 KB,
-  12 ≈91 KB, 13 ≈72 KB, 14 ≈75 KB (a large share of each is permalink URLs, which are not prose). In
-  line with the SQLite and PostgreSQL lessons. The old 5-9 KB budget was a `contributor-reading`
-  constraint and does not apply.
-- **Method note, carried, and lesson 14 is the second entry where simulation was not needed.** Lessons
-  10-12 re-implemented the pinned encoding functions and ran them; lessons 13 and 14 computed from the
-  read sources instead and said so. Lesson 14's two arithmetic claims — that all 13 accepted config
-  datatypes have registration numbers below 128 (max 65, `Instant`) and therefore a one-byte
-  `VariableLong` prefix, and that `UPGRADEABLE_FIXED` is exactly three of the six FIXED options — are
-  both read directly off the registration table and the jar resource, with the derivation shown.
-  **Keep the rule that produced all of them:** compute or re-implement rather than assert, say which,
-  and always pair it with an exercise that runs the real code. Lesson 14's is
-  `ReadConfigurationBuilderTest`, a Mockito suite that already pins the managed/not-managed split as a
-  `@ParameterizedTest` and is the natural place to extend for PR candidate 26. One trap carried from
-  lesson 12: model the layer above, not just the unit.
-- **Daily Diff procedure, re-confirmed this run and now simpler than lesson 13 found it.** At ~03:45 UTC
-  on 2026-11-12 the front page and `/archive/` **agreed**: both newest at **2026-11-11** (58 stories),
-  archive reporting **136 editions**, and 12-30 November unlinked plain text. So the 2026-11-11 run's
-  front-page-ahead-of-archive case was a one-off, not a new steady state. **Keep the procedure as stated:**
-  (a) fetch both and take the **maximum of the two**, in either direction; (b) before digesting, check
-  this session log for the newest edition already covered — lesson 12 covered 2026-11-09, lesson 13
-  covered 2026-11-10, lesson 14 covered 2026-11-11, so each run has so far found exactly one uncovered
-  edition; (c) the uncovered-item fallback is the last resort, and the 2026-11-06 edition still has two
-  items spent (Infino ids, Postgres `SKIP LOCKED` queues). Edition sizes remain volatile — 22 stories on
-  2026-11-08, 50 on 11-09, 63 on 11-10, 58 on 11-11 — so a small edition is not evidence of a partial
-  publish. **The run fires at 03:30 UTC and the edition for that calendar day is not up yet**; every run
-  so far has digested the previous day's. Say the edition date explicitly in the digest rather than
-  implying it is today's. One practical note carried from lesson 13: the front page can exceed 100 KB,
-  which is about what one WebFetch returns, so the tail of a large edition's item list needs a second
-  call with an offset.
+  12 ≈91 KB, 13 ≈72 KB, 14 ≈75 KB, 15 ≈86 KB (a large share of each is permalink URLs, which are not
+  prose). In line with the SQLite and PostgreSQL lessons. The old 5-9 KB budget was a
+  `contributor-reading` constraint and does not apply.
+- **Method note, carried, and lesson 15 is the third entry where simulation was not needed.** Lessons
+  10-12 re-implemented the pinned encoding functions and ran them; lessons 13, 14 and 15 computed from
+  the read sources instead and said so. Lesson 15's derived claims — that the transaction-level
+  container's `propertiesSize` is **identically 0** (only `addProperty`/`removeProperty` mutate it and
+  both are guarded by `groupPropertiesByKey`), that `edgesByLabel` is **never** built at transaction
+  level (same guard), that `getView(types, filter)` ignores `types` at transaction level, and that
+  `isModified()` is the range `3..5` and therefore excludes both `New` and `Removed` — are each read
+  directly off the pinned sources with the derivation shown. **Keep the rule that produced them:**
+  compute or re-implement rather than assert, say which, and always pair it with an exercise that runs
+  the real code. Lesson 15's is `RemovedVertexTrackingTest`, the only test in the tree that casts to
+  `StandardJanusGraphTx` and asserts on `isVertexFullyRemoved` directly, and whose second method is a
+  regression test for the exact `it()`-resolution ordering in `StandardVertex.remove()`. One trap
+  carried from lesson 12: model the layer above, not just the unit.
+- **Daily Diff procedure — the max-of-two rule is no longer sufficient, and this run found out the hard
+  way.** At ~03:40 UTC on 2026-11-13 the front page and `/archive/` **agreed**: both newest at
+  **2026-11-11** (58 stories), archive reporting **136 editions**. But `https://tdd.cat/2026-11-12/`
+  **exists and is complete** — 66 stories — so the front page and the archive can agree with each other
+  and still both be a day behind. **The procedure is now:** (a) fetch the front page and `/archive/` and
+  take the maximum of the two; (b) **also probe the dated URL for today and yesterday directly**
+  (`https://tdd.cat/YYYY-MM-DD/`), because a published edition can be missing from both indexes; (c)
+  before digesting, check this session log for the newest edition already covered — lesson 13 covered
+  2026-11-10, lesson 14 covered 2026-11-11, lesson 15 covered 2026-11-12, so every run so far has found
+  exactly one uncovered edition; (d) the uncovered-item fallback is still the last resort, and the
+  2026-11-06 edition still has two items spent (Infino ids, Postgres `SKIP LOCKED` queues). Edition sizes
+  remain volatile — 22 stories on 2026-11-08, 50 on 11-09, 63 on 11-10, 58 on 11-11, 66 on 11-12 — so a
+  small edition is not evidence of a partial publish. **The run fires at 03:30 UTC and the edition for
+  that calendar day is not up yet**; every run so far has digested the previous day's. Say the edition
+  date explicitly in the digest. One practical note carried from lesson 13 and confirmed again: a large
+  edition's page can exceed 100 KB, which is about what one WebFetch returns, so the tail of the item
+  list needs a second call with an offset (the 2026-11-12 page was 109,608 characters and needed
+  `offset: 100000` for stories 61-66).
 
-### Verified by lesson 14, for lessons 15, 16, 17, 18 and 25 to cite rather than re-derive
+### Verified by lesson 15, for lessons 16, 17, 18, 19 and 25 to cite rather than re-derive
+
+- **`connectRelation` (`StandardJanusGraphTx:945-960`) is the only door, and it opens onto four
+  destinations:** (1) `r.getVertex(i).addRelation(r)` for every endpoint — the per-vertex container;
+  (2) `addedRelations.add(r)` — the transaction container; (3) `vertexCache.add(vertex, vertex.id())`
+  for endpoints where `!vertex.isNew()`; (4) `addedPropertyIndex.add(prop)` for properties only.
+  `addVertex`, `addEdge` and `addProperty` are its only callers; `makeSchemaVertex` reaches it through
+  `addProperty`.
+- **One class, two configurations.** Transaction level is `SimpleAddedRelations(false)` /
+  `ConcurrentAddedRelations(false)` (`:336`/`:340`); per-vertex is the same classes with `true`
+  (`StandardVertex.addRelation`). All derived from that single `groupPropertiesByKey` guard: at
+  transaction level `propertiesSize` is **identically 0**, `edgesByLabel` is **never built**, and
+  `getView(Set<RelationType>, Predicate)` **ignores the type set**; at vertex level
+  `propertiesContainer` is allocated with capacity 0 and **never written**, properties live in a
+  `HashMap<String keyName, AddedPropertiesValue>`, and `edgesByLabel` is built once
+  `edgesContainer.size() > MAX_EDGES_WITHOUT_LABEL_INDEX` (**32**, package-private, not a config
+  option) with the existing 32 back-filled in that call. `isEmpty()` tests all three stores, so each
+  configuration only ever exercises two clauses.
+- **Properties are grouped by key *name* (a `String`)**; the upstream javadoc says a transaction that
+  renames the key "changes [the grouping] under this one". Three strategies by `Cardinality`:
+  `AddedPropertiesSingleValue` (one field; `addValue` returns **1 unconditionally**, `removeValue`
+  nulls the slot with **no identity check**), `AddedPropertiesSetValue` (`HashMap<value, relation>`,
+  true delta), `AddedPropertiesListValue` (`LinkedHashSet<>(20)`, true delta). **`isNull()` is a
+  hardcoded `false` in `SetValue` and `ListValue`**, so `removeProperty`'s `propertiesMap.remove(key)`
+  is dead code for `SET`/`LIST` — **PR candidate 30**. The `SINGLE` counter balances only because
+  `addProperty` always removes the previous value first.
+- **`ConcurrentAddedRelations` copies every view except the one that matters.** All methods
+  `synchronized`; `getView`, `getViewOfProperties(Predicate)` and `getViewOfPreviousRelations` go
+  through `copyView`; **`getAllUnsafe()` does not**, and the superclass returns an `AbstractCollection`
+  delegating to the live `iterator()`. `commit:2145` passes it straight to `graph.commit`, and `hppc`
+  iterators are not fail-fast. **Lesson 16 must not assume a snapshot.**
+- **Two different "empty" containers.** `AddedRelationsContainer.EMPTY` (interface constant) **throws
+  `UnsupportedOperationException`** from `add`/`remove` and is the per-vertex sentinel;
+  `EmptyAddedRelations.getInstance()` is what `releaseTransaction:2205` swaps into the transaction.
+- **`isSingleThreaded` is the only concurrency knob**, set by `threadBound()` alone
+  (`StandardTransactionBuilder:146-150`). It decides six things: the `addedRelations` class, the
+  `addedPropertyIndex` class, the `newTypeCache` map class (`HashMap` vs `NonBlockingHashMap`), whether
+  `getLock` returns `FakeLock.INSTANCE` (`:831`) without touching `uniqueLocks`, and the map/set types
+  of the three lazily-initialised fields (`deletedRelations` `:784-792`,
+  `removedVertexCanonicalIds` `:808-816`, `uniqueLocks` `:832-840`). `graph.tx()` is thread-bound;
+  `graph.newTransaction()` and `createThreadedTx()` are not.
+- **`ids.flush` defaults to `true`** (`GraphDatabaseConfiguration:1064-1067`, MASKABLE), so a user
+  vertex's temporary id is alive only between `StandardJanusGraphTx:686` and `:690`;
+  `label.isPartitioned()` also forces immediate assignment. With `ids.flush=false` it survives to
+  commit, where `idAssigner.assignIDs(addedRelations)` (`StandardJanusGraph:1226`) is handed **the
+  relations, not the vertices** — which is why `addVertex:692` unconditionally adds `VertexExists`.
+  **Lesson 13 confirmed:** `makeSchemaVertex:1098` assigns unconditionally and asserts `longId() > 0`.
+- **`vertexCache.add` is the last statement of `addVertex` (`:697`), deliberately.** `connectRelation`
+  skips new endpoints, so `:692`/`:695` never publish the new vertex; `:697` is the single publication
+  point and keys the cache by **whatever id the vertex has then**.
+- **`CaffeineVertexCache` is a bounded Caffeine cache plus an UNBOUNDED dirty map.**
+  `volatileVertices` is a `NonBlockingHashMap` sized by `cache.tx-dirty-size` as an **initial capacity
+  hint only**; `cache.tx-cache-size` (MASKABLE, **default 20000**) bounds only the clean cache. The
+  removal listener rescues an evicted vertex iff `isTxOpen() && (isModified() || isRemoved())`; `add`
+  puts into the dirty map iff `isNew() || hasAddedRelations()`. **Three predicates for three disjoint
+  reasons to be dirty**, which is why `removeRelation:770-773` must call `vertexCache.add` explicitly
+  for remove-only vertices. `get` is tier 1 (cache) → tier 2 (dirty map) → tier 3 (construct), and
+  tier 2 before tier 3 is correctness-critical.
+- **`cache.tx-dirty-size` has no declared default**; the fallback is batch-loading-dependent —
+  `TX_DIRTY_SIZE_DEFAULT_WITH_BATCH = 4096`, `..._WITHOUT_BATCH = 32`
+  (`GraphDatabaseConfiguration:691`, `:698`, resolved `:2060-2066`). Separately,
+  `vertexCacheSize(int)` also sets `indexCacheWeight = size / 2`
+  (`StandardTransactionBuilder:197-201`).
+- **`ElementLifeCycle` is six states in one byte, three `private`**: `New` 1, `Loaded` 2,
+  `AddedRelations` 3, `RemovedRelations` 4, `Modified` 5, `Removed` 6. The predicates are **range tests
+  on the numeric ordering** — `isModified()` is `3..5`, so it excludes both `New` and `Removed`. In
+  `update(byte, Event)`: `REMOVED` wins from **any** valid state including `Removed` (double-remove is
+  a silent no-op, which is what makes `StandardVertex.remove()` idempotent), and `New` and `Modified`
+  are **absorbing** for relation events. `StandardVertex` holds the byte `volatile` behind a
+  **private** `lifecycleMutex`, not `this`.
+- **The transaction-local locking vocabulary is complete and coordinates nothing beyond this
+  transaction: `getLock` / `LockTuple` / `ReentrantTransactionLock` / `CombinerLock` / `FakeLock`, with
+  a hardcoded `LOCK_TIMEOUT = Duration.ofMillis(5000L)` (`:199`) and no `ConfigOption`.** Tuples:
+  `(out, type, in)` for `SIMPLE`; `(vertex, type, direction)` per constrained direction otherwise,
+  combined by `CombinerLock` — `ONE2ONE` takes two locks and issues three storage queries.
+  `uniqueLocks` **never shrinks** (upstream `TODO` at `:841-842`). A property write adds one
+  `getLock(IndexLockTuple(index, match))` per unique composite index **record**, from
+  `IndexRecordUtil.indexMatches(...)` (`:997-1000`). **Lesson 18 starts at `ConsistencyModifier.LOCK`
+  — read at exactly one place, `:1030` — and `ExpectedValueCheckingStore`.**
+- **`enableBatchLoading()` removes storage work, not just a flag check.** It calls
+  `consistencyChecks(false)`, setting **both** `verifyUniqueness` and `acquireLocks` false
+  (`StandardTransactionBuilder:169-173`, `:222-227`), so up to three uniqueness queries per edge
+  disappear *and* the storage lock is never requested.
+- **The blind-overwrite path, and the `upsert` flag lesson 16 inherits** (`:1024-1042`). For `single`
+  or `set`, three conditions must **all** hold to skip reading the old value: (1)
+  `!hasVerifyUniqueness()` **or** the key's `ConsistencyModifier != LOCK`; (2)
+  `!TypeUtil.hasAnyIndex(key)`; (3) requested cardinality equals the key's declared one. Then only
+  in-memory duplicates are removed (`getDuplicatedAddedRelation`, not a query) and
+  `prop.setUpsert(true)` promises the commit path that a later delete must read the database.
+  Otherwise `vertex.properties(key.name())` runs — a real slice query for a loaded vertex.
+  **Adding any index to a key silently moves every write of that key onto the expensive path, with no
+  log line and no metric. Lesson 17 owns what a "record" is.**
+- **Auto-schema creation happens inside a data write.** `checkPropertyConstraintForVertexOrCreate...`
+  (`:870-877`), `...ForEdgeOrCreate...` (`:879-886`) and
+  `checkConnectionConstraintOrCreate...` (`:888-903`) return immediately on
+  `hasDisabledSchemaConstraints()` and otherwise call `config.getAutoSchemaMaker()` mid-write. Two
+  concurrent transactions auto-creating the same key both succeed locally; the `SchemaName` UNIQUE
+  graphindex entry (lesson 13) rejects one at the storage layer at commit. **Lesson 18's territory,
+  and why `schema.default=none` is the production recommendation.**
+- **Obligation (a) from lesson 14, settled: nothing in `StandardJanusGraphTx`'s constructor can reach
+  the backend.** All seven values read off `graph` (`:308-317`) are pre-built objects; `txHandle` is
+  the only backend-facing field, is non-final, and `setBackendTransaction:381-384` asserts the one-shot
+  contract. The constructor does **no I/O** — four containers, three `VertexConstructor`s, one
+  anonymous `IDPool` (an `AtomicLong` starting at **1**, shared by vertices and relations, never
+  released), conditionally two metrics wrappers. Its only guard is
+  `Preconditions.checkArgument(graph.isOpen())` at `:306`, which with lesson 14's `isOpen = true` at
+  `StandardJanusGraph:320` means no transaction can exist before the graph finishes wiring.
+  `StandardTransactionBuilder`'s constructor (`:107-133`) reads **fifteen pre-resolved fields** off the
+  `GraphDatabaseConfiguration`, no `Configuration` ladder, so building a transaction cannot fail on a
+  missing option; the only live `Configuration` it keeps is `customOptions`, passed to
+  `StandardBaseTransactionConfig` for the storage layer. **A transaction whose backend transaction
+  fails to open is never registered** — `openTransactions.add(tx)` is at `StandardJanusGraph:593`,
+  after `setBackendTransaction`; same shape as lesson 14's `Backend` leak, one level down.
+- **Obligation (c), settled: `newTypeCache` resolves name → id, `vertexCache` resolves id → object**,
+  and they meet only in `getSchemaVertex:1216-1225` (`newTypeCache` first, then
+  `graph.getSchemaCache().getSchemaId`, then `vertexCache.get(schemaId, existingVertexRetriever)` —
+  `verifyExistence == false`, `:347`, because the schema vertex may not be in storage yet).
+  `newTypeCache` is written only at `makeSchemaVertex:1109` and emptied at `:2206`.
+- **`releaseTransaction:2200-2211` sets `isOpen = false` first, then swaps eight fields to empty
+  singletons.** `txHandle`, `config`, `graph`, `edgeSerializer`, `temporaryIds` and `relTypeCache` are
+  **not** reset, which is why `rollbackIfOpen()` still works. `getVertices` defends against the swap
+  racing a reader with `result.removeIf(v -> v == null || v.isRemoved())`, with an upstream comment
+  naming `graph.close()` on another thread — `verifyOpen()` is a check, not a guarantee.
+- **`recordRemovedVertex:804-818` keys by CANONICAL id** (partition representatives collapsed) and
+  returns early for new vertices; `isVertexFullyRemoved:824-826` is what commit queries to choose a
+  whole-row deletion — the consumer of lesson 14's `wholeRowDeletionEnabled` at
+  `StandardJanusGraph:295`.
+- **`StandardVertex` shortcuts every read for a new vertex.** `properties(String...)` answers from its
+  own container with no query, filtering invisible properties when no keys are named — so
+  `v.properties()` on a brand-new vertex does **not** show the `VertexExists` property
+  `addVertex:692` just added. `loadRelations` returns `EntryList.EMPTY_LIST` when `isNew()`, and
+  `hasLoadedRelations` is a flat `false`. `relTypeCache` (`:239`) is a `ConcurrentHashMap<>(30)`
+  allocated only when `isLazyLoadRelations()`, populated by `getOrLoadRelationTypeById:486-496`.
+  **Lesson 19 owes the `CacheVertex` side of all of these.**
+- **`verifyWriteAccess`'s unmodifiable-vertex guard is three clauses:**
+  `hasId() && isUnmodifiableVertex(id) && !isNew()` (`:390-398`). The `!isNew()` is what lets
+  `makeSchemaVertex` write onto a vertex whose id already carries schema suffix bits; once committed,
+  schema changes must go through `ManagementSystem` — **lesson 25.** `verifyAccess:400-409` enforces
+  transaction affinity with one exception: `v instanceof SystemRelationType`, because system types are
+  `SystemTypeManager` singletons belonging to no transaction. **`verifyAttribute:735-759`** is where
+  lesson 12's registry is consulted at write time, once: `Object.class` keys check only
+  `validDataType`; otherwise `attributeHandler.convert(datatype, attribute)` and a null result is a
+  `SchemaViolationException`. Everything downstream sees the normalised value.
+- **The `#893` in `MIN_VERTEX_CACHE_SIZE`'s comment (`:201-206`) points at the wrong thing.** Verified
+  with `issue_read`: [JanusGraph/janusgraph#893](https://github.com/JanusGraph/janusgraph/pull/893) is
+  a PR opened 2018-01-17 by `davidclement90`, "Remove TTL support for Elasticsearch in
+  documentation.", closed 2018-01-18, milestone `Release v0.2.1` — almost certainly a carried-over
+  **Titan** id. **PR candidate 29**, and the real report must be found before substituting a number.
+  The hazard is real: `CaffeineVertexCache.get`'s tier-2/tier-3 sequence is not atomic, so two threads
+  of one multi-threaded transaction can both construct a vertex for the same id; the floor of **100**
+  lowers the probability and does not serialise the sequence.
+
+### Verified by lesson 14, for lessons 16, 17, 18 and 25 to cite rather than re-derive
 
 - **The open path is nine frames and three of them do work:** `JanusGraphFactory.open` →
   `GraphFactoryUtils.defineSchemaAndStart` → **`GraphDatabaseConfigurationBuilder.build`** (the merge) →
@@ -311,154 +479,74 @@ one that goes.
   `Preconditions.checkArgument(!globalWrite.has(...), "Database has already been initialized but not
   frozen")` with no repair path. The only fix is clearing the store.
 
-### Verified by lesson 13, for lessons 14, 17, 18, 20 and 25 to cite rather than re-derive
+### Verified by lesson 13 — compressed; full block in git history at the 2026-11-11 commit
 
 - **There is no catalog.** The schema is a subgraph in the same `edgestore`, written by the same
   `EdgeSerializer` and read back by the same `parseRelation`. `BaseKey` declares **six** system property
-  keys and `BaseLabel` **two** system edge labels, and that is the entire vocabulary.
-- **System type ids are computed, never stored**, by `BaseRelationType`'s constructor via
-  `IDManager.getSchemaId(type, raw)` = `(raw << offset()) | suffix()`. Suffixes: `UserPropertyKey` 5
-  (`000101`), `SystemPropertyKey` **37** (`100101`), `UserEdgeLabel` 21 (`010101`), `SystemEdgeLabel`
-  **53** (`110101`), all at offset 6; `GenericSchemaType` 9 (`1001`) at offset 4. The eight actual ids:
+  keys and `BaseLabel` **two** system edge labels, and that is the entire vocabulary. System type ids
+  are **computed, never stored**, by `IDManager.getSchemaId(type, raw)` = `(raw << offset()) | suffix()`:
   `VertexExists` **101**, `VertexLabelEdge` **181**, `SchemaName` **2085**, `SchemaDefinitionProperty`
   **2149**, `SchemaCategory` **2213**, `SchemaDefinitionDesc` **2277**, `SchemaUpdateTime` **2341**,
-  `SchemaDefinitionEdge` **2357**. The last two share raw id 36 and are separated only by the suffix —
-  the raw number is unique only *within* a `VertexIDType`. `SystemTypeManager` asserts
-  `SYSTEM_TYPES_BY_ID.size()==17` and the same for names.
-- **Names: `rt` for both relation kinds, `vl` for vertex labels, `gi` for graph indexes**, joined to the
-  user name by `Token.SEPARATOR_CHAR = 0x1e`; `TYPE_MODIFIER.hasName()` is false and stores none. System
-  names carry `Token.systemETprefix = Graph.Hidden.hide("T$")`. **Property keys and edge labels share one
-  namespace deliberately** — `getRelationTypeName` is hard-coded to `EDGELABEL.getSchemaName(name)`, so
-  one lookup serves `getPropertyKey` and `getEdgeLabel` and the two kinds can never share a name.
+  `SchemaDefinitionEdge` **2357**. `SystemTypeManager` asserts `SYSTEM_TYPES_BY_ID.size()==17`.
 - **`TypeDefinitionCategory` has 25 constants, ordinals 0-24**, property categories 0-16 and edge
   categories 17-24 (`RELATIONTYPE_INDEX`, `TYPE_MODIFIER`, `INDEX_FIELD`, `INDEX_SCHEMA_CONSTRAINT`,
   `PROPERTY_KEY_EDGE`, `CONNECTION_EDGE`, `UPDATE_CONNECTION_EDGE`, `INDEX_INLINE_KEY`). **Lesson 17
-  owns the eight edge categories.**
-- **Definition sets are checked by set EQUALITY, not containment** (`TypeDefinitionMap.isValidDefinition`
-  asserts `keys.size() == requiredTypes.size()`). `PROPERTYKEY` = 7 (`STATUS INVISIBLE SORT_KEY
-  SORT_ORDER SIGNATURE MULTIPLICITY DATATYPE`), `EDGELABEL` = 7 (same but `UNIDIRECTIONAL` for
-  `DATATYPE`), `GRAPHINDEX` = 6 (`STATUS ELEMENT_CATEGORY INDEX_CARDINALITY INTERNAL_INDEX BACKING_INDEX
-  INDEXSTORE_NAME`), `VERTEXLABEL` = 2 (`PARTITIONED STATIC`, **no `STATUS`**), `TYPE_MODIFIER` = exactly
-  1. `CONSISTENCY_LEVEL` and `TTL` are in no list — they live on separate `TYPE_MODIFIER` vertices
+  owns the eight edge categories.** Definition sets are checked by set **EQUALITY**, not containment
+  (`TypeDefinitionMap.isValidDefinition` asserts `keys.size() == requiredTypes.size()`): `PROPERTYKEY`
+  = 7, `EDGELABEL` = 7, `GRAPHINDEX` = 6, `VERTEXLABEL` = 2 (**no `STATUS`**), `TYPE_MODIFIER` = 1.
+  `CONSISTENCY_LEVEL` and `TTL` are in **no** list — they live on separate `TYPE_MODIFIER` vertices
   reached by a definition edge, which is **lesson 18's** concern.
 - **One ordinal byte is the whole on-disk difference between a property key and an edge label**: 5
-  (`DATATYPE`) against 6 (`UNIDIRECTIONAL`).
-- **Only two defaults exist** (`TypeDefinitionCategory.defaultValue`): `SORT_ORDER → Order.ASC` and
-  `STATUS → SchemaStatus.ENABLED`. The `STATUS` default is live (vertex labels never store one); the
-  `SORT_ORDER` default is dead for relation types, because `makeDefinition()` always writes it.
-- **Cardinality is a view; multiplicity is the stored concept.** `StandardPropertyKeyMaker.cardinality`
-  converts in, `PropertyKeyVertex.cardinality()` converts out, and `cardinalityIsSet` exists only so a
-  `DefaultSchemaMaker` can tell an explicit SINGLE from silence. There is no `CARDINALITY` category.
-- **A property key's row is 11 edgestore columns** — `VertexExists`, `SchemaName`, `SchemaCategory`,
-  `SchemaUpdateTime`, and 7 × `SchemaDefinitionProperty` — **plus 2 graphindex entries** (UNIQUE on
-  `SchemaName`, STANDARD/LIST on `SchemaCategory`). **Lesson 17 can cite this as the cost baseline.**
-- **The schema vertex's id is assigned EAGERLY**, inside `makeSchemaVertex` (`graph.assignID` +
-  `checkArgument(longId() > 0)`), unlike a user vertex, which `addVertex` may leave temporary. The reason
-  is `SIGNATURE`/`SORT_KEY`: they store other types' `longId()` values, so a referenced type must already
-  be final. **Lesson 15/16 should not expect a schema vertex ever to carry a temporary id past creation.**
-- **The same meta-property has two byte layouts because of one override.**
-  `EmptyRelationType.getSignature()` returns `long[0]`, so on a `SchemaDefinitionProperty` column the
-  `SchemaDefinitionDesc` tag is an ordinary inline property (type id 2277 + value);
-  `BaseLabel.SchemaDefinitionEdge.getSignature()` returns `{SchemaDefinitionDesc.id()}`, so on a
-  definition **edge** it rides the value's fixed signature slot with no id. Lesson 10's column/value
-  split is what makes that distinction possible.
+  (`DATATYPE`) against 6 (`UNIDIRECTIONAL`). **A property key's row is 11 edgestore columns** —
+  `VertexExists`, `SchemaName`, `SchemaCategory`, `SchemaUpdateTime`, and 7 ×
+  `SchemaDefinitionProperty` — **plus 2 graphindex entries** (UNIQUE on `SchemaName`, STANDARD/LIST on
+  `SchemaCategory`). **Lesson 17 can cite this as the cost baseline.**
 - **`TypeDefinitionDescription` is registration 63 and its payload is `[category ordinal][modifier]`.**
   For a property category the modifier must be null, so every tag on a property key's definition is
   **exactly two bytes: `[ordinal][0x00]`**. Only `INDEX_FIELD` (`Parameter[]`) and `CONNECTION_EDGE`
-  (`String`) carry a real modifier — **lesson 17 again**.
-- **Lesson 12's ordinal debt, settled: `EnumSerializer.write` is `VariableLong.writePositive(ordinal)`,
-  one byte for every constant below 128, and `getValue` validates only the RANGE.** So every one of the
-  seventeen registered enums is persisted by declaration order with no version marker, and
-  `TypeDefinitionMap.setValue`'s type check is an `assert` — disabled in production. Inserting a constant
-  mid-list silently reinterprets stored schema; deleting one shifts everything above it. The comment at
-  `TypeDefinitionCategory:41` is the entire mitigation. **PR candidate 25.**
-- **Lesson 11's dispatch debt, settled: the Java class of every vertex comes from the id's suffix bits**,
-  in the vertex constructor at `StandardJanusGraphTx:641-664` — `PropertyKeyVertex`, `EdgeLabelVertex`,
-  `VertexLabelVertex`, `JanusGraphSchemaVertex`, `CacheVertex`/`PreloadedVertex` — before a byte of the
-  row is read. `getExistingRelationType` short-circuits to `SystemTypeManager.getSystemType(id)` for
-  system ids. `SchemaCategory` is stored for enumeration, not for dispatch. **Lesson 19 should note that
-  `PreloadedVertex` is chosen by the `createStubVertex` flag on the same branch.**
+  (`String`) carry a real modifier — **lesson 17 again.**
+- **Every persisted enum is positional and unversioned.** `EnumSerializer.write` is
+  `VariableLong.writePositive(ordinal)`, one byte below 128, and `getValue` validates only the RANGE;
+  `TypeDefinitionMap.setValue`'s type check is an `assert`, disabled in production. Inserting a constant
+  mid-list silently reinterprets stored schema. The comment at `TypeDefinitionCategory:41` is the entire
+  mitigation. **PR candidate 25.**
+- **`BaseKey.SchemaName`'s internal composite index declares `Index.UNIQUE` with
+  `ConsistencyModifier.LOCK` and `getBackingIndexName() == Token.INTERNAL_INDEX_NAME`, so schema-name
+  uniqueness rests on `ConsistentKeyLocker` — lesson 18.** Enumeration by category goes through
+  `QueryUtil.getVertices(tx, BaseKey.SchemaCategory, <category>)`.
 - **`StandardSchemaCache`: two maps, both one-way.** `typeNames` (name → id) and `schemaRelations`
   ((schema id, system type, direction) → raw `EntryList`), each a `volatile` primary plus a bounded
   Caffeine backup; exceeding `MAX_CACHED_TYPES_DEFAULT = 10000` (or `×3` for relations) sets the primary
-  to `null` **permanently**. The relation key is `(((schemaId >>> 2) << 2) + systemTypeId) << 1) +
-  edgeDir` with a **two-bit** `systemTypeId` — so only four system types are cacheable
-  (`SchemaDefinitionEdge` 0, `SchemaName` 1, `SchemaCategory` 2, `SchemaDefinitionProperty` 3) and
-  anything else throws `AssertionError`.
-- **The `isCacheable` asymmetry is deliberate and worth citing:** an empty `SchemaDefinitionEdge` result
-  is cached, an empty name/category/definition result is **not**, because every existing schema vertex
-  necessarily has those — so an empty answer there means *"not visible on this instance yet"*, not
-  *"none"*. `StandardSchemaCacheTest` pins all four cases plus two eviction races.
-- **Both cache layers use the same counter protocol**: increment the counter before clearing
-  (`resetCache`, `expireSchemaElement`), and after storing a loaded value re-check the counter and undo
-  the store if it moved (`JanusGraphSchemaVertex.keepUnlessReset`, `StandardSchemaCache.publish`).
-- **Every schema cache miss is a whole separate transaction** built from
-  `backend.getStoreFeatures().getKeyConsistentTxConfig()` with `getTxHandle().disableCache()`, rolled
-  back in a `finally` (`StandardJanusGraph:611-643`). A name lookup reads the **graphindex** store
-  (`QueryUtil.getVertices(tx, BaseKey.SchemaName, name)`); a definition lookup reads the **edgestore**
-  (`edgeQuery` + `queryCache.getQuery(type, dir)`). **Lesson 14 needs this**: `schemaCache` is built at
-  `StandardJanusGraph:308` from `configuration.getTypeCache(typeCacheRetrieval)`, and the retriever opens
-  transactions, so it must be wired after `Backend` and before anything reads `system_properties`.
-- **`SchemaCategory` carries `Index.STANDARD`, i.e. a LIST-cardinality composite index, and that is the
-  entire implementation of schema enumeration** — `ManagementSystem.getGraphIndexes` and
-  `JanusGraphHadoopSetupImpl.getTypeInspector` both call
-  `QueryUtil.getVertices(tx, BaseKey.SchemaCategory, <category>)`. `SchemaName` carries `Index.UNIQUE`
-  with `ConsistencyModifier.LOCK` and `getBackingIndexName() == Token.INTERNAL_INDEX_NAME`, so **name
-  uniqueness rests on `ConsistentKeyLocker` — lesson 18.**
-- **`newTypeCache` is a per-transaction name → id map**, checked *before* the global schema cache in
-  `getSchemaVertex`, which is how a type created earlier in the same uncommitted transaction is findable
-  by name; the transaction swaps it for `Collections.emptyMap()` on close.
+  to `null` **permanently**. The relation key packs `systemTypeId` into **two bits**, so only four system
+  types are cacheable (`SchemaDefinitionEdge` 0, `SchemaName` 1, `SchemaCategory` 2,
+  `SchemaDefinitionProperty` 3). **Lesson 25 owes `JanusGraphSchemaVertex.resetCache()` and
+  `expireSchemaElement`'s interaction with it.**
+- **The Java class of every vertex comes from the id's suffix bits**, in the vertex constructor at
+  `StandardJanusGraphTx:641-664` — `PropertyKeyVertex`, `EdgeLabelVertex`, `VertexLabelVertex`,
+  `JanusGraphSchemaVertex`, `CacheVertex`/`PreloadedVertex` — before a byte of the row is read.
+  `PreloadedVertex` is chosen by the `createStubVertex` flag on the same branch. **Lesson 19.**
+- **Cardinality is a view; multiplicity is the stored concept.** There is no `CARDINALITY` category;
+  `StandardPropertyKeyMaker.cardinality` converts in and `PropertyKeyVertex.cardinality()` converts out.
+  Only two defaults exist in `TypeDefinitionCategory.defaultValue`: `SORT_ORDER → Order.ASC` (dead for
+  relation types) and `STATUS → SchemaStatus.ENABLED` (live; vertex labels store no `STATUS`).
 - **A reachability bug in the only name guard:** `throwIfSystemName` lowercases its argument before
   `isSystemType(name)`, whose first disjunct checks a map keyed by mixed-case names (`~T$VertexExists`),
   so that disjunct can never match from this call site. `Token.isSystemName`'s `~` check is what actually
-  protects the namespace, and `ADDITIONAL_RESERVED_NAMES` (`key vertex edge element property label`) is
-  the only live half of `isSystemType`. **PR candidate 24.**
-
-### Verified by lesson 12 — compressed; full block in git history at the 2026-11-10 commit
-
-- **Three positions, three encodings, one enum.** `EdgeSerializer`'s private `InlineType` (`:383-394`):
-  a **sort key** is `writeObjectByteOrder`, a **signature key** is `writeObject` with no id (position
-  implies the key), a **remaining property** is `IDHandler.writeInlineRelationType` + `writeObject`.
-  `writePropertyValue:419-427` and `readPropertyValue:250-259` are exact mirrors. A fourth path,
-  `writeClassAndObject` (`varint(registrationNo)` + body), is reached only when
-  `InternalAttributeUtil.hasGenericDataType(key)` — `dataType == Object.class` — which
-  `StandardRelationTypeMaker.checkSignature` bans from both sort keys and signatures, so it is confined
-  to a `NORMAL` position and a sort key is never untyped. **Lesson 17 needs this:** `IndexRecordUtil`
-  makes the same `hasGenericDataType` branch for graphindex fields.
-- **The flag byte.** `StandardSerializer.writeObjectInternal` prepends `0x00` for a value and a bare
-  `0xff` for null **unless** the serializer is a `SupportsNullSerializer`. Only two order-preserving
-  serializers are: `StringSerializer` (writes the same flags itself) and the private inner
-  `ClassSerializer` (writes none; null is registration 0). `writesMissingValuesLast` excludes exactly
-  `ClassSerializer`. **Lesson 14 confirms the other side of this:** `writeClassAndObject` goes through
-  `writeObjectNotNullInternal`, which emits **no** flag byte — so a config value is
-  `[registration][serializer body]` with nothing between.
-- **No in-tree `readObjectByteOrder` is length-ambiguous.** Ten of eleven order-preserving datatypes are
-  fixed-width in byte order and `String` is self-delimiting by a terminator its own writer refuses to
-  let into the payload. PR candidate 20 was **rewritten**, not dropped: the surviving trigger is a
-  third-party `OrderPreservingSerializer`, which `checkSortKey` accepts on nothing but an `instanceof`.
-- **The registration table is the on-disk type dispatcher** and `StandardSerializer` is where custom
-  attribute serializers are added (`GraphDatabaseConfiguration.getSerializer:1971-1981`, called from
-  `StandardJanusGraph:301`). **Lesson 21 and lesson 26** need that the registration number, not the
-  Java class, is what reaches disk, and that user registrations are offset by
-  `CLASS_REGISTRATION_OFFSET = 100`.
-- **`VariableString.writeBackward` puts `STRING_ID_MARKER` at the high address** with the `0x80` stop
-  bit at the low one, so `readBackward`'s `getByte(--position)` peek is correct for strings as for
-  longs. There are **three** near-duplicate in-tree ASCII codecs — `StringSerializer.write`'s ASCII
-  path, `StringEncoding.writeAsciiString`, and `VariableString.write` — differing on the marker and on
-  the empty string (header-only / a lone `0x80` / rejected outright).
+  protects the namespace. **PR candidate 24.**
 
 ### PR candidates, all verified at the pinned commit
 
 Numbering is **stable** — earlier entries reference these numbers, so new candidates are appended rather
-than inserted in size order. **Candidates 26-28 are new this run** (lesson 14); 24-25 came from lesson 13
-and 21-23 from lesson 12, which also **rewrote** candidate 20 rather than dropping it. **18 is still the
-most substantial the track has found. The best first contributions are now 28, 21 and 24** — 28 is a
-one-line error message with no behavioural risk, 21 is doc-only and 24 is a two-line guard fix, and all
-three force a maintainer to confirm a reading. Candidates 1-25 carry forward; 26-28 were verified at this
-pinned commit on 2026-11-12, 24-25 on 2026-11-11, 21-23 on 2026-11-10, 18-20 on 2026-11-09, 15-17 on
-2026-11-08, 11-14 on 2026-11-07, 8-10 on 2026-11-06, 1 and 7 on 2026-11-05, 2-4 and 6 on 2026-11-04, and
-**5 still needs its experiment run — and is now worth more**, because lesson 14 found a second,
-configuration-driven call site for `getBackend()`.
+than inserted in size order. **Candidates 29-30 are new this run** (lesson 15); 26-28 came from lesson 14,
+24-25 from lesson 13 and 21-23 from lesson 12, which also **rewrote** candidate 20 rather than dropping
+it. **18 is still the most substantial the track has found. The best first contributions are now 29, 28,
+21 and 24** — 29 is a one-line comment correction, 28 is a one-line error message with no behavioural
+risk, 21 is doc-only and 24 is a two-line guard fix, and all four force a maintainer to confirm a
+reading. Candidates 1-28 carry forward; 29-30 were verified at this pinned commit on 2026-11-13, 26-28 on
+2026-11-12, 24-25 on 2026-11-11, 21-23 on 2026-11-10, 18-20 on 2026-11-09, 15-17 on 2026-11-08, 11-14 on
+2026-11-07, 8-10 on 2026-11-06, 1 and 7 on 2026-11-05, 2-4 and 6 on 2026-11-04, and **5 still needs its
+experiment run — and is now worth more**, because lesson 14 found a second, configuration-driven call
+site for `getBackend()`.
 
 1. **`KCVSProxy.java:67`** passes `txh` where every sibling method passes `unwrapTx(txh)`. One token.
    Fix the same omission in the test double at `KCVSCacheTest.java:242` and add a `KCVSCacheTest` case
@@ -750,6 +838,46 @@ configuration-driven call site for `getBackend()`.
     a one-line test that stores a `Long` under a `String`-typed option's path and asserts the message
     names the key.
 
+29. **NEW, and the smallest the track has found: `MIN_VERTEX_CACHE_SIZE`'s comment cites the wrong
+    issue.** `StandardJanusGraphTx.java:201-205` reads *"This is a workaround for #893. Cache sizes
+    small relative to the level of thread parallelism can lead to JanusGraph generating multiple copies
+    of a single vertex in a single transaction."* Read with `issue_read` at the source:
+    [JanusGraph/janusgraph#893](https://github.com/JanusGraph/janusgraph/pull/893) is a pull request
+    opened 2018-01-17 by `davidclement90`, titled *"Remove TTL support for Elasticsearch in
+    documentation."*, closed 2018-01-18, milestone `Release v0.2.1`, label `cla: yes`. It has nothing
+    to do with vertex caches or thread parallelism; the number is almost certainly a carried-over
+    **Titan** issue id from before the fork. Anyone trying to understand why a 100-element floor exists
+    follows the comment into unrelated 2018 documentation history. One line, no behaviour change.
+    **Do the homework before opening it:** search the upstream tracker (and Titan's archived tracker)
+    for the actual duplicate-vertex report, and if it cannot be found, say so in the PR and propose
+    describing the mechanism in the comment instead of citing a number — substituting one wrong number
+    for another is worse than the status quo. The mechanism is independently verifiable and worth
+    stating in the PR body: `CaffeineVertexCache.get`'s tier-2 (`volatileVertices`) → tier-3
+    (`retriever.get`) sequence is not atomic, so two threads of one multi-threaded transaction can both
+    miss and both construct; only one wins `cache.get(id, k -> v)`, and the loser has already been
+    handed to its caller.
+30. **NEW: `AddedPropertiesSetValue.isNull()` and `AddedPropertiesListValue.isNull()` are hardcoded
+    `false`, which makes a cleanup branch dead code.** `SimpleAddedRelations.removeProperty` ends with
+    ```
+    if (propertiesValue.isNull()) { propertiesMap.remove(key); }
+    ```
+    `AddedPropertiesSingleValue.isNull()` returns `internalRelation == null`, so a `SINGLE` key's entry
+    is pruned correctly. `AddedPropertiesSetValue.isNull()` and `AddedPropertiesListValue.isNull()` both
+    `return false` unconditionally, so for a `SET` or `LIST` key the branch can **never** fire: remove
+    every property of that key from a vertex and you are left with an empty `AddedPropertiesSetValue`
+    wrapping an empty `HashMap` (or an empty `LinkedHashSet`), keyed by the key's name, for the rest of
+    the transaction. `getAllProperties()` then concatenates an empty iterator per dead key on every full
+    view of that vertex's properties. Bounded by the number of distinct key names ever written, so this
+    is a wart rather than a leak — but it is an inconsistency between three implementations of one
+    two-method interface, and the fix is `return internalRelationMap.isEmpty();` /
+    `return internalRelationSet.isEmpty();`. **The test is the larger half of the PR:**
+    `SimpleAddedRelations` has **no dedicated unit test** anywhere in the tree at the pinned commit, so
+    this needs a new test class that adds and removes `SET`- and `LIST`-cardinality properties and
+    asserts both `propertiesSize` and the pruning. Worth checking first whether any call site depends
+    on the entry surviving — none was found in `StandardVertex` or `StandardJanusGraphTx`, but
+    `getView(Set, Predicate)`'s `allProperties` short-circuit should be re-read before claiming that in
+    the PR.
+
 ### Still open, and who owns it
 
 - **Closed by lesson 14 — all three obligations lesson 13 handed it.** (a) **Construction order:**
@@ -768,10 +896,42 @@ configuration-driven call site for `getBackend()`.
   `StandardSchemaCache` with a MISS-incrementing retriever, no HIT counter, no counted eviction, and
   JVM-global counter names. Also corrected lesson 13's note that `attributes.custom.*` is FIXED — it is
   `GLOBAL_OFFLINE`.
-- **Owed to lesson 15 by lesson 14:** the `newTransaction:588-598` window in which a
-  `StandardJanusGraphTx` exists without a `BackendTransaction` (`setBackendTransaction` is called at
-  `:592`, after construction) — can anything in the transaction's own constructor reach the backend?
-  And what does `StandardTransactionBuilder` read out of the `GraphDatabaseConfiguration` at `:580`?
+- **Closed by lesson 15 — all three obligations lesson 14 handed it.** (a) **The no-backend window is
+  harmless by construction:** every value `StandardJanusGraphTx`'s constructor reads off `graph`
+  (`:308-317`) is a pre-built object, `txHandle` is the only backend-facing field and is non-final, and
+  the constructor does no I/O whatsoever. `StandardTransactionBuilder`'s constructor reads **fifteen
+  pre-resolved fields** off the `GraphDatabaseConfiguration` — not off a `Configuration` — so building a
+  transaction consults no config row and cannot fail on a missing option. (b) **A user vertex can carry
+  a temporary id past creation, but only with `ids.flush=false`, and the default is `true`** — so
+  normally the temporary id lives for the three statements between `:686` and `:690`. Lesson 13's
+  schema-vertex finding is confirmed: `makeSchemaVertex:1098` assigns unconditionally and asserts
+  `longId() > 0`. The containers hold, in the meantime, a `StandardVertex` at lifecycle byte `New` plus
+  its `VertexExists` property, which is the relation through which `assignIDs` reaches the vertex at
+  commit. (c) **`newTypeCache` resolves name → id and `vertexCache` resolves id → object**, and they meet
+  only in `getSchemaVertex:1216-1225`; `newTypeCache` is checked first, written only at
+  `makeSchemaVertex:1109`, and emptied at `:2206`.
+- **Owed to lesson 16 by lesson 15:** `addedRelations.getAllUnsafe()` is a **live, uncopied view** and
+  `commit:2145` hands it straight to `graph.commit` — establish what `prepareCommit` does with it, what
+  `ChangedSchemaVertices.of(addedRelations, deletedRelations)` (`StandardJanusGraph:1236`) extracts and
+  why schema changes need separate handling, how the `upsert` flag set at `StandardJanusGraphTx:1035`
+  changes the delete path, and the exact emission order of deletes versus additions.
+- **Owed to lesson 18 by lesson 15:** everything in `StandardJanusGraphTx` is transaction-local —
+  `getLock`, `LockTuple`, `ReentrantTransactionLock`, `CombinerLock`, `FakeLock`, a hardcoded 5000 ms
+  timeout, and a `uniqueLocks` map that never shrinks. The file reads `ConsistencyModifier.LOCK` at
+  exactly one place (`:1030`, to decide whether the blind-overwrite path is allowed). Lesson 18 picks
+  up at `ExpectedValueCheckingStore` and `ConsistentKeyLocker`, and owes an answer to how a
+  transaction-local lock and a storage lock compose when both are in play on one property write.
+- **Owed to lesson 17 by lesson 15:** a property write takes one `getLock(IndexLockTuple(index, match))`
+  per unique composite index **record**, built from
+  `IndexRecordUtil.indexMatches(vertex, index, key, normalizedValue)` (`:997-1000`). Lesson 17 must say
+  what a *record* is there before it explains the graphindex entries, and should note that
+  `TypeUtil.hasAnyIndex(key)` is one of the three conditions gating the blind-overwrite path — adding
+  any index to a key silently moves every write of that key onto a path that issues a slice query.
+- **Owed to lesson 19 by lesson 15:** why `StandardVertex.hasLoadedRelations` is a flat `false` and
+  `loadRelations` returns `EntryList.EMPTY_LIST` for a new vertex while `CacheVertex` must answer both
+  truthfully; and what `relTypeCache` (`:239`, a `ConcurrentHashMap<>(30)` allocated only when
+  `isLazyLoadRelations()`, populated by `getOrLoadRelationTypeById:486-496`) actually caches, given its
+  javadoc says "only in `JanusGraphLazyRelation`".
 - **Owed to lesson 18 by lesson 14:** `KCVSConfiguration.set(..., checkExpectedValue=true)` calls
   `store.acquireLock` at `:153` on the config row — who calls that overload, and does the config row
   therefore go through `ConsistentKeyLocker` exactly as a `SchemaName` graphindex entry does? Related
