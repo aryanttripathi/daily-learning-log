@@ -5,13 +5,14 @@ mode: lesson
 mode-history: contributor-reading 2026-10-30 .. 2026-11-02 (sessions 01-04); lesson from 2026-11-03 (lesson 05 on)
 started: 2026-10-30
 lessons-total: 28
-lessons-done: 16
+lessons-done: 17
 pinned-commit: a59ae8d8024207598eada34998d867617df51adf
 pinned-commit-date: 2026-10-28
 pinned-commit-reviewed: 2026-11-11 at the Part II/III boundary (lesson 13) — a59ae8d8 is still the tip of
   JanusGraph/janusgraph master, so there is nothing to re-pin to; staying. Not re-raised by lessons 14,
-  15 or 16 (all three mid-Part, by design; list_commits was deliberately not run). Re-check at the
-  Part III/IV boundary, after lesson 18, and re-run list_commits there rather than assuming either answer.
+  15, 16 or 17 (all four mid-Part, by design; list_commits was deliberately not run). DUE NEXT RUN: the
+  Part III/IV boundary is lesson 18, which must re-run list_commits on master rather than assuming
+  either answer.
 upstream: JanusGraph/janusgraph
 reader-fork: aryanttripathi/janusgraph
 registers: tracks/janusgraph-registers.md (PR candidates 1-32; "Still open, and who owns it")
@@ -68,10 +69,13 @@ number. The split is the only structural change of the 2026-11-14 run.
 
 Newest first. **Session-log roll-off:** the full `**Findings.**` paragraph is kept for the three most
 recent lessons only — the same window as the `Verified by lesson NN` blocks below. Lessons 09-12 were
-compressed to their headline finding on 2026-11-13, and **lesson 13's paragraph was compressed this
+compressed on 2026-11-13, lesson 13 on 2026-11-14, and **lesson 14's paragraph was compressed this
 run**; the full paragraphs remain verbatim in git history at the commit each line names, and their
 substance is carried forward either in the surviving `Verified by` blocks, in the registers file, or in
-the root `README.md`'s per-lesson narrative. Next run, lesson 14's paragraph is the one that goes.
+the root `README.md`'s per-lesson narrative. Next run, lesson 15's paragraph is the one that goes.
+
+- **17 — 2026-11-15** · [`2026/11/2026-11-15-janusgraph-index-serializer-graphindex-writes/README.md`](2026/11/2026-11-15-janusgraph-index-serializer-graphindex-writes/README.md) · **Lesson 16's "complete frame and one unopened box" held without correction; the box is open.** Read `IndexSerializer` (whole, 614 lines; written up for `:224-408` and `:593-612`), `IndexRecordUtil` (whole), `IndexUpdate`, `IndexUpdateContainer`, `IndexMutationType`, `IndexRecords`, `IndexRecordEntry` (all whole), `StandardJanusGraph` again (whole, 1490; cited at `:267-305`, `:518-533`, `:761-771`, `:1014-1025`, `:1080-1097`, `:1158-1206`, `:1295`), `ManagementSystem` (whole, 1815; cited at `:431` and `:831-879`), `BackendTransaction` (whole), `HashingUtil` (whole), `StaticBuffer` (whole), `StandardJanusGraphTx` again (whole, 2278; cited at `:436` only), `IndexSerializerRemoveElementTest`, `WholeRowDeletionOptimizationTest` and `WholeRowDeletionCapturingStoreManager` (all whole), plus four directory listings. One doc page: [Index Performance](https://docs.janusgraph.org/schema/index-management/index-performance/).
+  **Findings.** **THE finding: the composite-index row key is deliberately unorderable and the column width *is* the uniqueness level.** `getIndexKey` is `varint(indexId)` ++ per-field `writeObjectNotNull` — the **non**-order-preserving writer lesson 12 dissected — optionally prefixed with 4 bytes of murmur, and `hashKeys` **is not a config option**: `StandardJanusGraph:304-305` passes `storeFeatures.isDistributed() && storeFeatures.isKeyOrdered()`. So the backends that could scan the graphindex store in order are exactly the ones whose keys are hashed, which is the mechanism behind the documented "composite indexes are equality-only" — a limitation the docs assert without explaining and that no planner change can lift. The column is `0x00` alone for `SINGLE`, `0x00` ++ element id for `SET`, and `0x00` ++ element id ++ one varint per field for `LIST`; uniqueness is enforced by lesson 02's one-value-per-`(key, column)` contract with **no index-side check**, and the cardinality itself is **derived** in `ManagementSystem:848-850` from `unique()` and the keys' own cardinalities, never declared. `acquireLock(CompositeIndexType, …)` excludes exactly `LIST`, the one cardinality whose column cannot collide. **`IndexMutationType.UPDATE` exists only for inline (covering) keys, is reachable from one of the three generation sites, and is written as an addition** — `IndexUpdateContainer` is a two-field state machine that keeps it only while no `ADD`/`DELETE` touches the same index key. **Refinement to lesson 16, not a correction:** "phases 1-4 touch storage only to take locks" is false of phase 3 — `indexMatches` goes through `VertexCentricQueryBuilder` for every removal (`onlyLoaded = rel.isRemoved()`) and every partitioned vertex, from a `parallelStream`, with phase-1/2 locks held; `loadLabelsCheckedByIndexes` batches only the label reads. Also: `mutateIndex` calls the **four**-argument `mutateEntries`, so lesson 16's whole-row-deletion optimisation is edgestore-only **by construction**; a deletion's value bytes exist for the lock, not the mutation; `getCompleteDocument` is a second unbatched read inside phase 6; `indexMatches` emits a full Cartesian product with no guard; and three TTL paths disagree, the composite one taking the minimum over **every field key of the record**. **One conjecture, derived and explicitly not run:** `UPDATE` reaches the addition-lock pass with expected value `null` against a cell that by construction exists — predicted failure for a `LOCK`-consistency, non-`LIST`, inline-key composite index on an inline-only property change. Handed to lesson 18 with a named confirming scenario. No new PR candidates logged (the conjecture becomes one only if lesson 18 confirms it). No syllabus revisions. Daily Diff: the **2026-11-14** edition (39 stories) — **RFC 10008, the HTTP QUERY method**, after XRAID's primaries proved unfetchable.
 
 - **16 — 2026-11-14** · [`2026/11/2026-11-14-janusgraph-commit-prepare-commit-order/README.md`](2026/11/2026-11-14-janusgraph-commit-prepare-commit-order/README.md) · **All four things lesson 15 owed this run are settled, and one of them by correcting lesson 15.** Read `StandardJanusGraph` (whole, 1490 lines; written up for `:761-1470` plus the constructor fields it depends on), `StandardJanusGraphTx` again (whole, 2278; cited at `:1020-1048` and `:2115-2230`), `BackendTransaction` (whole), `CacheTransaction` (whole), `Mutation` (whole), `KCVEntryMutation` (whole), `TransactionLogHeader` (whole), `StandardVertexProperty` (whole), `GraphDatabaseConfiguration` again (whole, 2192; cited at `:255-270`, `:388-406`, `:748-800`, `:1912-1925`, `:2088-2110`), `WholeRowDeletionOptimizationTest` (whole), `WholeRowDeletionCapturingStoreManager` (whole), plus the `janusgraph-inmemory` test-package listing. Three `search_code` queries at the pinned ref (`isUpsert`, `getBufferSize`, `wholeRowDeletion` under `janusgraph-inmemory`), one `search_issues` query on this repo, and the [Failure & Recovery](https://docs.janusgraph.org/operations/recovery/) doc page.
   **Findings.** **The emission order is not decided in the commit path.** `prepareCommit` is seven phases over three accumulators — `mutations` (`ListMultimap<vertexId, relation>`), `mutatedProperties` (`ListMultimap<vertex, relation>`, properties only) and `indexUpdates` — and phases 1-4 only *collect* and take locks; phase 5 writes one `mutateEdges` per vertex key with **additions and deletions in the same call**, and the resolution happens in `Mutation.consolidate()` keyed on `KCVEntryMutation.ENTRY2COLUMN_FCT` (the **column**; the value is ignored) under the javadoc'd rule that *"additions apply logically after deletions"* — lesson 02's `KeyColumnValueStore` contract, finally spent. The delete/add **lock asymmetry is the uniqueness constraint**: a delete locks with the full `Entry` (expected value = the serialized relation, `:901`), an add locks with the column alone (expected value `null` = "must not exist", `:1004`), and an add whose endpoint `isNew()` takes **no lock at all** (`:1002`), so bulk-inserting fresh vertices is free of storage locks even under `ConsistencyModifier.LOCK`. `prepareCommit` runs **twice** only when `hasSchemaElements && !hasTxIsolation`, which is what the three filter predicates (`SCHEMA_FILTER`, `NO_SCHEMA_FILTER`, `NO_FILTER`, `:1208-1213`) exist for; `SCHEMA_FILTER` is two conditions ANDed (`BaseRelationType` **and** out-vertex `instanceof JanusGraphSchemaVertex`). **Whole-row deletion skips `writeRelation` entirely** for a fully-removed vertex (`:1136-1138`), is a config AND a feature (`storage.drop-whole-row-on-vertex-removal`, MASKABLE, default **true**, AND `hasOptimizedWholeRowDeletion()`), and costs identity in the change stream — which is the entire reason `cdcCanIdentifyDeletedRelation` (`:955-980`) exists, and it is the clearest statement in the tree of what a tombstone can and cannot carry, read straight off lesson 10's column layout. **Stage 7 swallows every index exception** (collect → log → `SECONDARY_FAILURE` → return success), and the repair path needs `tx.log-tx`, which defaults **false** and is force-disabled under batch loading (`:1232`) — [#833](https://github.com/JanusGraph/janusgraph/issues/833) has been open on exactly this since 2017. **`ChangedSchemaVertices` is cache invalidation, not persistence**: collected at `:1236` before any write because it reads live transaction state, consumed in a `finally` that never escalates, and its broadcast writes the management log **synchronously**, putting max-write-time on the commit's critical path. **Correction to lesson 15:** the `upsert` flag is **not** a commit-path mechanism — `isUpsert` appears in exactly one file and its only read is inside `StandardVertexProperty.remove()`, where it pays back the slice query the blind-overwrite optimisation skipped. Also: the phase-debug trace is gated on `totalMutations >= storage.buffer-size` (default **1024**), so it is silent on ordinary transactions; `txCounter` starts at 0 per JVM so WAL ids collide across restarts and recovery orders by the header timestamp; phase 3's index-update generation runs on `parallelStream()` with **no** threshold. New PR candidates **31** and **32**, both comment/message-level. No syllabus revisions. Structural change: the two registers split to `tracks/janusgraph-registers.md`. Daily Diff: the **2026-11-13** edition (47 stories) — Cloudflare choosing **QuePaxa**, a randomized priority-based leaderless consensus protocol, for its Meerkat control plane.
@@ -79,9 +83,7 @@ the root `README.md`'s per-lesson narrative. Next run, lesson 14's paragraph is 
 - **15 — 2026-11-13** · [`2026/11/2026-11-13-janusgraph-tx-write-path-containers/README.md`](2026/11/2026-11-13-janusgraph-tx-write-path-containers/README.md) · **All three obligations lesson 14 handed this run are discharged.** Read `StandardJanusGraphTx` (whole, 2278 lines; written up for `:193-1135` and `:2137-2278`), `StandardTransactionBuilder` (whole, 759), `StandardJanusGraph` (whole, 1490; cited at `:570-612`, `:750-762`, `:1215-1240`), `GraphDatabaseConfiguration` (whole, 2192; cited at `:115-132`, `:664-700`, `:1060-1070`, `:2055-2070`), `ElementLifeCycle` (whole), `StandardVertex` (whole), `CaffeineVertexCache` (whole), `SimpleAddedRelations` (whole), `ConcurrentAddedRelations` (whole), `AddedRelationsContainer` (whole), `AddedPropertiesSingleValue` / `SetValue` / `ListValue` (all whole), `RemovedVertexTrackingTest` (whole), plus the directory listings for `graphdb/transaction/`, `.../addedrelations/`, `.../vertexcache/`, `graphdb/vertices/` and the in-memory test package. Also read [JanusGraph/janusgraph#893](https://github.com/JanusGraph/janusgraph/pull/893) with `issue_read` and the [Transaction Handling](https://docs.janusgraph.org/basics/transactions/) doc page.
   **Findings.** Every data write funnels through `connectRelation:945` and fans out to **three** destinations (each endpoint's own container, the transaction's container, the vertex cache for non-new endpoints only) plus a fourth for properties (`addedPropertyIndex`). The per-transaction and per-vertex relation containers are **the same class with opposite `groupPropertiesByKey`**, which makes `propertiesSize` permanently 0 at transaction level and `propertiesContainer` permanently empty at vertex level, and means `getView(types, filter)` **ignores `types`** at transaction level. `ids.flush` defaults **true**, so a user vertex's temporary id lives for three statements; `makeSchemaVertex:1098` assigns unconditionally, so a schema vertex never has one. `ElementLifeCycle` is a six-state machine (three constants `private`) whose predicates are **range tests on the numeric ordering**, with `New` and `Modified` absorbing and `isModified()` excluding both `New` and `Removed`. `ConcurrentAddedRelations.getAllUnsafe()` is the one method **not** passed through `copyView` — it returns a live view, which is the whole meaning of the name, and `commit:2145` hands it to `graph.commit`. `MIN_VERTEX_CACHE_SIZE = 100` is a probability reduction, not a fix, for a non-atomic tier-2/tier-3 sequence in `CaffeineVertexCache.get` — **and the `#893` it cites is a 2018 Elasticsearch-TTL documentation PR, not a vertex-cache bug** (PR candidate 29). New PR candidates **29 and 30**. Daily Diff: the **2026-11-12** edition (66 stories) — PostgreSQL's 52-CVE security release and CVE-2026-6460, the composite-attribute type-confusion umbrella fix.
 
-- **14 — 2026-11-12** · [`2026/11/2026-11-12-janusgraph-open-path-config-merge/README.md`](2026/11/2026-11-12-janusgraph-open-path-config-merge/README.md) · **Part III opens. All three obligations lesson 13 handed this run are discharged, and one of lesson 13's own notes is corrected.** Read `JanusGraphFactory` (whole), `GraphFactoryUtils` (whole), `SchemaInitializationManager` (whole), `GraphDatabaseConfigurationBuilder` (whole), `ReadConfigurationBuilder` (whole), `ModifiableConfigurationBuilder` (whole), `ConfigOption` (whole), `BasicConfiguration` (whole), `ModifiableConfiguration` (whole), `MixedConfiguration` (whole), `MergedConfiguration` (whole), `KCVSConfiguration` (whole), `KCVSConfigurationBuilder` (whole), `JanusGraphConstants` (whole), `janusgraph.internal.properties` (whole), `MetricInstrumentedSchemaCache` (whole), `ReadConfigurationBuilderTest` (whole), plus `GraphDatabaseConfiguration` (the option declarations 140-189, 1027-1030, 1157-1159, 1363-1375, 417-423; the class body 1604-1680; `getIDAssigner` 1934-1936, `getBackend` 1951-1956, `getSerializer` 1967-1981, `getTypeCache` 1983-1986, `getLocalConfiguration` 1988-1996, `preLoadConfiguration` 2034-2120, `selectExactConfig` 2122-2126), `StandardJanusGraph` (the constructor 264-360, `closeInternal` 422-470, `getSchemaCache` 554-556, `newTransaction` 588-603, `typeCacheRetrieval` 611-644, `getGlobalSystemConfig` 745-749), `Backend` (the constructor 236-280, `initialize` 333-417, `getGlobalSystemConfig` 478-479, `getStorageManager` 522-545), `ManagementSystem` (fields and constructor 145-188, `configVerifier` 190-207, `getOpenInstancesInternal` 209-213, `forceCloseInstance` 225-234) and `StandardSerializer` again (the registration table 113-171, for the 13 config datatypes).
-  **Findings.** The global configuration is **one row** in `system_properties`, row key UTF-8 `"configuration"` (13 bytes), columns the dotted option paths, values `writeClassAndObject`; `hidden.frozen` is a column in that same row and is excluded from `getAll()` by a swallowed `ConfigElement.parse` failure logged at debug. `ConfigOption.ACCEPTED_DATATYPES` is a closed set of **13** classes whose registration numbers top out at 65, so **every config value's registration prefix is exactly one byte** — and the set is closed because `KCVSConfiguration:75` builds its own bare `new StandardSerializer()`, which no `attributes.custom.*` registration ever reaches. **Obligation (b), answered:** at open time `FIXED`, `GLOBAL_OFFLINE` and `GLOBAL` are **indistinguishable** — every open-path site uses `isGlobal()`/`isManaged()`/`isLocal()`, and the only two places in the tree that switch on the constant are `ModifiableConfiguration.set:37-44` and `ManagementSystem`'s `configVerifier:190-207`. The resolution order is three rows wide (`MergedConfiguration(overwrite, MixedConfiguration(global, local))`). **The MASKABLE surprise:** `getGlobalSubset` filters on `isGlobal()`, which *includes* `MASKABLE`, so every MASKABLE option in the first instance's properties file is frozen into the global row, never updated, never discrepancy-checked (`getManagedSubset` excludes MASKABLE), and inherited by every later instance that omits it — **PR candidate 26**. **Obligation (a), answered:** `system_properties` needs nothing but a `KeyColumnValueStoreManager`, which is why the open path creates store manager #1, reads and freezes the row through it, and **closes it** before `getBackend()` opens store manager #2 and a *second* `KCVSConfiguration` on the same row; in the constructor, `schemaCache` is wired at `:308` but its retriever cannot run until `isOpen` at `:320`, and that invariant holds by ordering alone with no assertion or test. **Obligation (c), answered:** `MetricInstrumentedSchemaCache` is a `StandardSchemaCache` with a counting retriever — behaviour identical, no HIT counter, `MISS` incremented before the store call, counters under the JVM-global system prefix. Also: six FIXED options exactly, three of them escapable via `graph.allow-upgrade`, and a successful upgrade writes `allow-upgrade=false` back into the database, disarming itself. **Correction to lesson 13's note:** `attributes.custom.*` is `GLOBAL_OFFLINE`, not FIXED. New PR candidates **26**, **27**, **28**. No syllabus revisions.
-
+- **14 — 2026-11-12** · [`2026/11/2026-11-12-janusgraph-open-path-config-merge/README.md`](2026/11/2026-11-12-janusgraph-open-path-config-merge/README.md) · **Part III opens; all three of lesson 13's obligations discharged and one of its notes corrected.** Read the whole open path — `JanusGraphFactory`, `GraphFactoryUtils`, `SchemaInitializationManager`, `GraphDatabaseConfigurationBuilder`, `ReadConfigurationBuilder`, `ConfigOption`, the five `Configuration` implementations, `KCVSConfiguration`, `MetricInstrumentedSchemaCache`, `ReadConfigurationBuilderTest` — plus slices of `GraphDatabaseConfiguration`, `StandardJanusGraph`, `Backend`, `ManagementSystem` and `StandardSerializer`. **THE finding: the global configuration is one row** in `system_properties`, row key UTF-8 `"configuration"`, columns the dotted option paths, values `writeClassAndObject`; `ConfigOption.ACCEPTED_DATATYPES` is a closed set of 13 classes whose registration ids top out at 65, so **every config value's registration prefix is one byte**. Second: **MASKABLE options leak from the first instance to every later one** (`getGlobalSubset` filters on `isGlobal()`, which includes MASKABLE; never refreshed, never discrepancy-checked) — PR candidate **26**. Third: **two store managers per open**, the first closed before the second exists, so a storage option whose authoritative value is in the row is not applied to the manager that reads the row. Also: six FIXED options, three escapable via `graph.allow-upgrade`, and a successful upgrade writes `allow-upgrade=false` back, disarming itself. New PR candidates **26**, **27**, **28**. The two facts lesson 18 was promised — `KCVSConfiguration.set:153`'s `acquireLock` with an expected value, and the five `ConfigOption` types collapsing to three predicates at open time — are restated in *Notes For The Next Run*. Daily Diff: the **2026-11-11** edition (58 stories). *(Full paragraph in git history at the 2026-11-12 and 2026-11-13 commits; compressed form at the 2026-11-14 commit.)*
 - **13 — 2026-11-11** · [`2026/11/2026-11-11-janusgraph-system-types-schema-storage/README.md`](2026/11/2026-11-11-janusgraph-system-types-schema-storage/README.md) · **Part II complete; re-pin reviewed and declined — `a59ae8d8` is still the tip of `master`.** Read the whole system-type and schema-storage surface: `BaseKey`, `BaseLabel`, `BaseRelationType`, `SystemTypeManager`, `Token`, `JanusGraphSchemaCategory`, `TypeDefinitionCategory`, `TypeDefinitionMap`, `TypeDefinitionDescription`, `StandardRelationTypeMaker`, `JanusGraphSchemaVertex`, `PropertyKeyVertex`, `StandardSchemaCache`, `TypeDefinitionDescriptionSerializer`, `EnumSerializer`, plus slices of `StandardJanusGraphTx` and `IDManager`. **THE finding: there is no catalog** — the schema is a subgraph in the same `edgestore`, six system property keys and two system edge labels hold all of it, and their ids are *computed* (`(raw << 6) | 37` / `| 53`) so there is no bootstrap read. A property key is **11 edgestore columns + 2 graphindex entries**, its definition **exactly 7** of them by set *equality*, and one ordinal byte (5 `DATATYPE` vs 6 `UNIDIRECTIONAL`) is the whole on-disk difference between a property key and an edge label. New PR candidates **24** and **25**. Daily Diff: the **2026-11-10** edition (63 stories). *(Full entry in git history at the 2026-11-11 commit; the facts later lessons need survive in the registers file and in the root README's narrative.)*
 - **12 — 2026-11-10** · [`2026/11/2026-11-10-janusgraph-standard-serializer-attribute-encodings/README.md`](2026/11/2026-11-10-janusgraph-standard-serializer-attribute-encodings/README.md) · **stayed on `a59ae8d8`** · read `StandardSerializer`, the `Serializer`/`OrderPreservingSerializer`/`SupportsNullSerializer` interfaces, all seventeen registered attribute serializers, `NumericUtils`, `StringEncoding`, `VariableLong`, `VariableString`, `StandardRelationTypeMaker` and `SerializerTest`. **THE finding: `StandardSerializer` has four write entry points and `EdgeSerializer` chooses between them by *where in the column the value sits*, not by its type — and the whole difference is one flag byte.** Also: eleven order-preserving datatypes, three in-tree comparators that disagree, and PR candidate 20 rewritten rather than dropped. Daily Diff: the **2026-11-09** edition (50 stories) — Turso implementing Tantivy's `Directory` trait against its own B-tree. *(Full entry in git history at the 2026-11-10 commit.)*
 - **11 — 2026-11-09** · [`2026/11/2026-11-09-janusgraph-parse-relation-relation-cache/README.md`](2026/11/2026-11-09-janusgraph-parse-relation-relation-cache/README.md) · **stayed on `a59ae8d8`** · read `EdgeSerializer` from the read side, `RelationCache`, `RelationReader`, `VariableLong`'s backward section, `IDHandler`, the `StaticArrayBuffer`/`ReadArrayBuffer` pair, `CacheEdge`, `RelationConstructor`, `ModificationDeserializer`, `EdgeSerializerTest` and `RelationReparseBenchmark`, plus commit `29c0b18a`. **THE finding: the backward encoding is the only genuinely order-preserving varint in the tree, and that — not readability — is why the tail ids are written backward.** `parseRelation` walks one cursor back and forth across a cell rather than streaming it. Daily Diff: the **2026-11-08** edition (22 stories) — a Postgres replication slot that cannot advance while its captured tables are idle. *(Full entry in git history at the 2026-11-09 commit.)*
@@ -122,7 +124,7 @@ the root `README.md`'s per-lesson narrative. Next run, lesson 14's paragraph is 
 - [x] 14 — `JanusGraphFactory.open` → `GraphDatabaseConfiguration` → `StandardJanusGraph` constructor: local vs global (fixed/masked) config
 - [x] 15 — `StandardJanusGraphTx`: `addVertex`, `addEdge`, property writes, added/deleted relation containers, and the vertex cache
 - [x] 16 — `StandardJanusGraph.commit` and `prepareCommit`: deletes, additions, mutations, and the order they are emitted in
-- [ ] 17 — Composite indexes on write: `IndexSerializer` and the graphindex entries
+- [x] 17 — Composite indexes on write: `IndexSerializer` and the graphindex entries
 - [ ] 18 — Locking: `ExpectedValueCheckingStore` and `ConsistentKeyLocker`, and how uniqueness survives an eventually consistent store
 
 ### Part IV — The read path (`graphdb/vertices`, `graphdb/query`)
@@ -147,28 +149,51 @@ the root `README.md`'s per-lesson narrative. Next run, lesson 14's paragraph is 
 ## Notes For The Next Run
 
 **Syllabus unchanged this run. No items added, split, merged or reordered; the 28 stand as written on
-2026-10-30.** Lesson 16 was handed four obligations by lesson 15 and discharged all four, one of them by
-correcting lesson 15 rather than extending it. Part III's remaining two items (17, 18) are both
-well-scoped by what lesson 16 established: 17 needs only `IndexSerializer` and the `IndexUpdate` type,
-because lesson 16 fixed when updates are generated, locked and written; 18 needs
-`ExpectedValueCheckingTransaction` and `ConsistentKeyLocker`, because lesson 16 enumerated all four
-storage-lock call sites and the expected-value asymmetry between them.
+2026-10-30.** Lesson 17 was handed "a complete frame and one unopened box" and that is exactly what it
+found: everything lesson 16 promised about *when* index updates are generated, locked and written held
+without correction, and the whole lesson fitted inside `IndexSerializer` + `IndexRecordUtil` +
+`ManagementSystem.createCompositeIndex`. **One refinement, not a correction:** lesson 16's "phases 1-4
+touch storage only to take locks" is true of phases 1, 2 and 4 and false of phase 3 —
+`IndexRecordUtil.indexMatches` goes through `VertexCentricQueryBuilder` for every *removal*
+(`onlyLoaded = rel.isRemoved()`) and for every partitioned vertex, i.e. it issues slice queries from a
+`parallelStream` with the phase-1/2 locks already held. `loadLabelsCheckedByIndexes`
+(`StandardJanusGraph:1019-1021`) batches only the **label** reads the constraint check needs, not those
+property reads.
 
-**The re-pin decision stays closed until after lesson 18.** Lesson 13 reviewed it at the Part II/III
-boundary and found `a59ae8d8` still the tip of `master`. Lessons 14, 15 and 16 were all mid-Part, so it
-was **not re-raised and `list_commits` was not run** in any of them — by design. The next review is the
-**Part III/IV boundary, after lesson 18**, and it must re-run `list_commits` on `JanusGraph/janusgraph`
-`master` rather than assuming either answer.
+**Lesson 18 is now the best-prepared item in Part III, and it inherits one falsifiable conjecture.**
+Lesson 16 gave it the four graph-level `acquireLock` call sites and the expected-value asymmetry;
+lesson 14 gave it `KCVSConfiguration.set`'s own `acquireLock` with an expected value; lesson 17 adds
+the two index-lock passes and **the conjecture it must settle first**: `IndexMutationType.UPDATE` is
+not a deletion, so it is handled by pass 2 (`StandardJanusGraph:1090-1096`) with expected value
+`null` — "this cell must not exist" — against a cell that by construction already exists, because an
+`UPDATE` is generated only when an **inline** key changed and the field-key values (hence row key and
+column) did not. Predicted failure conditions: composite index, `ConsistencyModifier.LOCK`,
+cardinality != `LIST`, at least one inline key, transaction changing only an inline property of an
+existing element. **Not verified by running** — the entry says so and puts the confirming scenario in
+its Hands-On B (BerkeleyJE, breakpoint on `prepareCommitAcquireIndexLocks`, second pass). Lesson 18
+either logs a PR candidate or names the line that makes it a non-issue. Lesson 18's second inherited
+item: confirm from `ExpectedValueCheckingStore`/`ConsistentKeyLocker` the **idempotence** claim lesson
+17 derived from `BackendTransaction`'s javadoc — that a second lock request for an already-locked
+`(key, column)` pair in the same transaction is dropped, which is what makes "deletions first"
+load-bearing and lets one transaction hand a unique value from one element to another.
 
-**The roll-off rule applied again this run, and the file was split.** `TRACK.md` keeps the notes for the
-three most recent lessons; older ones roll off into git history. The three most recent are now 14, 15 and
-16, so: **lesson 13's block is removed** (verbatim in git history at the 2026-11-11 commit, compressed at
-the 2026-11-12 and 2026-11-13 commits), **lesson 14's block is now compressed** to the facts lessons 17,
-18, 25 and 27 were promised — the full block is preserved verbatim in git history at the 2026-11-12
-commit and in full form at the 2026-11-13 commit — and lessons 15 and 16 keep their blocks in full. Next
-run, lesson 14's block is the one that goes. Separately, the **PR-candidate and open-question registers
-moved to [`tracks/janusgraph-registers.md`](tracks/janusgraph-registers.md)**; the roll-off rule does
-**not** apply there, because those registers are the one place a claim is allowed to survive its lesson.
+**The re-pin decision is DUE NEXT RUN.** Lesson 13 reviewed it at the Part II/III boundary and found
+`a59ae8d8` still the tip of `master`. Lessons 14, 15, 16 and 17 were all mid-Part, so it was **not
+re-raised and `list_commits` was not run** in any of them — by design. Lesson 18 closes Part III, so
+**lesson 18 must re-run `list_commits` on `JanusGraph/janusgraph` `master`** and decide, rather than
+assuming either answer. If it re-pins, note that Part IV's byte offsets stop being comparable with
+lessons 02-17.
+
+**The roll-off rule applied again this run.** `TRACK.md` keeps the notes for the three most recent
+lessons; older ones roll off into git history. The three most recent are now 15, 16 and 17, so
+**lesson 14's `Verified by` block is removed** (compressed form in git history at the 2026-11-14 and
+2026-11-15 commits, full form at the 2026-11-12 and 2026-11-13 commits) and lessons 15, 16 and 17 keep
+their blocks in full. Next run, lesson 15's block is the one that goes — but **do not drop lesson 14's
+two facts that lesson 18 was explicitly promised**, both already restated above: `KCVSConfiguration.set`
+calling `store.acquireLock(rowKey, column, expectedValueBuffer, txh)` at `:153`, and the five
+`ConfigOption` types collapsing to three predicates at open time. The **PR-candidate and open-question
+registers** remain in [`tracks/janusgraph-registers.md`](tracks/janusgraph-registers.md); the roll-off
+rule does **not** apply there.
 
 - **The mode question is closed. Do not reopen it unprompted.** Four consecutive empty `My Notes`
   triggered the switch recorded in the front-matter. Entries from lesson 05 on write in `lesson` mode
@@ -177,56 +202,145 @@ moved to [`tracks/janusgraph-registers.md`](tracks/janusgraph-registers.md)**; t
 - **Never touch an earlier entry's `## My Notes`.** Sessions 01-04 keep their templates. They are his
   to fill at any time; if a future run finds content in any of them, answer those questions in that
   run's entry regardless of mode.
-- **Lesson 17 (`IndexSerializer`, composite indexes on write) inherits a complete frame and one
-  unopened box.** It knows *when* index updates are generated — three sites, `StandardJanusGraph:919`
-  (per deleted relation), `:1007` (per added relation), `:1022-1024` (per mutated vertex, on
-  `parallelStream`) — *when* their locks are taken (`prepareCommitAcquireIndexLocks:1080-1099`,
-  composite only, deletions pass the whole `Entry` and additions pass `getColumn()`), and *how* they are
-  written (`:1168-1206`: one `mutator.mutateIndex` call per composite update with a `singletonList`, or
-  `IndexTransaction.add`/`delete` for a mixed one). What it owns is `IndexSerializer.getIndexUpdates`'s
-  three overloads, the `IndexUpdate` type, `IndexRecordUtil.indexMatches` (what a *record* is), and
-  `itx.needsCompleteDocument` / `registerCompleteDocument` — read at `:1196-1204` **while the transaction
-  can still read**, because the index commit runs after the storage commit. It should also explain
-  `isCdcOnlyMixedIndex` only as far as lesson 26 needs, and must **not** re-derive lesson 13's cost
-  baseline or lesson 10's 2+N column arithmetic.
-- **Entry size.** Lesson 05 ≈35 KB, 06 ≈63 KB, 07 ≈78 KB, 08 ≈67 KB, 09 ≈61 KB, 10 ≈70 KB, 11 ≈56 KB,
-  12 ≈91 KB, 13 ≈72 KB, 14 ≈75 KB, 15 ≈86 KB, 16 ≈87 KB (a large share of each is permalink URLs, which
-  are not prose). In line with the SQLite and PostgreSQL lessons. The old 5-9 KB budget was a
-  `contributor-reading` constraint and does not apply. **One mechanical note added this run:** a single
-  `create_or_update_file` call carrying ~87 KB of content succeeds, and `get_file_contents` on anything
-  over roughly 55 KB returns an over-limit error that *saves the content to a local file* instead — which
-  is the cheap way to read a large source file, via `python3`/`sed` on the saved JSON. That is also why
-  `TRACK.md` at 116 KB was worth splitting rather than re-emitting whole every run.
-- **Method note, carried, and lesson 16 is the fourth entry where simulation was not needed.** Lessons
-  10-12 re-implemented the pinned encoding functions and ran them; lessons 13-16 computed from the read
-  sources instead and said so. Lesson 16's derived claims — that the emission order is established by
-  `Mutation.consolidate` rather than the commit path, that `ListMultimap.size()` in the phase-7 log line
-  counts values rather than keys, that the phase trace is unreachable below `storage.buffer-size`
-  mutations, and that `isUpsert` has exactly one read in the tree — are each read directly off the pinned
-  sources or off a `search_code` result at the pinned ref, with the derivation shown. **Keep the rule
-  that produced them:** compute or re-implement rather than assert, say which, and always pair it with an
-  exercise that runs the real code. Lesson 16's is `WholeRowDeletionOptimizationTest` plus the
-  `mutateMany`-capturing store manager it uses, which is the only harness in the tree that observes what
-  `prepareCommit` emits — and the extension it proposes (a `SINGLE`-vs-`SET` property update, watching
-  whether the deletion survives consolidation) is the first exercise in the track that tests a *contract*
-  rather than a function.
-- **Daily Diff procedure — the 2026-11-05 one-way cross-check fired again this run and was right.** At
-  ~03:40 UTC on 2026-11-14 the front page served **2026-11-12 / 66 stories**, which lesson 15 had already
-  digested, and `/archive/` reported **138 editions** with **2026-11-13 / 47** as newest. The archive's
-  maximum *exceeded* the front page's, so the dated page was probed and
-  `https://tdd.cat/2026-11-13/` served the complete 47-story edition first try. **The procedure stands
-  as amended on 2026-11-13:** (a) fetch the front page and `/archive/` and take the maximum; (b) **also
-  probe the dated URL for today and yesterday directly** (`https://tdd.cat/YYYY-MM-DD/`), because a
-  published edition can be missing from both indexes — that is what 2026-11-13 proved; (c) before
-  digesting, check this session log for the newest edition already covered — lesson 13 covered 2026-11-10,
-  14 covered 11-11, 15 covered 11-12, 16 covered 11-13, so every run so far has found exactly one
-  uncovered edition; (d) the uncovered-item fallback is still the last resort, and the 2026-11-06 edition
-  still has two items spent (Infino ids, Postgres `SKIP LOCKED` queues). Edition sizes remain volatile —
-  22 on 11-08, 50 on 11-09, 63 on 11-10, 58 on 11-11, 66 on 11-12, 47 on 11-13 — so a small edition is
-  not evidence of a partial publish. **The run fires at 03:30 UTC and the edition for that calendar day
-  is not up yet**; every run so far has digested the previous day's. Say the edition date explicitly. The
-  two-fetch constraint held in reverse this run: at 47 stories the page fit one WebFetch, where the
-  109,608-character 11-12 page had needed `offset: 100000`.
+- **Lesson 18 (`ExpectedValueCheckingStore`, `ConsistentKeyLocker`) owns the locking layer and nothing
+  above it.** It must **not** re-derive: lesson 16's four graph-level `acquireLock` call sites or the
+  delete/add asymmetry; lesson 17's two index-lock passes, the `acquireLock(CompositeIndexType, …)`
+  three-conjunct predicate, or the `SINGLE`/`SET`/`LIST` column widths. What it owns is what happens
+  *inside* `acquireLock`: the `ExpectedValueCheckingStore` wrapper, where the expected value is
+  remembered and when it is checked, `ConsistentKeyLocker`'s lock rows, the lock-expiry and
+  lock-wait options, and how all of that behaves on a store whose `StoreFeatures` offer no native
+  locking. Entry point suggested by lesson 14: `KCVSConfiguration.set:153`, the simplest
+  compare-and-set in the tree.
+- **Lesson 19 should check whether the index store cache is invalidated by these writes.**
+  `KCVSCacheInvalidationService` is constructed with both `backend.getEdgeStoreCache()` and
+  `backend.getIndexStoreCache()` (`StandardJanusGraph:298-299`), and `mutateIndex` goes through
+  `indexStore.mutateEntries`, i.e. the `KCVSCache` wrapper lesson 07 mapped. Whether a composite-index
+  row is evicted or written through is lesson 19's question, not lesson 17's.
+- **Entry size.** Lesson 05 ~35 KB, 06 ~63, 07 ~78, 08 ~67, 09 ~61, 10 ~70, 11 ~56, 12 ~91, 13 ~72,
+  14 ~75, 15 ~86, 16 ~87, 17 ~64 (a large share of each is permalink URLs, which are not prose). The
+  old 5-9 KB budget was a `contributor-reading` constraint and does not apply. **Mechanical notes,
+  carried and extended this run:** a single `create_or_update_file` call carrying ~87 KB succeeds;
+  `get_file_contents` on anything over roughly 55 KB returns an over-limit error that *saves the JSON to
+  a local file*, which is the cheap way to read a large source file (`python3`/`sed`/`nl` on the saved
+  JSON) **and the only way to get trustworthy line numbers** — a file returned inline has no numbering,
+  so lesson 17 cited `IndexRecordUtil` by member name with whole-file permalinks and reserved
+  `#Lstart-Lend` fragments for the three files it had numbered locally. That split is honest and should
+  be repeated rather than guessed around. `README.md` and `TRACK.md` are both over the limit now, so
+  both are read to a local file and edited with a script rather than re-emitted from context.
+- **Method note, carried; lesson 17 is the fifth entry where simulation was not needed.** Lessons 10-12
+  re-implemented the pinned encoding functions and ran them; lessons 13-17 computed from the read
+  sources instead and said so. Lesson 17's derived claims are each labelled where they appear — the
+  `UPDATE` lock conjecture, the deletions-first/idempotence argument, and the Cartesian-product cost —
+  and each is paired with an exercise that runs the real code (Hands-On A dumps actual graphindex bytes
+  for all three cardinalities; B is written to fail if the conjecture holds). **Keep the rule that
+  produced them:** compute or re-implement rather than assert, say which, and always pair it with an
+  exercise that runs the real code.
+- **Daily Diff procedure — the 2026-11-05 one-way cross-check fired for the fourth consecutive run and
+  was right again.** At ~03:35 UTC on 2026-11-15 the front page **and** `/archive/` both served
+  **2026-11-13 / 47 stories** (archive total **138 editions**) — the edition lesson 16 had digested —
+  while `https://tdd.cat/2026-11-14/` served a complete **39-story** edition first try, and
+  `https://tdd.cat/2026-11-15/` returned a client error. **The procedure stands as amended on
+  2026-11-13:** (a) fetch the front page and `/archive/` and take the maximum; (b) **also probe the
+  dated URL for today and yesterday directly** (`https://tdd.cat/YYYY-MM-DD/`), because a published
+  edition can be missing from both indexes — proved on 11-13 and again on 11-14; (c) before digesting,
+  check this session log for the newest edition already covered — 13 covered 11-10, 14 covered 11-11,
+  15 covered 11-12, 16 covered 11-13, 17 covered 11-14, so every run so far has found exactly one
+  uncovered edition; (d) the uncovered-item fallback is still the last resort, and the 2026-11-06
+  edition still has two items spent (Infino ids, Postgres `SKIP LOCKED` queues). Edition sizes remain
+  volatile — 22 on 11-08, 50 on 11-09, 63 on 11-10, 58 on 11-11, 66 on 11-12, 47 on 11-13, 39 on 11-14
+  — so a small edition is not evidence of a partial publish. At 39 stories the page fit one WebFetch.
+  **New this run:** when the obvious deep-dive candidate's primary sources are unreachable, say so and
+  pick another. XRAID (LWN, 2026-11-13) was the most on-topic item in the edition, but both primaries —
+  the lore/LWN mailing-list archive URL and Hellwig's `raid-sucks.pdf` slides — are **robots-disallowed**
+  to WebFetch, and the LWN report states outright that it does not describe the declustered layout,
+  parity distribution or rebuild behaviour. The digest covers XRAID as a notable item with that gap
+  named explicitly and deep-dives **RFC 10008** instead, which was fetchable in full. Do not fill an
+  unverifiable mechanism with plausible generalities to protect a chosen item.
+
+### Verified by lesson 17, for lessons 18, 19, 25, 26, 27 and 28 to cite rather than re-derive
+
+- **`IndexSerializer` has seven `getIndexUpdates`; three do work** (`:240-265` relation, `:267-319`
+  vertex, plus `reindexElement:390-408` for lesson 25). The four thin ones only pick between
+  `FULL_INDEX_APPLIES_TO_FILTER` and `INDEX_APPLIES_TO_NO_CONSTRAINTS_FILTER` (`:224-238`). The
+  preconditions on both real overloads (`:241`, `:278`) are Java `assert`s, **not** the live
+  `Preconditions` lesson 16 found in `prepareCommit`.
+- **The two commit-path overloads differ in four load-bearing ways:** index list (`getKeyIndexes()` vs
+  `getKeyIndexesReferences()`, which carries `isInlined()`); whether `UPDATE` is possible at all
+  (`getUpdateType(relation, false)` hard-coded at `:243` vs `indexRef.isInlined()` at `:281`);
+  deduplication (`HashSet<IndexUpdate>` on `IndexUpdate.equals` over `(index, type, key, entry)` vs a
+  `HashMap<key, IndexUpdateContainer>` keyed on `update.getKey()` **alone**, `:273`, `:293-297`); and
+  the guards `updatedProperties.isEmpty()` (`:272`) and `vertex.isRemoved() && indexRef.isInlined()`
+  (`:283`). **`IndexMutationType.UPDATE` is reachable from exactly one of the three generation sites
+  and only for an inline key.**
+- **The composite row key is `varint(index.longId())` ++ per-field `writeObjectNotNull` (or
+  `writeClassAndObject` for a generic data type), optionally prefixed by 4 bytes of murmur.** Two facts
+  follow and lessons 25-27 need both. (1) The values use the **non**-order-preserving writer lesson 12
+  dissected, so graphindex row keys have no value order. (2) `hashKeys` **is not a config option**:
+  `StandardJanusGraph:304-305` passes `storeFeatures.isDistributed() && storeFeatures.isKeyOrdered()`,
+  and `hashLength` is a `private final` `HashLength.SHORT` = **4 bytes** with no setter
+  (`IndexSerializer:133-134`, `HashingUtil`). So the backends that could scan the index store in order
+  are exactly the ones whose keys are hashed. **That is the mechanism behind the documented
+  "composite indexes are equality-only"**, and it cannot be lifted in the planner.
+- **The column width IS the uniqueness level** (`IndexRecordUtil.getIndexEntry`): `SINGLE` → the single
+  byte `0x00` (`FIRST_INDEX_COLUMN_BYTE`); `SET` → `0x00` ++ element id; `LIST` → `0x00` ++ element id
+  ++ one `varint(record[i].relationId)` per field. The value is the element identity (`writeVertexId`,
+  or `relationId ++ outVertexId ++ typeId [++ inVertexId]` for a relation) followed by inline
+  properties, split by the same single `valuePosition` integer lesson 10 found in `writeRelation`.
+  Uniqueness is enforced by lesson 02's one-value-per-`(key, column)` contract, not by any index-side
+  check.
+- **Cardinality is derived in `ManagementSystem.createCompositeIndex:848-850`, never declared:**
+  `unique()` → `SINGLE`; else all-`SINGLE` property keys → `SET`; else → `LIST`. Also there:
+  `unique` is rejected for non-`VERTEX` indexes (`:838`), and `STATUS` is `ENABLED` immediately when
+  `oneNewKey || constraint.isNew()`, otherwise `INSTALLED` + `REGISTER_INDEX` (`:852-860`, `:877`).
+  **Lesson 25 starts at this method.**
+- **`acquireLock(CompositeIndexType, boolean)` (`StandardJanusGraph:768-771`) excludes exactly
+  `Cardinality.LIST`** — the one cardinality whose column already contains the property ids and
+  therefore cannot collide. `SET` **does** take storage locks under `ConsistencyModifier.LOCK`. Three
+  conjuncts: config flag (false under `enableBatchLoading()`), modifier `== LOCK`, cardinality
+  `!= LIST`.
+- **`prepareCommitAcquireIndexLocks:1080-1097` is two full passes over the same list, deletions first**,
+  mixed-index updates skipped in both. Deletion: `acquireIndexLock(key, (Entry) entry)` → expected value
+  = the entry's value bytes. Addition (and therefore `UPDATE`): `acquireIndexLock(key,
+  entry.getColumn())` → expected value `null`. For a `SINGLE` index that addition lock is literally
+  "nobody currently owns this value", which is the **entire** uniqueness mechanism for `unique()`.
+- **`prepareCommitIndexUpdatesAndCheckIfAnyMixedIndexUsed:1163-1206`**: one `mutateIndex` per update
+  with a `Collections.singletonList` and the `NO_ADDITIONS`/`NO_DELETIONS` sentinel on the other side;
+  an `UPDATE` takes the **addition** path (the branch tests `isDeletion()` only); a deletion passes the
+  whole `Entry`, whose value bytes exist for the **lock**, not the mutation (lesson 16:
+  `KCVEntryMutation` compares both sides by column). **`BackendTransaction.mutateIndex` calls the
+  four-argument `indexStore.mutateEntries` — there is no `wholeRowDeletion` parameter for the index
+  store at all**, so lesson 16's `storage.drop-whole-row-on-vertex-removal` optimisation is
+  edgestore-only by construction.
+- **The mixed branch sets `has2iMods = true` unconditionally**, and `has2iMods` is read in exactly one
+  place: `hasSecondaryPersistence = logTxIdentifier != null || commitSummary.has2iModifications`
+  (`:1295`) — whether the transaction needs the WAL. **Lesson 28.** `itx.needsCompleteDocument` /
+  `registerCompleteDocument` (`:1198-1201`) call `getCompleteDocument` (`IndexSerializer:332-357`),
+  which reads every value of every non-`DISABLED` field key through `documentProperties:364-370` — one
+  slice with `query.fast-property`, otherwise one per key — and the in-tree comment states why it must
+  happen here: *"Read here, while the transaction can still read: the index commit runs after the
+  storage commit."* **Lesson 26** needs the rest.
+- **cdc-only mixed indexes:** `isCdcOnlyMixedIndex:1158-1161`; the two constructor filters
+  (`:267-288`) differ by one clause — the deletion filter keeps a cdc-only index when
+  `index.getElement().isRelation()`, so relation-document deletions stay synchronous. The
+  constructor's `log.warn` is the only signal, fires once at open, and says itself that the WAL
+  records these transactions as successful, so recovery will not repair them. **Lessons 26 and 28.**
+- **`SchemaStatus` on the index-write path, index side:** `indexAppliesToWithoutConstraints` rejects a
+  `DISABLED` **composite index**, and `IndexSerializer:257` / `:304` skip a `DISABLED` **field** of a
+  mixed index. `INSTALLED` and `REGISTERED` still receive writes — which, with lesson 16's `:1125`
+  relation-type check, is what lets a reindex job converge. **Lesson 25.**
+- **TTL reaches index entries three ways** (`IndexSerializer:244`, `:291-292`, `:306-308`), and
+  `IndexRecordUtil.getIndexTTL(vertex, keys...)` takes the **minimum** over the vertex's TTL and every
+  named key's, treating 0 as unset. For the composite path the keys are **every field key of the
+  record**, not the property that triggered the write. `IndexUpdate.setTTL` itself asserts
+  `ttl > 0 && mutationType != DELETE`.
+- **Cost facts worth not re-deriving.** `indexMatches` is a recursion over field-key positions that
+  emits **∏ kᵢ** records for a vertex with kᵢ values on field key i (1 for all-`SINGLE` keys);
+  `IndexRecords.add` overrides `ArrayList.add` to `Arrays.copyOf` the shared buffer, without which
+  every record would alias it. `onlyLoaded` **is** `rel.isRemoved()` (`IndexSerializer:288`), so a
+  deletion's record is computed from pre-transaction values and an addition's from post-change values,
+  each with the changed property substituted via `replaceKey`/`replaceValue`. Inline keys are a
+  covering index whose bytes are a full `EdgeSerializer.writeRelation` cell nested inside the index
+  cell, framed as `int length`, `int valuePosition` per property.
 
 ### Verified by lesson 16, for lessons 17, 18, 19, 25, 27 and 28 to cite rather than re-derive
 
@@ -494,69 +608,6 @@ moved to [`tracks/janusgraph-registers.md`](tracks/janusgraph-registers.md)**; t
   The hazard is real: `CaffeineVertexCache.get`'s tier-2/tier-3 sequence is not atomic, so two threads
   of one multi-threaded transaction can both construct a vertex for the same id; the floor of **100**
   lowers the probability and does not serialise the sequence.
-
-### Verified by lesson 14 — compressed; full block in git history at the 2026-11-12 and 2026-11-13 commits
-
-- **The open path is nine frames and three of them do work:** `JanusGraphFactory.open` →
-  `GraphFactoryUtils.defineSchemaAndStart` → **`GraphDatabaseConfigurationBuilder.build`** (the merge) →
-  **`ReadConfigurationBuilder.buildGlobalConfiguration`** (the freeze and the checks) →
-  `GraphDatabaseConfiguration` ctor + `preLoadConfiguration` (~45 fields resolved eagerly) →
-  `SchemaInitializationManager.initializeSchemaAndStart` → **`new StandardJanusGraph`**.
-- **One row, not a config file.** Store `system_properties`, row key UTF-8 `"configuration"` (13 bytes,
-  no id encoding), columns the dotted option paths, values `writeClassAndObject`. A second row
-  `"userconfig"` holds `Graph.Variables` (`Backend:412`). `hidden.frozen` is a column in the
-  configuration row that fails `ConfigElement.parse`, so `getAll()` swallows the exception at debug.
-  **Reads are whole-row snapshots** — `asReadConfiguration()` calls `toMap()` **once** and closes over
-  the `HashMap`, which is precisely why GLOBAL_OFFLINE must force a shutdown and FIXED must be refused.
-- **Five types, three predicates, and that is the whole type system.** `isGlobal()` = everything but
-  `LOCAL`; `isManaged()` = `{FIXED, GLOBAL_OFFLINE, GLOBAL}`; `isLocal()` = `{MASKABLE, LOCAL}`. Counts:
-  FIXED **6**, GLOBAL_OFFLINE **15**, GLOBAL **8**, MASKABLE **88**, LOCAL **34**. **At open time FIXED,
-  GLOBAL_OFFLINE and GLOBAL are indistinguishable**; only `ModifiableConfiguration.set:37-44` and
-  `ManagementSystem.configVerifier:190-207` read the constant, both post-open, and the latter sets
-  `graphShutdownRequired = true` at `:204` for a GLOBAL_OFFLINE change. **Lessons 18 and 25 both need
-  this.** Resolution order, from `MergedConfiguration.get:39-47` over `MixedConfiguration.get:49-58`:
-  managed → overwrite, global row, default (**the local file is never consulted**); MASKABLE →
-  overwrite, local file, global row, default; LOCAL → overwrite, local file, default.
-- **The MASKABLE leak — PR candidate 26.** `getGlobalSubset` (`ReadConfigurationBuilder:172-178`)
-  filters on `isGlobal()`, which includes MASKABLE, so first-open persists every MASKABLE option from
-  the properties file into the global row; never refreshed, never discrepancy-checked
-  (`getManagedSubset:180-186` filters on `isManaged()`), and inherited with no log line by a later
-  instance that omits it. **Lesson 16's sharpening:**
-  `storage.drop-whole-row-on-vertex-removal` is MASKABLE and default **true**, so this is a MASKABLE
-  option whose first-instance value decides an index-correctness property cluster-wide.
-- **Two store managers per open, and the first is closed before the second exists.** Manager #1 comes
-  from the local file alone, reads and freezes the row through a `KCVSConfiguration` whose `close()` is
-  `manager.close()`, and `ReadConfigurationBuilder:70` holds it in try-with-resources;
-  `Backend.initialize:384-399` then opens `system_properties` again and builds a **second**
-  `KCVSConfiguration` on the same row with a deliberately empty `close()`. Consequence: any storage
-  option whose authoritative value is in the row is **not applied to the manager that reads the row**.
-- **`KCVSConfiguration.set(key, value, expectedValue, true)` calls
-  `store.acquireLock(rowKey, column, expectedValueBuffer, txh)` at `:153` before `store.mutate`** — the
-  config row participates in the same compare-and-set primitive as a composite index entry.
-  **Lesson 18 should start here**, and lesson 16 supplies the four graph-level call sites to compare it
-  against. Unanswered: `StandardJanusGraph:341`'s `REGISTRATION_TIME` write uses the **non**-expected-value
-  overload, so the instance registration is provisionally **unlocked** while `ManagementSystem`'s
-  `openInstances.size() < 2` guard races it.
-- **Six FIXED options**, three escapable via `graph.allow-upgrade` from a jar-resource list
-  (`storage-version,janusgraph-version,titan-version`; `STORAGE_VERSION=2`), and **a successful upgrade
-  writes `allow-upgrade=false` back into the global row, disarming itself.** The discrepancy check
-  compares against the **default** when the row has no entry, so setting a managed option locally to a
-  non-default value on a graph where it was never written fails the open with no real conflict;
-  `graph.allow-stale-config` downgrades all such errors with no per-option escape. **The freeze is not
-  atomic** — N+4 independent `BackendOperation.execute` calls — and a crash between them leaves version
-  entries with no `hidden.frozen` and no repair path but clearing the store.
-- **`StandardJanusGraph` construction order `:264-360`**, with `backend = getBackend()` at `:289`,
-  `wholeRowDeletionEnabled` at `:295`, `serializer` at `:301` (**where `attributes.custom.*` is
-  applied**), `schemaCache` at `:308`, **`isOpen = true` at `:320`**, instance registration `:332-341`,
-  `managementLogger` + `registerReader` `:343-346`. **`:308` before `:320` is safe by ordering alone**,
-  with no assertion and no test; the first code that can touch the cache is `:346`. **A constructor
-  failure after `:289` leaks the `Backend`** — only `:351-358` is inside a try/catch that calls
-  `closeInternal()`. `getBackend()` (`GraphDatabaseConfiguration:1951-1956`) has **no memoisation and no
-  guard** and is reachable from three call sites, one configuration-driven — **PR candidate 5.**
-- **`MetricInstrumentedSchemaCache` counts and nothing else**: a `StandardSchemaCache` with a
-  MISS-incrementing retriever, no HIT counter, uncounted `expireSchemaElement`, and counters under
-  `METRICS_SYSTEM_PREFIX_DEFAULT`, so **two graphs in one JVM share them**. **Correction to lesson 13:**
-  `attributes.custom.[X].attribute-class` and `serializer-class` are **`GLOBAL_OFFLINE`, not FIXED.**
 
 ## Paused Subjects
 
