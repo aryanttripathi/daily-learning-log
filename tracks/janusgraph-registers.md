@@ -4,6 +4,7 @@ track: JanusGraph
 upstream: JanusGraph/janusgraph
 pinned-commit: a59ae8d8024207598eada34998d867617df51adf
 split-from: TRACK.md on 2026-11-14 (lesson 16)
+last-updated: 2026-11-16 (lesson 18; candidates 33-38 appended, next free number 39)
 -->
 
 # JanusGraph track — PR candidates and open questions
@@ -24,7 +25,9 @@ PR candidate and needs the next free number.
 ## PR candidates, all verified at the pinned commit
 
 Numbering is **stable** — earlier entries reference these numbers, so new candidates are appended rather
-than inserted in size order. **Candidates 31-32 are new this run** (lesson 16); 29-30 came from lesson 15,
+than inserted in size order. **Candidates 33-38 are new this run** (lesson 18, the locking layer — the
+largest batch the track has added in one run, and **38 is the first candidate that is a plausible
+correctness bug rather than a cleanup since 18**); 31-32 came from lesson 16, 29-30 from lesson 15,
 26-28 from lesson 14, 24-25 from lesson 13 and 21-23 from lesson 12, which also **rewrote** candidate 20
 rather than dropping it. **18 is still the most substantial the track has found. The best first
 contributions are now 29, 31, 28, 21 and 24** — 29 and 31 are one-line comment/message corrections, 28 is
@@ -405,10 +408,159 @@ because lesson 14 found a second, configuration-driven call site for `getBackend
     structure — the `[FAILURE]` comments are the best documentation of commit's error semantics that
     exists and they are currently indexed by two overlapping numbering schemes. **File separately from 31
     and from anything behavioural**, and attach lesson 16 §7's linearised table as the proposed reading.
+33. **NEW: `BackendTransaction.hasAcquiredLock()` is dead code, and the field it reads is set before the
+    call that can throw.** Cleanup. `search_code` across `JanusGraph/janusgraph` for `hasAcquiredLock`
+    returns **exactly one hit — its own definition** in
+    [`BackendTransaction.java`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/diskstorage/BackendTransaction.java).
+    Nothing in the tree calls it, so the `private boolean acquiredLock` field is write-only. Worse, all
+    four `acquireEdgeLock`/`acquireIndexLock` overloads set `acquiredLock = true` **before** delegating
+    to `edgeStore.acquireLock(...)` / `indexStore.acquireLock(...)`, which can throw
+    `PermanentLockingException` — so if the method were ever revived it would report a lock that was
+    never acquired. Either delete the method and the field, or move the assignment after the delegated
+    call. Deleting is the honest fix; it is public API on a non-`@Deprecated` class, so the PR should
+    say so and let a maintainer decide. **Zero behavioural risk either way.** Found by lesson 18.
+34. **NEW: `AbstractLocker`'s `check` and `delete` metrics count calls where they mean exceptions, so
+    two meters never exist and two others double-count.** Real, small, behavioural (observability only).
+    [`AbstractLocker.java`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/diskstorage/locking/AbstractLocker.java)
+    defines `M_CALLS` and `M_EXCEPTIONS`. `writeLock`'s failure path correctly increments
+    `(M_LOCKS, M_WRITE, M_EXCEPTIONS)`. But `checkLocks`'s `finally` increments
+    `(M_LOCKS, M_CHECK, M_CALLS)` on `!ok`, and `deleteLocks`'s `catch (Throwable t)` increments
+    `(M_LOCKS, M_DELETE, M_CALLS)` — both almost certainly meant `M_EXCEPTIONS`. Consequences:
+    `locks.check.exceptions` and `locks.delete.exceptions` are **never emitted at all** (`M_EXCEPTIONS`
+    has exactly one use site in the class), and `locks.check.calls` / `locks.delete.calls` are
+    **incremented twice** on a failing call, so neither meter is usable as a call count or as an error
+    rate. Anyone alerting on lock-check failures in production today is alerting on nothing. The fix is
+    two token changes. **File this one on its own**, with the counter names in the title, and note that
+    it changes published metric behaviour (a dashboard watching `locks.check.calls` will see the number
+    drop) — that is the only reason it is not trivially mergeable. Found by lesson 18.
+35. **NEW: `Backend` declares an 8-byte fixed key length for `edgestore_lock_`, which contradicts the
+    lock-key serializer; it is dead today and would be wrong if it were not.** Dead code with an
+    argument attached.
+    [`Backend.java:537-541`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/diskstorage/Backend.java#L537-L541)
+    builds the `keyLength` map handed to `OrderedKeyValueStoreManagerAdapter` with three entries:
+    `EDGESTORE_NAME -> 8`, `EDGESTORE_NAME + LOCK_STORE_SUFFIX -> 8`, and the ids store `-> 8`. But a
+    lock key is `ConsistentKeyLockerSerializer.toLockKey(key, column)` = **4-byte big-endian
+    `key.length()` ++ key ++ column**, i.e. `4 + keyLen + colLen` bytes — never 8 for any real
+    `(key, column)` pair. The entry is unreachable at the pinned commit because the adapter is only
+    installed for an `OrderedKeyValueStoreManager`, and the only in-tree one, `BerkeleyJEStoreManager`,
+    sets `.locking(true)` — so `Backend:271-276` never builds `ExpectedValueCheckingStoreManager` and
+    the `edgestore_lock_` store is never opened through the adapter. **Before filing, confirm what would
+    actually happen** by reading `OrderedKeyValueStoreAdapter`'s use of `keyLength` (lesson 05 read it;
+    lesson 18 did not re-open it) — if it asserts `key.length() == keyLength`, an out-of-tree ordered
+    key-value backend without native locking would fail hard on its first lock, which turns this from a
+    cleanup into a latent bug and is worth saying in the PR. Either way the entry should go or be
+    corrected. Found by lesson 18.
+36. **NEW: `ConsistentKeyLocker`'s protocol javadoc is wrong about the lock column's time unit and the
+    lock value's width.** Comment-only, two lines, and it matters because that javadoc is the only
+    specification of the on-disk lock format anyone reads.
+    [`ConsistentKeyLocker:92-121`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/diskstorage/locking/consistentkey/ConsistentKeyLocker.java#L92-L121)
+    says the column holds *"the approximate current timestamp in **nanoseconds**"* and that the value is
+    *"the **single byte** 0; this is unused but reserved for future use"*. Both are wrong against the
+    default configuration. (a) `AbstractLocker.Builder` defaults `times` to `TimestampProviders.NANO`,
+    but `ConsistentKeyLocker.Builder.fromConfig` overwrites it with
+    `times(config.get(TIMESTAMP_PROVIDER))` at
+    [`:240`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/diskstorage/locking/consistentkey/ConsistentKeyLocker.java#L240),
+    `TIMESTAMP_PROVIDER` is `FIXED` with default **`MICRO`**
+    ([`GraphDatabaseConfiguration:148`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/configuration/GraphDatabaseConfiguration.java#L148)),
+    and `Backend` always builds via `fromConfig` — so a lock column carries **microseconds**, which also
+    means two claims written inside the same microsecond are indistinguishable by timestamp. (b)
+    `zeroBuf = BufferUtil.getIntBuffer(0)` at
+    [`:152`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/diskstorage/locking/consistentkey/ConsistentKeyLocker.java#L152),
+    and `BufferUtil.getIntBuffer(int)` allocates `intSize` and asserts the array length — **4 bytes**.
+    (That line already carries `// TODO this does not belong here`.) While in there: the byte-layout
+    comment at `:154-180` calls the constant `LOCK_END_COL` while the field is `LOCK_COL_END`. A
+    documentation-only PR that makes the stated format match the written bytes; pairs naturally with
+    candidate 31 as a comment-correction batch, but **keep it separate from 34**. Found by lesson 18.
+37. **NEW: `ExpectedValueCheckingStore.deleteLocks` and `ExpectedValueCheckingTransaction.checkAllLocks`
+    disagree about whether a null `Locker` is possible, so one of them is dead code.** Cleanup, with a
+    design question attached. `checkAllLocks` explicitly guards —
+    `Locker locker = store.getLocker(); if (null == locker) continue;` with the comment *"Ignore locks on
+    stores without a locker"* — while
+    [`ExpectedValueCheckingStore.deleteLocks`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/diskstorage/locking/consistentkey/ExpectedValueCheckingStore.java)
+    dereferences `locker.deleteLocks(tx.getConsistentTx())` with no guard at all, and
+    `deleteAllLocks()` calls it for every store in `expectedValuesByStore`. Today neither path can see a
+    null locker, because the map is populated only by `storeExpectedValue`, which is reached only from
+    the `locker != null` branch of `acquireLock` — so **`checkAllLocks`'s guard is the dead half**. But
+    the constructor accepts any `Locker` and the test suite constructs the store directly, so the right
+    fix is to pick one contract: either `Preconditions.checkNotNull(locker)` paths throughout and drop
+    the guard, or add the symmetric guard to `deleteLocks`. **Worth filing mainly as a question**, since
+    a maintainer may know which way the null branch is meant to be used. Found by lesson 18.
+38. **NEW (behavioural, and the first plausible correctness bug since 18): an `IndexMutationType.UPDATE`
+    takes its index lock with expected value `null` against a cell that by construction exists, so a
+    covering-key-only change to a `LOCK`-consistency composite index should fail with
+    `PermanentLockingException: Expected value mismatch` on any backend without native locking.**
+    Derived by reading at the pinned commit; **not yet observed in a run** — do not file until it is.
+    The chain, three links, each a quoted line:
+    (a) [`IndexUpdate.isDeletion()`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/database/index/IndexUpdate.java)
+    is `mutationType == IndexMutationType.DELETE`, and `isUpdate()` is a separate predicate — so
+    `prepareCommitAcquireIndexLocks`'s first pass skips an `UPDATE` (`!update.isDeletion()` → continue)
+    and the second pass takes it at
+    [`StandardJanusGraph:1094`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/database/StandardJanusGraph.java#L1094).
+    (b) That call is the **two**-argument `BackendTransaction.acquireIndexLock(StaticBuffer, StaticBuffer)`,
+    which is `indexStore.acquireLock(key, column, null, storeTx)` — the javadoc spells out that null means
+    *"it is expected that the key-column pair does not exist"*.
+    (c) `ExpectedValueCheckingTransaction.checkSingleExpectedValueUnsafe` turns a null `ev` into
+    `Collections.emptyList()` and compares with `Iterables.elementsEqual`, so an existing cell is a
+    mismatch and a `PermanentLockingException`. An `UPDATE` is generated only when an **inline
+    (covering)** key changed while the field-key values did not, so the row key and column are
+    unchanged and the cell is present with its old value.
+    **Firing conditions:** composite index, `ConsistencyModifier.LOCK`, cardinality != `LIST`, at least
+    one inline key, a transaction changing only an inline property of an existing element, **and a
+    storage backend whose `StoreFeatures` omit `locking`** (so `Backend` installs
+    `ExpectedValueCheckingStoreManager`) — i.e. CQL/HBase in production and **the in-memory backend
+    locally**. **NOT BerkeleyJE**, which sets `.locking(true)` and therefore never runs this code; lesson
+    17 proposed BerkeleyJE as the reproduction and that was wrong.
+    **The proposed fix is small:** the addition pass should use the three-argument
+    `acquireIndexLock(key, entry)` for an `UPDATE`, exactly as the deletion pass does — i.e. lock with
+    the entry's value bytes, which is what the cell actually holds. **Supporting evidence for the PR:**
+    the suite tests the *mirror* case only — `expectedValueMismatchCausesMutateFailure` covers
+    expected-present/actually-absent — and there is no test anywhere for expected-absent/actually-present,
+    so a regression test belongs in the same PR. **Owner: the run that executes lesson 18's Hands-On C.**
+    If the exercise passes instead of failing, the reason will be visible at link (a) or (b) — most
+    likely that no `UPDATE` is generated for the schema under test — and this candidate should be struck
+    with that reason recorded rather than silently dropped. Found by lesson 18.
 
 ---
 
 ## Still open, and who owns it
+
+- **Closed by lesson 18 — both debts lesson 17 handed it, and one of them by correcting lesson 17's
+  method.** (a) **The idempotence claim is confirmed, and it is implemented twice.** Lesson 17 took
+  *"all but the first invocation are ignored"* from `BackendTransaction`'s javadoc; the two mechanisms
+  are `AbstractLocker.writeLock`'s `if (lockState.has(tx, lockID)) return;` (so no second lock row is
+  written) and `ExpectedValueCheckingTransaction.storeExpectedValue`'s `containsKey` check (so the
+  **first** expected value wins and later ones are logged and discarded). The second is what makes
+  lesson 16's *"deletions first"* ordering load-bearing rather than cosmetic: in a transaction that
+  moves a unique value from one element to another, pass 1's deletion lock remembers the **old entry's
+  value bytes** and pass 2's addition lock (expected value `null`) is dropped — reverse the passes and
+  every such hand-off fails. Covered by `transactionMayReenterLock`. (b) **The `UPDATE` expected-value
+  conjecture HOLDS**, by reading, and is now **PR candidate 38** — with the correction that lesson 17's
+  proposed reproduction on BerkeleyJE could not have worked, because BerkeleyJE advertises
+  `locking(true)` and therefore never constructs `ExpectedValueCheckingStoreManager`. The reproduction
+  must use a backend whose features omit `locking`, and the cheapest is the **in-memory** one, which
+  `InMemoryStoreManager` leaves unset — meaning every in-memory JanusGraph has been running the full
+  `ConsistentKeyLocker` protocol, 100 ms sleeps included, since lesson 01.
+- **Owned by the run that executes lesson 18's Hands-On C: settle PR candidate 38 empirically.** It is
+  derived from reading, not from a run, and the candidate is explicitly marked *do not file until
+  observed*. The exercise is written to **fail** if the conjecture is right.
+- **Owned by lesson 19: does a composite-index row get evicted or written through, and what about the
+  lock stores?** Lesson 17 posed the first half. Lesson 18 adds the second and narrows both: two reads
+  in the commit path deliberately bypass `KCVSCache` — `checkSingleExpectedValueUnsafe` reads through
+  `store.getBackingStore()`, and every lock store is opened by `Backend`'s
+  `CONSISTENT_KEY_LOCKER_CREATOR` directly off `storeManager` (**not** `storeManagerLocking`), so lock
+  rows are never cached and never invalidated. `BackendTransaction.mutateIndex` still goes through
+  `indexStore.mutateEntries`, i.e. the `KCVSCache` wrapper lesson 07 mapped, and
+  `KCVSCacheInvalidationService` is constructed with both `getEdgeStoreCache()` and
+  `getIndexStoreCache()` (`StandardJanusGraph:298-299`).
+- **Owned by lesson 27 (the CQL backend): two values lesson 18 could not get.** Whether
+  `CQLStoreManager` omits `locking` from its `StandardStoreFeatures` (expected, but **not verified** —
+  lesson 18 read only the in-memory and BerkeleyJE managers), and what its
+  `getKeyConsistentTxConfig()` actually sets. That second one is the entire safety argument: once any
+  lock is held, `ExpectedValueCheckingStore.mutate` promotes **every** write in the transaction to
+  `strongConsistentTx`, and lesson 18 saw the mechanism but never the consistency level it switches to.
+- **Owned by whoever revisits candidate 35: read `OrderedKeyValueStoreAdapter`'s use of `keyLength`.**
+  It decides whether `Backend:537-541`'s `edgestore_lock_ -> 8` entry is merely dead or is a latent
+  hard failure for an out-of-tree ordered key-value backend without native locking.
 
 - **Closed by lesson 14 — all three obligations lesson 13 handed it.** (a) **Construction order:**
   established line by line for `StandardJanusGraph:264-360`; the answer to "what must exist before a
