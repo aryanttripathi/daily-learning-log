@@ -4,7 +4,7 @@ track: JanusGraph
 upstream: JanusGraph/janusgraph
 pinned-commit: a59ae8d8024207598eada34998d867617df51adf
 split-from: TRACK.md on 2026-11-14 (lesson 16)
-last-updated: 2026-11-16 (lesson 18; candidates 33-38 appended, next free number 39)
+last-updated: 2026-11-17 (lesson 19; candidates 39-42 appended, next free number 43)
 -->
 
 # JanusGraph track — PR candidates and open questions
@@ -520,10 +520,141 @@ because lesson 14 found a second, configuration-driven call site for `getBackend
     likely that no `UPDATE` is generated for the schema under test — and this candidate should be struck
     with that reason recorded rather than silently dropped. Found by lesson 18.
 
+39. **`hasValidateKeysOnly()` is `true` with no override anywhere, so entry-level cache invalidation is
+    dead code.** A repo-wide `search_code` for the identifier at the pinned commit returns exactly
+    **three** hits: the definition in
+    [`KCVSCache`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/diskstorage/keycolumnvalue/cache/KCVSCache.java)
+    (`protected boolean hasValidateKeysOnly() { return true; }`), the branch in
+    [`CacheTransaction.flushInternal`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/diskstorage/keycolumnvalue/cache/CacheTransaction.java),
+    and the tautological precondition in
+    [`ExpirationKCVSCache.invalidate`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/diskstorage/keycolumnvalue/cache/ExpirationKCVSCache.java).
+    `NoKCVSCache` overrides `clearCache`, `invalidate` and `forceClearExpiredCache` only.
+    **Consequences:** `flushInternal`'s `else` branch — the one that builds a
+    `List<CachableStaticBuffer>` from the mutation's additions and deletions with
+    `assert e instanceof CachableStaticBuffer` on each — is unreachable in the shipped tree;
+    `ExpirationKCVSCache.invalidate`'s `entries` parameter is always `Collections.EMPTY_LIST`; and
+    `Preconditions.checkArgument(!hasValidateKeysOnly() || entries.isEmpty())` is always satisfied by
+    its first clause. **So column-level db-cache invalidation is scaffolding, not an option the call
+    site chooses** — whole-row marking is the only implemented granularity.
+    **The PR is a choice, not a fix, and that should be said in the description:** either delete the
+    dead branch, `CachableStaticBuffer`'s role in it, and the `hasValidateKeysOnly` hook (smaller,
+    uncontroversial), or implement an `ExpirationKCVSCache` that overrides it to `false` and invalidates
+    per column (larger, and needs a design discussion about the missing key → `KeySliceQuery` index —
+    see candidate 40). **Low risk either way; start with an issue, not a PR.** Found by lesson 19.
+
+40. **`ExpirationKCVSCache.clearExpiredCache` scans the entire db-cache key set on every cleanup
+    trigger.** `for (KeySliceQuery ksq : cache.asMap().keySet()) { if
+    (expiredKeysCopy.containsKey(ksq.getKey())) cache.invalidate(ksq); }` — inside a `synchronized`
+    method that `clearCache()` also calls — to invalidate entries for at most `expiredKeysCopy.size()`
+    row keys. The edgestore cache is sized `Math.round(cacheSizeBytes * 0.8)` with `cacheSizeBytes`
+    defaulting to 0.3 of free heap (`Backend:344-376`), so the scanned key set can be very large while
+    `expiredKeysCopy` is typically a handful of keys from one commit. **The structural cause is that the
+    cache is keyed by `KeySliceQuery` while invalidation is keyed by row key, and no index exists
+    between them.** A `Multimap<StaticBuffer, KeySliceQuery>` maintained on `cache.put` (and pruned by a
+    Caffeine removal listener) would turn the scan into a lookup, at the cost of memory the weigher does
+    not currently account for. **Medium risk, needs a benchmark to justify.** Found by lesson 19.
+
+41. **Conjecture, derived from reading, NOT yet observed: a `persist` that throws mid-flush leaves the
+    db-cache serving pre-mutation rows.**
+    [`CacheTransaction.flushInternal`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/diskstorage/keycolumnvalue/cache/CacheTransaction.java)
+    persists in `persistChunkSize` chunks (`if (numSubMutations >= persistChunkSize) { numSubMutations =
+    persist(subMutations); ... }`, then a final `if (numSubMutations > 0) persist(subMutations);`) and
+    **only after that** loops over the buffered mutations calling `cache.invalidate(...)`, followed by
+    `clear()`. `persist` wraps `manager.mutateMany` in `BackendOperation.execute(..., maxWriteTime)`,
+    which throws when it gives up. **If it throws on a later chunk, earlier chunks have already been
+    applied to the backend, but the invalidation loop and `clear()` are skipped entirely** — so
+    `ExpirationKCVSCache` keeps pre-mutation `EntryList`s for those rows until
+    `expireAfterWrite(db-cache-time)` (10 s by default, **200 years** when `cache.db-cache-time=0`,
+    which is the setting the docs recommend for a single instance).
+    **Firing conditions:** `cache.db-cache=true`, a mutation set larger than
+    `storage.buffer-size`, and a backend that fails after at least one successful chunk.
+    **Reproduction:** a `KeyColumnValueStoreManager` test double that succeeds on the first
+    `mutateMany` and throws a `TemporaryBackendException` on the second, with `storage.buffer-size`
+    lowered so the commit chunks; then read a row from the first chunk through the cache and assert it
+    reflects the write. **Do not file until observed.** The fix, if confirmed, is to invalidate the keys
+    of each chunk as that chunk is persisted, or to invalidate everything buffered in a `finally`.
+    **Owner: the run that executes lesson 19's Next Step 3.** Found by lesson 19.
+
+42. **Conjecture, derived from reading: the public two-argument `CacheVertex.addToQueryCache` bypasses
+    the refresh-counter guard, on the graph-index read path.**
+    [`CacheVertex`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/vertices/CacheVertex.java)
+    has two `addToQueryCache` overloads: the private three-argument one stores only `if (refreshes ==
+    refreshesBefore)`, and the **public two-argument one stores unconditionally**. Its only caller is
+    `StandardJanusGraphTx`'s `vertexIDConversionFct`
+    ([`:2091-2103`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/transaction/StandardJanusGraphTx.java#L2091-L2103)):
+    `v.getInlineProperties().forEach((sq, entryList) -> ((CacheVertex) vertex).addToQueryCache(sq,
+    entryList))`, which loads a vertex's covering-index properties into its query cache after a
+    graph-centric index read. **A concurrent `refresh()` — i.e. a schema eviction arriving via
+    `ManagementLogger` while a thread sharing the transaction runs an index query — can therefore be
+    undone, which is exactly the race `CacheVertexRefreshTest.aLoadWhichARefreshOverlapsIsNotKept`
+    exists to prevent on the other path.** Whether it is reachable for a *schema* vertex is the open
+    question: the inline-property path carries user vertices, and `refresh()`'s only production caller
+    refreshes `JanusGraphSchemaVertex`es. **So this may be unreachable in practice, and that must be
+    settled before filing.** Reproduction: extend `CacheVertexRefreshTest` with a case that calls the
+    two-argument overload across a `refresh()` and asserts the entry is *not* kept — it will fail
+    against the current code, which is the point; then decide whether the fix is to give the public
+    overload a refresh check or to route `vertexIDConversionFct` through the three-argument form with a
+    count snapshotted before the index read. **Owner: the run that executes lesson 19's Next Step 2.**
+    Found by lesson 19.
+
 ---
 
 ## Still open, and who owns it
 
+- **Closed by lesson 19 — the question lesson 17 posed and lesson 18 sharpened.** **A commit marks, it
+  does not evict and it does not write through.** `CacheTransaction.flushInternal` persists first, then
+  calls `cache.invalidate(key, Collections.EMPTY_LIST)` per mutated row key (the `hasValidateKeysOnly()`
+  branch — and per candidate 39 it is the *only* branch), and `ExpirationKCVSCache.invalidate` is
+  `expiredKeys.put(key, now + cacheTimeMS)` plus a 1-in-1000 `penaltyCountdown.countDown()`. Nothing is
+  evicted at that moment. **While the key is marked, the row is not merely uncached but uncacheable:**
+  `isExpired` is true, `getSlice` reads the store and does **not** repopulate, on all three read paths,
+  enforced by the `key -> null` sentinel `fillResultAndReturnMisses` returns. Release needs
+  `PENALTY_THRESHOLD = 5` latch countdowns (each expired read counts one) **and** `getAge >=
+  db-cache-clean-wait` (50 ms default); `ExpirationCacheTest.testGracePeriod`'s local
+  `minCleanupTriggerCalls = 5` is that constant. The graphindex is the same `ExpirationKCVSCache` class
+  as the edgestore, differing only in its size share (`INDEXSTORE_CACHE_PERCENT = 0.2`), so a
+  composite-index row behaves identically. The lock-store half was already settled by lesson 18: lock
+  stores are opened off `storeManager` by `CONSISTENT_KEY_LOCKER_CREATOR` and have no cache at all.
+  **Do not re-pose this question.**
+- **Owned by lesson 20: how many `SliceQuery` shapes a traversal generates, and the partitioned-vertex
+  read fan-out.** Lesson 19 fixed what a shape *costs* — tier 1 keyed by `SliceQuery` per vertex object,
+  tier 2 keyed by `KeySliceQuery` per (row key, shape) — but never counted shapes, and
+  `CacheVertex.getSuperResultSet`'s linear `subsumes` scan only pays off if the shapes nest. On
+  partitioned vertices lesson 19 established the storage side and **half-discharged lesson 08's debt**:
+  `getVertex` canonicalises at `StandardJanusGraphTx:534`; `getOtherPartitionVertex:459-462` and
+  `getAllRepresentatives:464-480` each loop `getExistingVertex(ids[i])`, so every representative is its
+  own `CacheVertex` with its own `queryCache` and **there is no shared relation cache across
+  representatives**; a non-canonical representative additionally takes its lifecycle from
+  `getExistingVertex(canonicalVertexId).getLifeCycle()`, which is a second `vertexCache.get` and, with
+  `verifyExistence`, a second existence slice query; and `config.getRestrictedPartitions()` bounds the
+  id list. **What remains for lesson 20 is the count** — how many slice queries one traversal over a
+  partitioned vertex actually issues — plus `MultiSliceQueriesGroupingUtil`'s grouping tree, which
+  lesson 19 found `ExpirationKCVSCache.getMultiSlices` **mutates in place**
+  (`setQueries` / `moveQueriesToNewLeafNode` / `filterEmptyGroups` / `setQueryGroups`).
+- **Closed by lesson 19 — the three debts from lessons 15 and 16.** (a) `StandardVertex`'s flat
+  `hasLoadedRelations() == false` and `EMPTY_LIST`-for-`isNew()` are the honest base case, not stubs:
+  the question is *"do I hold this `SliceQuery`'s answer?"*, a `StandardVertex` holds none, and a new
+  vertex has no edgestore row. (b) `relTypeCache` (`:239`) is allocated only under
+  `isLazyLoadRelations()`, consumed only by `getOrLoadRelationTypeById:486-492` as
+  `computeIfAbsent(typeId, this::loadRelationTypeById)`, and caches the `TypeUtil.getBaseType`-unwrapped
+  **base relation type**, not the schema vertex; the `null` sentinel is a deliberate zero-cost path for
+  the non-lazy default. (c) What a transaction that commits and immediately re-reads sees: three cases,
+  written up in lesson 19 §7 — `db-cache` off (tier 2 absent, `EmptyVertexCache` installed, fresh
+  `CacheVertex` via `it()`/`getNextTx()`, backend read); `db-cache` on and the row was touched (marked,
+  so backend read **and not re-cached**); `db-cache` on and the row was untouched (Caffeine hit, bounded
+  by `expireAfterWrite(db-cache-time)`).
+- **Owed to lesson 25 by lesson 19, new this run:** `StandardJanusGraphTx.expireSchemaElement:2252-2276`
+  calls `sv.refresh()` + `sv.resetCache()` and invalidates the mixed-index transaction, but **does not
+  clear `relTypeCache`**. Whether that is a bug depends on whether a `lazyLoadRelations()` transaction
+  can outlive a schema change — `ManagementLogger` territory. The chain lesson 19 established, for
+  lesson 25 to cite: `ManagementSystem.commit()` / `ManagementLogger` →
+  `schemaCache.expireSchemaElement(id)` → for each `graph.getOpenTransactions()`,
+  `tx.expireSchemaElement(id)` → `vertexCache.contains(id)` (**no storage access**) → `sv.refresh()`.
+- **Owed to lesson 27 by lesson 19, new this run:** the db-cache's staleness bound is **one-sided**.
+  `CacheTransaction` calls `invalidate` only on its own JVM's `KCVSCache` objects, so cross-instance
+  invalidation exists for *schema* changes via `ManagementLogger` and **never for data**. CQL is where
+  that bites. This is cheap to verify and belongs alongside lesson 27's two outstanding
+  `CQLStoreManager` values.
 - **Closed by lesson 18 — both debts lesson 17 handed it, and one of them by correcting lesson 17's
   method.** (a) **The idempotence claim is confirmed, and it is implemented twice.** Lesson 17 took
   *"all but the first invocation are ignored"* from `BackendTransaction`'s javadoc; the two mechanisms
