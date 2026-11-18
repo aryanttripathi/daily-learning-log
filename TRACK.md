@@ -62,7 +62,7 @@ From lesson 05, `janusgraph-berkeleyje` is also needed:
 `mvn clean install -pl janusgraph-berkeleyje -am -DskipTests`.
 
 **The registers live in [`tracks/janusgraph-registers.md`](tracks/janusgraph-registers.md), new on
-2026-11-14, and now carrying candidates 1–42 (next free number **43**; 39–42 were added by lesson 19).**
+2026-11-14, and now carrying candidates 1–45 (next free number **46**; 43–45 were added by lesson 20).**
 PR candidates and the "Still open, and who owns it" ledger were split out of this
 file at lesson 16: this file had reached 116 KB, it is read **in full** at the start of every run, and
 those two sections were ~55 KB of append-only material that matters only when choosing a contribution
