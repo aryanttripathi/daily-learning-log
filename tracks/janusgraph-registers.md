@@ -4,7 +4,13 @@ track: JanusGraph
 upstream: JanusGraph/janusgraph
 pinned-commit: a59ae8d8024207598eada34998d867617df51adf
 split-from: TRACK.md on 2026-11-14 (lesson 16)
-last-updated: 2026-11-17 (lesson 19; candidates 39-42 appended, next free number 43)
+last-updated: 2026-11-19 (lesson 21; candidates 43-45 recovered from lesson 20's entry and 46-51
+  appended, next free number 52)
+sync-note: TRACK.md recorded candidates 43-45 as added by lesson 20 on 2026-11-18, but this file was
+  never written in that run and still ended at 42. Lesson 21 recovered 43-45 verbatim from
+  2026/11/2026-11-18-janusgraph-vertex-centric-query-builder/README.md and appended them with that
+  provenance marked, then appended its own 46-51. TRACK.md and this file now agree: 1-51 present.
+  A run that logs candidates must write this file in the SAME push as TRACK.md.
 -->
 
 # JanusGraph track — PR candidates and open questions
@@ -25,7 +31,18 @@ PR candidate and needs the next free number.
 ## PR candidates, all verified at the pinned commit
 
 Numbering is **stable** — earlier entries reference these numbers, so new candidates are appended rather
-than inserted in size order. **Candidates 33-38 are new this run** (lesson 18, the locking layer — the
+than inserted in size order. **Candidates 46-51 are new this run** (lesson 21, the graph-centric index
+selector — six, tying lesson 18's batch, and **51 is the first reachability argument the track has filed
+rather than a defect**). **Candidates 43-45 were recovered this run**: lesson 20 found them and recorded
+them in `TRACK.md`, but never wrote them here, so they are reproduced from lesson 20's own entry with
+their provenance marked — see the `sync-note` in the header. Candidate **44 and candidate 47 are the same
+defect on the two different planners, in opposite directions**, and are best filed together or at least
+cross-referenced. **The best first contributions are now 46, 29, 31, 28, 21 and 24** — 46 is two constant
+declarations and a misspelling, 29 and 31 are one-line comment/message corrections, 28 is a one-line error
+message with no behavioural risk, 21 is doc-only and 24 is a two-line guard fix; every one of them forces
+a maintainer to confirm a reading. Candidates 46-51 were verified at this pinned commit on 2026-11-19 and
+43-45 re-verified against it in the same run. The historical note follows. **Candidates 33-38 were new at
+lesson 18** (lesson 18, the locking layer — the
 largest batch the track has added in one run, and **38 is the first candidate that is a plausible
 correctness bug rather than a cleanup since 18**); 31-32 came from lesson 16, 29-30 from lesson 15,
 26-28 from lesson 14, 24-25 from lesson 13 and 21-23 from lesson 12, which also **rewrote** candidate 20
@@ -597,9 +614,152 @@ because lesson 14 found a second, configuration-driven call site for `getBackend
     count snapshotted before the index read. **Owner: the run that executes lesson 19's Next Step 2.**
     Found by lesson 19.
 
+43. **Recovered this run, originally found by lesson 20 and never written here (see the header note).
+    `BasicVertexCentricQueryBuilder.getAllRelationsQuery()` allocates a fresh `SliceQuery` on every
+    call**, while the file three directories over keeps `ALL_PROPERTIES_SLICE` as a `static final` with
+    an in-tree comment explaining that the point is to allocate no query per access
+    ([`VertexCentricQueryBuilder`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/query/vertex/VertexCentricQueryBuilder.java)). Make it a
+    constant; the precedent is in the same package. Found by lesson 20.
+44. **Recovered this run, originally found by lesson 20. `5.0/k` versus a flat `+1` makes a six-value
+    `IN` score *below* an open range on the same key.** In
+    [`BasicVertexCentricQueryBuilder`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/query/vertex/BasicVertexCentricQueryBuilder.java)'s
+    relation-index score, a `k`-point `Contain.IN` scores `5.0/k` and any range scores a flat `1.0`,
+    so the two cross at **k = 5**: `IN` of 6 scores 0.833 against a range's 1.000, even though the `IN`
+    compiles to six tight **fitted** slices and the range to one wide one. A scoring artefact, not a
+    correctness bug — the wrong choice still returns the right answer, over more bytes — but it wants a
+    benchmark. **Now paired with candidate 47, which is the same defect on the other planner, in the
+    opposite direction.** Found by lesson 20.
+45. **Recovered this run, originally found by lesson 20. `BackendQueryHolder.hashCode()` hashes
+    `isFitted` twice and `isSorted` never:** `return Objects.hash(backendQuery, isFitted, isFitted);`
+    ([`BackendQueryHolder`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/query/BackendQueryHolder.java)) while `equals` compares all
+    three. Equal objects still hash equal so nothing breaks, but two holders differing only in
+    `isSorted` collide by construction. A one-character typo. Found by lesson 20.
+46. **NEW: `AbstractIndexSelectionStrategy.getIndexTypeScore` branches on `Cardinality.SINGLE` and
+    returns the same number either way.**
+    [`AbstractIndexSelectionStrategy`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/query/index/AbstractIndexSelectionStrategy.java)
+    declares `CARDINALITY_SINGE_SCORE = 1000` and `CARDINALITY_OTHER_SCORE = 1000`, and
+    `getIndexTypeScore` is an `if`/`else` over exactly those two constants — so a unique composite
+    index and a non-unique one are weighed identically and the branch cannot change any decision.
+    Either the distinction was intended and one constant is wrong, or the branch is dead and should
+    collapse to one line; a maintainer has to say which. The misspelled name (`SINGE`, missing the
+    `L`) suggests the pair has not been read in a while, and is worth fixing in the same change.
+    **Smallest candidate since 11 and 31, and the easiest to confirm: two constant declarations.**
+    Found by lesson 21.
+47. **NEW, and the mirror image of candidate 44: the graph-centric score is blind to the width of an
+    `IN` list.** `AbstractIndexSelectionStrategy.getConditionBasicScore` gives
+    `EQUAL_CONDITION_SCORE = 4` only to `c instanceof PredicateCondition && predicate == Cmp.EQUAL`,
+    else `OTHER_CONDITION_SCORE = 1`. A multi-value `Contain.IN` reaches the planner as an `Or` of
+    equalities (`QueryUtil.constraints2QNF`, [`QueryUtil:240-307`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/query/QueryUtil.java#L240-L307)),
+    which is **not** a `PredicateCondition`, so it scores `1` — the same as a range, and **independent
+    of `k`**. Meanwhile `constructIndexCover` has produced one `Object[]` tuple per `IN` value
+    combination, and `IndexSerializer.getQuery(CompositeIndexType, List<Object[]>)`
+    ([`:454-462`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/database/IndexSerializer.java#L454-L462)) turns each into its own
+    `KeySliceQuery`. So a 1000-value `IN` is scored exactly like a 2-value one while costing 1000 row
+    reads. Lesson 20's planner over-penalises a wide `IN`; this one ignores it. **Measure before
+    proposing:** on a 100k-vertex graph with one composite index, compare
+    `has(k, within(…1000 values…))` against an equivalent range, and let the result decide whether this
+    is a documentation fix or a scoring fix. Found by lesson 21.
+48. **NEW: `ALREADY_MATCHED_ADJUSTOR` cannot penalise a composite index, because the `+1000` is added
+    outside the multiplication.** In
+    [`ApproximateIndexSelectionStrategy`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/query/index/ApproximateIndexSelectionStrategy.java):
+    `double subScore = getConditionBasicScore(c); if (coveredClauses.contains(c)) subScore = subScore * ALREADY_MATCHED_ADJUSTOR; score += subScore + getIndexTypeScore(indexCandidate.getIndex());`
+    With `ALREADY_MATCHED_ADJUSTOR = -1.1`, an already-covered equality on a composite index contributes
+    `(4 × −1.1) + 1000 = +995.6` — the penalty meant to discourage redundant coverage leaves the
+    contribution strongly **positive**. It only bites on a mixed index (`−4.4 + 0`). Moving
+    `getIndexTypeScore` inside the adjusted term, or applying the adjustor to the whole per-clause
+    contribution, would make it mean what its name says — but it changes plans, so it needs the greedy
+    strategy's tests run and probably a benchmark. Found by lesson 21.
+49. **NEW: `ApproximateIndexSelectionStrategy` rebuilds every `IndexCandidate` on every pass of its
+    greedy loop.** `createIndexCandidate(index, conditions, serializer)` is called inside the
+    `for (final IndexType index : rawCandidates)` loop, which is itself inside `while (true)` — so with
+    `n` raw candidates and `p` picks it runs `n × (p + 1)` times, each re-walking the whole condition
+    tree through `indexCover`/`coversAll`/`constructIndexCover` and re-allocating a `HashSet` sub-cover
+    and, for a composite index with `IN` lists, the entire `List<Object[]>` tuple product. Nothing is
+    memoised. `BruteForceIndexSelectionStrategy` already does the right thing: it builds each candidate
+    **once** before enumerating. The fix is to hoist construction above the `while` and recompute only
+    the score, which is the only thing that depends on `coveredClauses`. This is the strategy the
+    default (`threshold-based`) selects whenever a query has **more than 10** raw candidates — i.e.
+    exactly the wide-schema case where it costs most. Found by lesson 21.
+50. **NEW: the brute-force strategy's tie-break is non-deterministic across JVM runs, and it decides
+    which index gets streamed.** `IndexCandidateGroup.compareTo` is lexicographic (clauses↑, indexes↓,
+    score↑) and `BruteForceIndexSelectionStrategy` keeps a group only on a **strict** `> 0`, so the
+    *first* group seen wins a tie. The enumeration is `new PowerSet<>(indexCandidates)` over a
+    `HashSet<IndexCandidate>`, and
+    [`IndexCandidate`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/query/index/IndexCandidate.java) declares **no `equals` and no
+    `hashCode`** — so bucket order is identity-hash dependent. Two single-key composite indexes that
+    cover one clause each with the same score (the common shape: `has(a,…).has(b,…)` with an index on
+    each) can therefore be ordered differently between runs, and because
+    `StandardJanusGraphTx.elementProcessorImpl.execute` **streams subquery 0 and materialises the rest
+    unbounded**, which index is cheap and which is expensive flips with it. Fix: give `IndexCandidate`
+    a stable identity, or sort the candidate list by index name before enumerating. Worth filing as an
+    issue first — it is a reproducibility and benchmarking problem before it is a performance one, and
+    a maintainer may prefer a different stable key. Fold in the observation that
+    `IndexCandidateGroup.getTotalScore()` memoises with a `Double.NEGATIVE_INFINITY` sentinel while
+    `IndexCandidate`'s default score **is** `Double.NEGATIVE_INFINITY`, so a candidate whose
+    `setScore` was never called makes its group's total both `−∞` and unmemoisable. Found by lesson 21.
+51. **NEW, and a reachability claim rather than a defect: the adaptive retry loop in
+    `QueryUtil.processIntersectingRetrievals` cannot execute from its only caller.**
+    [`QueryUtil:463-504`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/query/QueryUtil.java#L463-L504) computes
+    `multiplier = Math.min(16, (int) Math.pow(2, retrievals.size() - 1))`, sets
+    `subLimit = Integer.MAX_VALUE`, and replaces it with `limit * multiplier` only if
+    `Integer.MAX_VALUE / multiplier >= limit`. Its only production caller is
+    `StandardJanusGraphTx.elementProcessorImpl.execute`
+    ([`:1894-1942`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/transaction/StandardJanusGraphTx.java#L1894-L1942)), which passes
+    `Query.NO_LIMIT` — and `Query.NO_LIMIT == Integer.MAX_VALUE`
+    ([`Query`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/query/Query.java)). With one retrieval, `multiplier == 1` and
+    `subLimit = Integer.MAX_VALUE`; with two or more, the integer-division guard fails and `subLimit`
+    stays `Integer.MAX_VALUE`. Either way `subResult.size() >= subLimit` needs a sub-result of
+    2 147 483 647 elements, so `exhaustedResults` stays `true` and the `do/while` runs **exactly one
+    pass**: the `16` cap, the `2^(n-1)` multiplier, the `Math.pow(subLimit, 1.5)` growth and the retry
+    itself are all unreachable, and the `//TODO: smarter limit estimation` sits directly above them.
+    `search_code` for the method name returned one production caller, one call site inside it, and two
+    comment references (`SubqueryIterator`, `SubqueryIteratorTest`). **Open this as a question, not a
+    patch** — the `NO_LIMIT` argument is itself a deliberate correctness fix (the intersection must be
+    complete; see issue [#4931](https://github.com/JanusGraph/janusgraph/issues/4931) and PR
+    [#4941](https://github.com/JanusGraph/janusgraph/pull/4941)), so the honest ask is whether the
+    adaptive path is meant to come back, in which case the dead machinery is a deliberate placeholder
+    and deserves a comment saying so. Verify there is no reflective or test caller supplying a real
+    limit before writing anything. Found by lesson 21.
+
 ---
 
 ## Still open, and who owns it
+
+- **Closed by lesson 21 — all three debts lesson 20 handed forward.** (a) *The second scoring function,
+  and whether it consults statistics.* It does not: four constants on
+  `AbstractIndexSelectionStrategy` (`EQUAL_CONDITION_SCORE = 4`, `OTHER_CONDITION_SCORE = 1`,
+  `CARDINALITY_SINGE_SCORE = CARDINALITY_OTHER_SCORE = 1000`) and two on
+  `ApproximateIndexSelectionStrategy` (`ORDER_MATCH = 1`, `ALREADY_MATCHED_ADJUSTOR = -1.1`), over two
+  three-line functions. The difference from the vertex-centric planner is *shape*, not kind: a weighted
+  set cover with a **lexicographic** objective (`IndexCandidateGroup.compareTo`: more clauses covered →
+  fewer indexes → higher score), solved exactly by `2^n` enumeration under the default
+  `query.index-select-threshold = 10`. (b) *`QueryUtil.processIntersectingRetrievals`.* It is not the
+  analogue of a sub-query merge — it is an **intersect**, because graph-centric sub-queries are conjuncts
+  of one `And`, and its adaptive retry loop is unreachable from its only caller (candidate 51).
+  (c) *Whether the strategy layer can fold a `has()` into a compiled query.* **No.** `JanusGraphStep`
+  calls `requireOrderValues()` then `constructQueryWithoutProfile(…)` on a fresh mutable builder;
+  `GraphCentricQuery` is immutable and exposes no way to add a condition. The only post-compilation
+  rewrite in the tree is `JointIndexQuery.narrowFirst`, used by `withoutResultsAfter`, and it rewrites
+  the backend query rather than the condition tree.
+- **Open, owner lesson 22 (the Part IV/V boundary).** The **re-pin review**, not run since lesson 18;
+  plus what `QueryProcessor` does with an unfitted or unsorted `BackendQueryHolder`, how
+  `ResultMergeSortIterator` and `ResultSetIterator` compose, whether the in-memory filter runs before or
+  after the limit, and `LimitAdjustingIterator` proper — with the caveat that `query.smart-limit`
+  defaults to `false`, so there is often nothing to adjust.
+- **Open, owner lesson 25, new this run.** Reads skip a **composite** index unless
+  `index.getStatus() == SchemaStatus.ENABLED`, with **no base-type exemption** of the kind lesson 20
+  found on the relation-index path, while a **mixed** index is filtered per `ParameterIndexField` status
+  inside `coversAll`. Which of the two a reindex relies on to converge is lesson 25's to state.
+- **Open, owner lesson 26, new this run.** Three `IndexFeatures` flags each decide a planner branch that
+  lesson 21 could only name: `supportNotQueryNormalForm()` (whether a top-level `Or` has any candidate
+  at all, since composite indexes are excluded outright), `supportsOrderingListProperty()` (whether
+  `indexCoversOrder` holds for a `LIST`/`SET` order key) and `supportsExistsQuery()` (whether `has(key)`
+  can be answered from the index, and so whether `requireValues` can narrow a subquery).
+- **Open, owner lesson 27, carried from lesson 18's rolled-off block.** Whether `CQLStoreManager` and
+  `HBaseStoreManager` set `.locking(...)` in their feature builders, and therefore whether
+  `ConsistentKeyLocker` runs on them. (`InMemoryStoreManager` is wrapped and runs the full protocol;
+  `BerkeleyJEStoreManager` sets `.locking(true)` and is native.) Also still owed: what the CQL store does
+  with `SliceQuery.setDirectColumnByStartOnlyAllowed`.
 
 - **Closed by lesson 19 — the question lesson 17 posed and lesson 18 sharpened.** **A commit marks, it
   does not evict and it does not write through.** `CacheTransaction.flushInternal` persists first, then
