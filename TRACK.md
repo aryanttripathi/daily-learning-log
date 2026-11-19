@@ -315,7 +315,13 @@ present, next free 52.** *A run that logs candidates must write the register in 
   contains the file twice (once as `text`, once inside a nested `{"content": …}` resource), and a naive
   join produces a file with the JSON tail appended, which silently shifts every line number past the
   real end of file. Verify by checking the byte count against the size `get_file_contents` reports for
-  the path. Files read inline this run were cited by member name only, per lesson 20's split.
+  the path. **Better, and it earned its keep on this run's push:** compute the git blob hash locally,
+  `sha1("blob " + len + "\0" + bytes)`, and compare it against the blob `sha` that
+  `create_or_update_file` returns. This run's first TRACK.md push landed at 103,606 bytes instead of
+  103,607 — a single blank line, between the lesson-16 and lesson-15 session-log entries, was dropped in
+  transit — and the blob-sha comparison caught it immediately where a line-count or eyeball check would
+  not have. It was diffed, corrected and re-pushed, so two TRACK.md commits are on `main` for 2026-11-19.
+  **Do this check on every push over ~50 KB.** Files read inline this run were cited by member name only, per lesson 20's split.
   `README.md`, `TRACK.md` and `tracks/janusgraph-registers.md` are all far over the limit, so all three
   are read to local files and edited with a script rather than re-emitted from context.
 - **Method note; lesson 21 is the ninth entry where simulation was not needed.** Lessons 10-12
