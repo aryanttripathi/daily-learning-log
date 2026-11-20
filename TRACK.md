@@ -5,21 +5,23 @@ mode: lesson
 mode-history: contributor-reading 2026-10-30 .. 2026-11-02 (sessions 01-04); lesson from 2026-11-03 (lesson 05 on)
 started: 2026-10-30
 lessons-total: 28
-lessons-done: 21
+lessons-done: 22
 pinned-commit: a59ae8d8024207598eada34998d867617df51adf
 pinned-commit-date: 2026-10-28
-pinned-commit-reviewed: 2026-11-16 at the Part III/IV boundary (lesson 18); NOT re-run since, as lessons
-  19, 20 and 21 are all mid-Part. Each got a free cross-check instead and all four agree: lesson 19 measured
-  Backend at 775 lines and GraphDatabaseConfiguration at 2191; lesson 20 measured EdgeSerializer at 591,
-  matching lessons 10 and 11; lesson 21 measured GraphDatabaseConfiguration at 2191 again (exact match with
-  18 and 19) and found QueryUtil.processIntersectingRetrievals at :463, exactly where lesson 20 cited it
-  (lesson 20 reported QueryUtil's total as 521 lines against lesson 21's 520 — the cited member line agrees
-  to the line, so the difference is in the reported total, not a moved pin). The pin has demonstrably not
-  moved. NEXT REVIEW: DUE NOW — lesson 22 is the Part IV/V boundary and owes it; re-run list_commits on
-  JanusGraph/janusgraph master and either re-pin and record the new commit here, or record the decline.
+pinned-commit-reviewed: 2026-11-20 at the Part IV/V boundary (lesson 22) — PERFORMED, and the pin stays
+  for the fourth review in a row. list_commits on JanusGraph/janusgraph master returns a59ae8d8 (2026-10-28,
+  Restore 1.3.0-SNAPSHOT version CTR), 9a30ff14 (2026-10-28) and 5e3e7bc7 JanusGraph release 1.2.0
+  (2026-10-24), then 0f578b3f (2026-10-22, fixes #5124) and b7c14c53 (2026-10-23, fixes #5126). There is
+  nothing to re-pin to. Lesson 22 also replaced the line-count cross-check with a STRONGER one: it
+  reconstructed the two files it cites by line number and verified their git blob SHAs —
+  QueryProcessor.java 16,048 bytes = b28e68871c9a8a0f655373deaa4185cdf4da9a44 and
+  LimitAdjustingIterator.java 5,961 bytes = 96a7e3ae38ff3c0138879c5688f8a62053b66220, both exactly what
+  get_file_contents reported at the pinned commit. Use the blob-SHA check from here on.
+  NEXT REVIEW: the Part V/VI boundary, after lesson 24. Lessons 23 and 24 are mid-Part and must NOT
+  re-raise it.
 upstream: JanusGraph/janusgraph
 reader-fork: aryanttripathi/janusgraph
-registers: tracks/janusgraph-registers.md (PR candidates 1-51, next free 52; "Still open, and who owns it")
+registers: tracks/janusgraph-registers.md (PR candidates 1-60, next free 61; "Still open, and who owns it")
 paused-tracks: PostgreSQL (resume at lesson 11; full state in tracks/postgresql.md)
 -->
 
@@ -49,13 +51,18 @@ are reference material rather than reading material (`GraphDatabaseConfiguration
 
 **Pinned source.** All line numbers and permalinks use commit `a59ae8d8` (2026-10-28) on
 `JanusGraph/janusgraph` `master`. Re-pin only at a Part boundary, and record the new commit here.
-**Reviewed again 2026-11-16 (lesson 18, the last item of Part III): `list_commits` on `master` returns
-the same three newest commits as at lesson 13 — `a59ae8d8` (2026-10-28), `9a30ff14` (2026-10-28) and
-`5e3e7bc7` *JanusGraph release 1.2.0* (2026-10-24). There is nothing to re-pin to, so the pin stays and
-Part IV's byte offsets stay comparable with lessons 02-18. Lessons 19, 20 and 21 were all mid-Part and
-correctly did not re-run `list_commits`; each cross-checked a line count against an earlier lesson's
-independent count instead, and all three matched exactly. **The review is now DUE: lesson 22 is the
-Part IV/V boundary and owes it.**
+**Reviewed again 2026-11-20 (lesson 22, the last item of Part IV, and the Part IV/V boundary): the review
+was PERFORMED and the pin stays for the fourth time.** `list_commits` on `master` returns the same newest
+commits as at lessons 13 and 18 — `a59ae8d8` (2026-10-28), `9a30ff14` (2026-10-28) and `5e3e7bc7`
+*JanusGraph release 1.2.0* (2026-10-24), then `0f578b3f` (2026-10-22, fixes #5124) and `b7c14c53`
+(2026-10-23, fixes #5126). There is nothing to re-pin to, so Part V's line numbers stay comparable with
+lessons 02-22. Lessons 19, 20 and 21 were all mid-Part and correctly did not re-run `list_commits`; the
+next review is the **Part V/VI boundary, after lesson 24**, and lessons 23-24 must not re-raise it.
+**The cross-check method changed and improved this run:** instead of comparing line-count totals, lesson 22
+reconstructed the two files it cites by line number and verified their **git blob SHAs** against what
+`get_file_contents` reported — `QueryProcessor.java` 16,048 bytes = `b28e6887…`,
+`LimitAdjustingIterator.java` 5,961 bytes = `96a7e3ae…`. Byte-identity is a proof where a line count is
+only evidence; use it from here on for every file cited by line number.
 
 **Reader setup (assumed from lesson 02 on).** Fork at `aryanttripathi/janusgraph`, cloned locally
 with `upstream` pointing at `JanusGraph/janusgraph`; Java 17 or 21, Maven 3.6.3+;
@@ -64,9 +71,9 @@ From lesson 05, `janusgraph-berkeleyje` is also needed:
 `mvn clean install -pl janusgraph-berkeleyje -am -DskipTests`.
 
 **The registers live in [`tracks/janusgraph-registers.md`](tracks/janusgraph-registers.md), new on
-2026-11-14, and now carrying candidates 1–51 (next free number **52**; 46–51 were added by lesson 21,
-which also repaired the file: lesson 20's 43–45 were recorded in this file but never written to the
-register, and were recovered this run from lesson 20's own entry).**
+2026-11-14, and now carrying candidates 1–60 (next free number **61**; 52–60 were added by lesson 22 —
+nine, the largest batch the track has filed — and written in the **same push** as this file, per the rule
+the 2026-11-19 desync produced).**
 PR candidates and the "Still open, and who owns it" ledger were split out of this
 file at lesson 16: this file had reached 116 KB, it is read **in full** at the start of every run, and
 those two sections were ~55 KB of append-only material that matters only when choosing a contribution
@@ -82,7 +89,10 @@ compressed on 2026-11-13, lesson 13 on 2026-11-14, lesson 14 on 2026-11-15, less
 lesson 16 on 2026-11-17, and **lesson 17's paragraph was compressed this run**; the full paragraphs
 remain verbatim in git history at the commit each line names, and their substance is carried forward
 either in the surviving `Verified by` blocks, in the registers file, or in the root `README.md`'s
-per-lesson narrative. Next run, lesson 18's paragraph is the one that goes.
+per-lesson narrative. **Lesson 19's `Verified by` block was removed this run** and its paragraph
+compressed. Next run, lesson 20's block and paragraph are the ones that go.
+
+- **22 — 2026-11-20** · [`2026/11/2026-11-20-janusgraph-query-processor-iterator-stack/README.md`](2026/11/2026-11-20-janusgraph-query-processor-iterator-stack/README.md) · **Part IV complete. The Part IV/V re-pin review was PERFORMED and the pin stays for the fourth time. All three debts lesson 21 handed over are discharged.** Read the whole `graphdb/query` top level and the profile package at the pinned commit: `QueryProcessor` (whole, 320 lines, **blob-SHA verified** — 16,048 bytes = `b28e6887`; cited at `:56`, `:69-74`, `:76-162`, `:80-119`, `:87-88`, `:93`, `:95-100`, `:101-107`, `:109-111`, `:114`, `:120-160`, `:139-151`, `:170-176`, `:187-224`, `:227-237`, `:239-245`, `:247-296`, `:257-275`, `:298-318`), `LimitAdjustingIterator` (whole, 131 lines, **blob-SHA verified** — 5,961 bytes = `96a7e3ae`; `:59-65`, `:76-113`, `:78-86`, `:87`, `:91-96`, `:99-108`), plus `ResultSetIterator`, `ResultMergeSortIterator`, `BackendQueryHolder`, `QueryExecutor`, `MetricsQueryExecutor`, `ElementQuery`, `BackendLimitAware`, `QueryProfiler`, `SimpleQueryProfiler`, `TP3ProfileWrapper`, `GraphCentricQuery`, `BaseVertexCentricQuery`, `VertexCentricQuery`, `CloseableIteratorUtils`, `MultiIterator`, `SubqueryIterator` (re-read) and `QueryProcessorTest` — all whole, all cited by member name. `search_code` for `new QueryProcessor`, `hasSiblings addNested`, `implements ElementQuery`, `useSimpleQueryProcessor` and `BackendLimitAware`; `list_commits` on `master`. **THE finding: the in-memory filter sits between the backend limit and the element count**, so `limit(10)` bounds what the caller receives and not what is read, and the backend limit **doubles** — `L, 2L, 4L …` with a full re-read each time, no cursor — until enough survive. Second: **`QueryProcessor` creates no profiler span at all** (three pass-through uses, no `addNested`/`startTimer`/`setResultSize`), so merge, sort and filter time is invisible in `.profile()` and in Metrics; the only external traces are the gap between a `backend-query` span's `readCount` and the elements returned, and repeated sibling `backend-query` spans with doubling `limit` annotations. Third: **half the class is dead** — `VertexCentricQuery.isSorted()` is hard-coded `true` and `GraphCentricQuery.numSubQueries()` hard-coded `1`, so the unsorted branch's `concat` + de-dup arm (`:139-150`) is unreachable and `ResultMergeSortIterator`'s `filterDuplicates` is dead in both implementations. Fourth: **the single-slice fitted sorted vertex-centric case does not use `QueryProcessor` at all** — `useSimpleQueryProcessor` diverts it to `SimpleVertexQueryProcessor`. Nine PR candidates logged (**52-60**, the largest batch so far), register now 1-60, next free 61; `tracks/janusgraph-registers.md` written in the **same push** as this file, per the 2026-11-19 rule. Daily Diff: **no 2026-11-19 or 2026-11-20 edition exists** (front page and `/archive/` agree on 2026-11-18, both dated URLs `client_error`) and 2026-11-18 was already digested by lesson 21, so the uncovered-item fallback was used: #15, Percona on Galera `pc.weight` — whose printed quorum formula does not match the `have_quorum` code it quotes.
 
 - **21 — 2026-11-19** · [`2026/11/2026-11-19-janusgraph-graph-centric-query-builder/README.md`](2026/11/2026-11-19-janusgraph-graph-centric-query-builder/README.md) · **stayed on `a59ae8d8`. All three debts lesson 20 handed over are discharged, and the answer to the headline question is "same kind of function, different shape": the graph-centric planner is also statistics-free, but it solves a weighted set cover over the query's clauses, may choose several indexes, and may choose none — which is the full scan.** Read the whole graph-query and index-selection surface at the pinned commit: `GraphCentricQueryBuilder` (whole, 612 lines, numbered locally; cited at `:177-249`, `:236-238`, `:271-274`, `:282-283`, `:302-330`, `:332-436`, `:448-465`, `:471-495`, `:503-524`, `:532-551`, `:561-597`, `:603-611`), `GraphCentricQuery`, `JointIndexQuery`, `Query`, `IndexSelectionStrategy`, `AbstractIndexSelectionStrategy`, `BruteForceIndexSelectionStrategy`, `ApproximateIndexSelectionStrategy`, `ThresholdBasedIndexSelectionStrategy`, `IndexCandidate`, `IndexCandidateGroup`, `IndexSelectionUtil`, `SubqueryIterator` (all whole), plus `QueryUtil` again (whole, **520** lines by this run's count — lesson 20 reported 521, but `processIntersectingRetrievals` sits at **`:463` in both counts**, so the one-line difference is in the reported total, not a moved pin), `StandardJanusGraphTx` (whole, 2277; cited at `:373-376`, `:1589-1592`, `:1596-1631`, `:1640-1698`, `:1713-1755`, `:1807-1836`, `:1838-1857`, `:1868-1891`, `:1894-1942`, `:1956-1990`), `IndexSerializer` (whole, 613; `:414-446`, `:454-462`, `:464-485`), `GraphDatabaseConfiguration` (whole, **2191** — identical to lessons 18 and 19's independent counts), `StandardJanusGraph` (whole, 1489) and `QueryTest` (whole, 1105 — the dedicated test class the vertex-centric compiler does not have). `search_code` located `JanusGraphStep` and `SubqueryIteratorTest`; `issue_read` fetched issue #4931 and its closing PR #4941. Daily Diff: the 2026-11-18 edition (61 stories), deep dive on Postgres `CREATE TEMP TABLE` catalog churn and the instance-wide shared-invalidation ring.
   **Findings.** **THE finding: the graph-centric decision is a weighted set cover with a lexicographic objective, and it lives behind a swappable SPI rather than in the builder.** `GraphCentricQueryBuilder.constructQueryWithoutProfile` (105 lines) calls `indexSelector.selectIndices(...)`, which mutates a caller-owned `Set<Condition> coveredClauses` as an out-parameter and returns `SelectedIndexQuery(JointIndexQuery, isSorted)`. `IndexCandidateGroup.compareTo` ranks groups by **more clauses covered, then fewer indexes, then higher total score** — so a mixed index scoring `5` beats a composite scoring `1004` when it covers one more clause, and the `+1000`-per-clause composite bias only ever breaks ties. Scoring is four constants (`EQUAL_CONDITION_SCORE = 4`, `OTHER_CONDITION_SCORE = 1`, `CARDINALITY_SINGE_SCORE = CARDINALITY_OTHER_SCORE = 1000`) plus two on the approximate strategy (`ORDER_MATCH = 1`, `ALREADY_MATCHED_ADJUSTOR = -1.1`); no statistics anywhere, and `ThresholdBasedIndexSelectionStrategy` carries the in-tree `TODO` asking for selectivity histograms. Default is `threshold-based` with `query.index-select-threshold = 10`, counted against **raw** candidates, so the default admits `2^10 = 1024` `IndexCandidateGroup` allocations per compiled query inside the `OPTIMIZATION` span. A composite index is all-or-nothing (`constructIndexCover` needs an equality at every field position, and an `IN` multiplies out to one `Object[]` tuple per combination → one `KeySliceQuery` each inside one `MultiKeySliceQuery`), and it is excluded outright when the top-level condition is an `Or`. Execution is **stream-one/intersect-the-rest**: `StandardJanusGraphTx.elementProcessorImpl.execute` streams subquery 0 through `SubqueryIterator` under the joint limit and materialises subqueries 1..n−1 **eagerly and unbounded** via `QueryUtil.processIntersectingRetrievals(retrievals, Query.NO_LIMIT)` — which, because `NO_LIMIT == Integer.MAX_VALUE`, makes that function's adaptive retry loop, its `min(16, 2^(n-1))` multiplier and its `subLimit^1.5` growth unreachable from its only caller (candidate 51). The full scan is literally an empty `JointIndexQuery`; `query.force-index` turns it into a `JanusGraphException`. `isSorted` survives three independent gates (`IndexSelectionUtil.indexCoversOrder`, the same check inside `IndexSerializer.getQuery` when building `OrderEntry`s, and the builder's own `takesTheOrder` re-derivation from the serialized query, which demands position 0, equal length and matching field and direction at every position). **Lesson 20's three debts are closed:** the second scoring function is above; `processIntersectingRetrievals` is an *intersect*, not a merge, because graph-centric sub-queries are conjuncts of one `And`; and `JanusGraphStep` proves the strategy layer **cannot** fold a `has()` into a compiled query — it calls `requireOrderValues()` and then `constructQueryWithoutProfile(...)` on a fresh builder, and the only post-compilation rewrite in the tree is `JointIndexQuery.narrowFirst`, used by `withoutResultsAfter`. Six PR candidates logged, **46-51**; next free **52**.
@@ -90,7 +100,7 @@ per-lesson narrative. Next run, lesson 18's paragraph is the one that goes.
 - **20 — 2026-11-18** · [`2026/11/2026-11-18-janusgraph-vertex-centric-query-builder/README.md`](2026/11/2026-11-18-janusgraph-vertex-centric-query-builder/README.md) · **stayed on `a59ae8d8`. The count question lesson 19 handed over is answered: the number of `SliceQuery` shapes a traversal makes per vertex is a product, not a constant. Lesson 08's partitioned-read debt is fully discharged; lesson 19's `MultiSliceQueriesGroupingUtil` hand-off is traced to its single entry condition.** Read the whole vertex-query package at the pinned commit: `BasicVertexCentricQueryBuilder` (whole, 973 lines, numbered locally; cited at `:205-212`, `:325-334`, `:336-342`, `:344-367`, `:376-409`, `:498-517`, `:537-544`, `:546-731`, `:733-774`, `:787-801`, `:816-847`, `:849-929`, `:960-969`), `BaseVertexCentricQueryBuilder`, `VertexCentricQueryBuilder`, `MultiVertexCentricQueryBuilder`, `SimpleVertexQueryProcessor`, `BaseVertexCentricQuery`, `VertexCentricQuery`, `BasicVertexCentricQueryUtil`, `BackendQueryHolder` (all whole), plus `EdgeSerializer` again (whole, 591, numbered; cited at `:430-434`, `:436-552`, `:554-577`, `:579-588` — the line count matches lessons 10 and 11, a free confirmation the pin has not moved), `QueryUtil` (whole, 521, numbered; cited at `:57-71`, `:89-95`), `IDHandler` (whole), `InternalRelationType` (whole), `RelationTypeVertex` (whole). Tests read: `JanusGraphBaseTest` (whole, 764, numbered; `evaluateQuery` at `:589-659`), `JanusGraphTest` (whole, 12,258, numbered; cited at `:2120-2262`, `:4722-4761`, `:4818-4834`, `:5086-5106`, `:5265-5293`), `InMemoryGraphTest` (whole, for its `@Disabled` list). Three directory listings. Four `search_code` queries, of which `VertexCentricQueryTest` returned **0 hits** — there is no dedicated unit test for this compiler at all; its entire coverage lives inside `JanusGraphTest`. One doc page: [Index Performance](https://docs.janusgraph.org/schema/index-management/index-performance/).
   **Findings.** **THE finding: the vertex-centric planner is one `double` with no statistics, and its arithmetic has a crossover nobody states.** A 1-point equality on a leading sort-key position scores +5.0, a *k*-point `Contain.IN` scores +5.0/k, any range (including the `RangeInterval` that `has(key)` compiles to) scores a flat +1 and then **breaks the loop**, and +3 is added when the candidate's declared sort order and key prefix satisfy the `orderBy` — which, with no `orderBy`, **every** candidate gets, making the ordering bonus a constant offset rather than a tiebreaker. So `5.0/k` crosses the flat `+1` at **k = 5**: a six-value `IN` list is scored *below* an open range on the same key, although it compiles to six tight fitted slices rather than one wide one (**PR candidate 44**, derived, paired with Hands-On B which makes a real planner choose). Second: **`score > bestScore` is strict and `RelationTypeVertex.getRelationIndexes()` yields `Iterables.concat(singletonList(this), …)` — the base relation type is always candidate #0 — so every tie resolves to the plain label slice**, which is the mechanism behind the docs' prose warning that a constraint must land on an index's *first* sort key. Third, and this is the answer lesson 19 asked for: **sub-queries per vertex = Σ over named types of ( dirs × ∏ |points| over the leading run of point-interval sort-key positions )**, with dirs ∈ {1,2} and an `isUnbounded`-BOTH collapse forcing 1; `JanusGraphTest` pins 1, 2 and 3 at `:4829-4834` and 2 at `:5267-5268`. Crossing one is the switch that changes machinery — `bq.getQueries().size() == 1` picks `executeMultiQuery`, anything more picks `executeMultiSliceMultiQuery`, i.e. the grouping tree the db-cache rewrites in place. Fourth: **direction is the low bit of the varint *inside* the relation type**, not a level above it, which is why an untyped `direction(OUT)` query is unfitted (`:5290-5293` asserts the pair three lines apart), why `sliceLimit *= 2` is arithmetic rather than a heuristic, and why a typed BOTH query is two slices. Fifth: **`has(key)` is not "no constraint"** — `intersectConstraints` returns `new RangeInterval<>()` for it, so it occupies a slot in `intervalConstraints` and makes the collapsed BOTH form **unfitted** (`:2247-2248`). Two more candidates: **43** (`getAllRelationsQuery()` allocates a `SliceQuery` per call where the sibling `ALL_PROPERTIES_SLICE` in the same package is a `static final`, with an in-tree comment saying why) and **45** (`BackendQueryHolder.hashCode()` is `Objects.hash(backendQuery, isFitted, isFitted)` — `isFitted` hashed twice, `isSorted` never, while `equals` compares both). Candidates 43-45 logged; next free number **46**.
 
-- **19 — 2026-11-17** · [`2026/11/2026-11-17-janusgraph-vertex-caches-lazy-adjacency/README.md`](2026/11/2026-11-17-janusgraph-vertex-caches-lazy-adjacency/README.md) · **Part IV opens. Lesson 18's inherited question is answered in full — invalidation *marks* a row key, it does not evict and it does not write through — and the release turns out to be a `CountDownLatch(5)`, not a clock. Three debts from lessons 15 and 16 discharged; lesson 08's partitioned-read debt half-discharged and explicitly handed to lesson 20.** Read the whole vertex and cache layer at the pinned commit: `AbstractVertex`, `StandardVertex`, `CacheVertex` (all whole), `VertexCache`, `CaffeineVertexCache`, `EmptyVertexCache` (all whole), `KCVSCache`, `ExpirationKCVSCache`, `NoKCVSCache`, `CacheTransaction` (all whole), `StandardTransactionBuilder` (whole), plus `StandardJanusGraphTx` again (whole, 2277 lines, numbered locally; cited at `:206`, `:230-268`, `:345-365`, `:486-496`, `:526-607`, `:609-665`, `:1428-1467`, `:1562-1573`, `:2091-2103`, `:2200-2210`, `:2252-2276`), `Backend` again (whole, 775, numbered; cited at `:162-165`, `:257`, `:344-381`, `:768-774`) and `GraphDatabaseConfiguration` again (whole, 2191, numbered; cited at `:610-698`, `:2055-2066`) — both line counts identical to lesson 18's independent counts, a free confirmation that the pin has not moved. Tests read whole: `CacheVertexRefreshTest`, `ExpirationCacheTest`. Four directory listings. Five `search_code` queries, of which `hasValidateKeysOnly` (**3 hits, repo-wide**) is the basis of the dead-branch finding. One doc page: [`docs/operations/cache.md`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/docs/operations/cache.md). **Findings.** (1) **Invalidation granularity is the row key and that is the only implemented path:** `hasValidateKeysOnly()` returns `true` and is overridden nowhere, so the `else` branch of `CacheTransaction.flushInternal` — which builds a `List<CachableStaticBuffer>` from the mutation's entries — is unreachable, and `ExpirationKCVSCache.invalidate`'s precondition is a tautology (**PR candidate 39**). (2) **An invalidated row is uncacheable, not merely uncached:** while the key sits in `expiredKeys`, every `getSlice` takes the `isExpired` branch, reads the store and does **not** repopulate, on all three read paths, enforced by the `key -> null` sentinel from `fillResultAndReturnMisses`; release needs `PENALTY_THRESHOLD = 5` latch countdowns plus `getAge >= db-cache-clean-wait`, and `ExpirationCacheTest.testGracePeriod`'s `minCleanupTriggerCalls = 5` is that constant verbatim. (3) **`db-cache-time = 0`, the setting the docs recommend for a single instance, makes the invalidation *mark* eternal too** — `getExpirationTime()` uses the same `cacheTimeMS`, so `isExpired`'s self-healing branch can never fire and release falls entirely to a 1-in-1000 probabilistic cleanup. (4) **Cleanup is an `O(cache size)` key-set scan** under `synchronized`, with no key → `KeySliceQuery` index (**PR candidate 40**). (5) **Invalidation runs after `persist`**, so a `persist` that throws mid-chunk skips the whole invalidation loop and `clear()`, leaving pre-mutation rows cached for up to `db-cache-time` (**PR candidate 41**, derived from reading, marked *do not file until observed*). (6) **"Pinned in the cache" is implemented on the way out:** `CaffeineVertexCache` lets Caffeine evict by size and rescues modified/removed vertices into an unbounded `volatileVertices` from the removal listener, so `cache.tx-cache-size` bounds clean vertices only. (7) The public two-argument `CacheVertex.addToQueryCache` **skips the refresh-counter guard** and its one caller is the graph-index `vertexIDConversionFct` path (**PR candidate 42**). (8) `refresh()` has exactly one production caller chain — `ManagementSystem`/`ManagementLogger` → `tx.expireSchemaElement` → `sv.refresh()` — so a user-data `CacheVertex` is never refreshed by JanusGraph itself. Candidates 39-42 logged; next free number **43**.
+- **19 — 2026-11-17** · [`2026/11/2026-11-17-janusgraph-vertex-caches-lazy-adjacency/README.md`](2026/11/2026-11-17-janusgraph-vertex-caches-lazy-adjacency/README.md) · **Part IV opened.** **Findings.** Paragraph compressed 2026-11-20 under the roll-off rule, and the `Verified by lesson 19` block removed in the same run; the full versions are in git history at the 2026-11-17 through 2026-11-19 commits. The load-bearing facts: a read passes through **four** cache tiers (per-transaction `CaffeineVertexCache`, the vertex's own four-entry `queryCache` with its linear `subsumes` scan, the per-graph `ExpirationKCVSCache`, the backend); **what the documentation calls invalidation is a mark, not an eviction, and its release is a `CountDownLatch(5)` counter rather than a clock**, which is why `testGracePeriod` and its sibling are both `@RepeatedIfExceptionsTest` and flaky by issue number; and every user vertex in an ordinary transaction is a `CacheVertex`. Lessons 22 and 27 were the stated consumers — lesson 22 used the tier model to place `SubqueryIterator`'s cache interaction, and lesson 27 still owes the CQL comparison.
 
 - **18 — 2026-11-16** · [`2026/11/2026-11-16-janusgraph-locking-consistent-key-locker/README.md`](2026/11/2026-11-16-janusgraph-locking-consistent-key-locker/README.md) · **Part III complete. Both debts lesson 17 handed this run are settled — one of them by confirming its conjecture and correcting the backend it named. Re-pin reviewed at the Part III/IV boundary and declined: `a59ae8d8` is still the tip of `master`.** Read the whole locking layer at the pinned commit: `ExpectedValueCheckingStore`, `ExpectedValueCheckingStoreManager`, `ExpectedValueCheckingTransaction`, `ConsistentKeyLocker` (whole, 638 lines, numbered locally), `AbstractLocker` (whole), `LocalLockMediator` (whole), `LockerState` (whole), `ConsistentKeyLockerSerializer` (whole), `ConsistentKeyLockStatus` (whole), `StandardLockCleanerRunnable` (whole), `StandardLockCleanerService` (whole), `PermanentLockingException`, `TemporaryLockingException`, plus `Backend` (whole, 775, numbered; cited at `:157`, `:183-202`, `:271-276`, `:292-299`, `:309-325`, `:345-346`, `:385`, `:537-541`), `BackendTransaction` (whole), `StandardJanusGraph` again (whole, 1489; cited at `:761-771`, `:899-901`, `:1002-1005`, `:1077-1097`, `:1230`), `GraphDatabaseConfiguration` again (whole, 2191; cited at `:148`, `:150-155`, `:796-804`, `:937-996`), `KCVSConfiguration` (whole), `IndexUpdate` (whole), `BufferUtil` (whole), `BaseKeyColumnValueAdapter` (whole), `InMemoryStoreManager` (whole), `BerkeleyJEStoreManager` (whole), `LockKeyColumnValueStoreTest` (whole), `InMemoryLockKeyColumnValueStoreTest` (whole), and both `locking/` directory listings. Five `search_code` queries and one doc page: [Eventual Consistency](https://docs.janusgraph.org/advanced-topics/eventual-consistency/).
   **Findings.** Paragraph compressed 2026-11-19 under the roll-off rule; the full version is in git history at the 2026-11-16 through 2026-11-18 commits. The one-sentence substance: **uniqueness survives an eventually consistent store because of one boolean** — `ExpectedValueCheckingStoreManager`'s constructor rebuilds the backing manager's features with `.locking(true)`, so every `hasLocking()` branch above it sees `true` on a store with no native locking. Two facts this block owed forward are carried in *Notes For The Next Run* rather than dropped: **lesson 27** still owes the CQL/HBase feature-builder classification (`InMemoryStoreManager` is wrapped and runs the full `ConsistentKeyLocker` protocol; `BerkeleyJEStoreManager` sets `.locking(true)` and is native), and **lesson 25** still starts from `ManagementSystem.createCompositeIndex:848-850`.
@@ -163,7 +173,7 @@ per-lesson narrative. Next run, lesson 18's paragraph is the one that goes.
 - [x] 19 — `StandardVertex`/`CacheVertex`, lazy adjacency loading, and the transaction-level and database-level caches
 - [x] 20 — `BasicVertexCentricQueryBuilder`: `v.edges(...)` → `SliceQuery`, and vertex-centric indexes
 - [x] 21 — `GraphCentricQueryBuilder`: index selection between composite, mixed, and full scan
-- [ ] 22 — `QueryProcessor`, limits, sub-query merging, and query profiling
+- [x] 22 — `QueryProcessor`, limits, sub-query merging, and query profiling
 
 ### Part V — Gremlin integration (`graphdb/tinkerpop`)
 
@@ -180,78 +190,97 @@ per-lesson narrative. Next run, lesson 18's paragraph is the one that goes.
 ## Notes For The Next Run
 
 **Syllabus unchanged this run. No items added, split, merged or reordered; the 28 stand as written on
-2026-10-30.** Lesson 21 closed the query-compilation half of Part IV by answering, in full, the question
-lesson 20 posed: **the graph-centric planner is the same *kind* of function as the vertex-centric one —
-a scalar over schema and query text, with no statistics of any sort — but a different *shape*.** Where
-lesson 20's picks one relation index per `(type, direction)` by `score > bestScore`, this one solves a
-weighted set cover: `IndexSelectionStrategy.selectIndices` returns a `JointIndexQuery` that may hold
-several indexes, and `IndexCandidateGroup.compareTo` ranks groups **lexicographically — more clauses
-covered, then fewer indexes, then higher score.**
+2026-10-30.** Lesson 22 closed Part IV by opening its consumer, and the answer to the headline question
+is that **`QueryProcessor` is a generic right fold over sub-queries that in the shipped tree almost never
+folds anything.** All three debts lesson 21 handed over are discharged, and the **re-pin review was
+performed** (below).
 
-**THE fact to carry forward, because it decides what the read actually costs: only the first subquery
-streams.** `StandardJanusGraphTx.elementProcessorImpl.execute:1894-1942` hands subquery 0 to
-`SubqueryIterator` with the joint query's limit as its `readLimit`, and materialises subqueries
-1..n−1 **eagerly and without any limit** through
-`QueryUtil.processIntersectingRetrievals(retrievals, Query.NO_LIMIT)` before the first result exists.
-`limit(10)` therefore reaches exactly one index. The unbounded read is deliberate — the in-tree comment
-says *"NO_LIMIT is passed to processIntersectingRetrievals to prevent incomplete intersections, which
-could lead to missed results"* — and issue **#4931** (closed by PR #4941, milestone 1.2.0) is the other
-half of that story: `JointIndexQuery.updateLimit` propagates a limit into a subquery **only when
-`queries.size() == 1`**, so a multi-subquery joint query leaves subquery 0 at `NO_LIMIT` and its cache
-key does not vary with the outer limit. Lesson 22 should not describe the graph-centric path as
-limit-bounded; it is limit-bounded in exactly one place.
+**THE fact to carry forward: the in-memory filter sits between the backend limit and the element count.**
+Reading outward from the backend, the per-sub-query chain is built at
+`QueryProcessor:101-107` as: `executor.execute` → `LimitAdjustingIterator` (backend limit, counts raw
+results) → `filter !allNewSet.contains` (graph-centric only) → `getFilterIterator` (`isDeleted` and/or
+`query.matches`) → the merge fold → `ResultSetIterator` (query limit, counts emitted elements). That one
+ordering explains everything else: a `limit(10)` bounds what the caller *receives*, not what is *read*,
+and when the filter eats results the backend limit **doubles** until ten survive or the index runs out.
+There is no cost ceiling on an unfitted query and no error — only latency that grows with the inverse of
+the uncovered clause's selectivity. Lessons 23-28 should never describe the read path as limit-bounded at
+the backend.
 
-**Second fact, and the one to be careful about: "fitted" means something different on this side.**
-Lesson 20's `isFitted` was positional — the chosen relation index's extended sort-key prefix consumed
-with no gap. Here it is a **count**: `coveredClauses.size() == queryConditions.numChildren() ||
-coveredClauses.contains(queryConditions)` (`:430`). The second disjunct exists because the mixed-index
-`Or` path adds the **entire** condition to the cover in one go. Do not carry lesson 20's definition
-across.
+**Second fact, and the one lessons 23/24 need most: `QueryProcessor` creates no profiler span at all.**
+Grep the file for `profiler` and there are exactly three uses, all pass-through (the inner
+`LimitAdjustingIterator` field, its use in `getNewIterator`, and `backendQueryHolder.getProfiler()` in
+`PreSortingIterator`). No `addNested`, no `startTimer`, no `stopTimer`, no `setResultSize`. So merge
+time, `sorted()` heap time, `allNewSet` hashing and `matches` filtering are **invisible in `.profile()`
+and invisible to Metrics**. The only external trace of in-memory work is (a) the gap between a
+`backend-query` span's result size — which is `SubqueryIterator`'s `readCount`, i.e. **ids read**, not
+elements emitted — and what the traversal returned, and (b) **repeated sibling `backend-query` spans with
+doubling `limit` annotations**, which is the signature of `LimitAdjustingIterator` growing. Lesson 23/24
+own the step layer where `TP3ProfileWrapper` is attached, and must establish the ordering of
+`requireOrderValues()` → `constructQueryWithoutProfile` → `observeWith` → `iterator()`: a holder observed
+*after* the stack is built still carries `QueryProfiler.NO_OP` and silently profiles nothing.
 
-**Third, a layout-level fact that will keep paying: the full scan is not a flag.** It is an **empty
-`JointIndexQuery`**, produced whenever `coveredClauses.isEmpty()` (`:432-434`), and the executor
-branches on `indexQuery.isEmpty()`. `query.force-index` (default `false`) turns that branch into a
-`JanusGraphException`; otherwise it is `log.warn("Query requires iterating over all vertices …")` plus a
-profiler annotation `fullscan=true`. Lessons 25-28 can treat "no index covered a single clause" and
-"full graph scan" as the same state.
+**Third, the branch map, which is four one-line method bodies and decides everything.**
+`VertexCentricQuery.isSorted()` is **`return true;`** unconditionally and its `getSortOrder()` is a
+`RelationComparator` (**not** an `OrderList`); `GraphCentricQuery.isSorted()` is `!orders.isEmpty()` and
+its `numSubQueries()` is a literal **`1`**; both return a constant `false` from `hasDuplicateResults()`.
+`search_code` for `implements ElementQuery` returns **exactly those two classes**. Therefore: every
+vertex-centric query takes the sorted branch; only a graph-centric query without `orderBy` takes the
+unsorted one; the unsorted branch's `iterators.size() > 1` arm — `concat` plus the `seenResults`
+de-duplication block, `:139-150` — is **unreachable**; `ResultMergeSortIterator`'s `filterDuplicates`
+arm is **dead**; and `lastFirstOrderValueWithinLimit` returns `null` for every vertex-centric query
+because of the `instanceof OrderList` guard. Do not treat the class's documented generality as live
+behaviour.
 
-**Fourth, the shipped limit defaults are the opposite of the constants in the file.**
-`query.smart-limit` defaults to **`false`** and `query.hard-max-limit` to **`Integer.MAX_VALUE`**, so
-`DEFAULT_NO_LIMIT = 1000` and `MAX_BASE_LIMIT = 20000` are opt-in and an unlimited graph query asks its
-backend for everything in one request. `QueryTest#testQueryLimitAdjustment` measures the multiplier end
-to end: `limit(5)` with 0, 1 and 2 uncovered clauses prints `@5`, `@10`, `@20` — `limit × 2^uncovered`,
-exactly, via `QueryUtil.adjustLimitForTxModifications` with
-`uncoveredAndConditions = queryConditions.numChildren() - coveredClauses.size()`.
+**Fourth, the two resumption units, because they are the difference between the two families.**
+`LimitAdjustingIterator` re-reads the backend from the start on every growth — there is no cursor — and
+then has to land where it left off. If the inner iterator is `BackendLimitAware` it calls
+`skipBackendResults(getBackendResultsRead())`, skipping **backend results** with no element construction;
+otherwise it replays `count` **elements** with `iterator.next()`, rebuilding every element already seen.
+The element replay is *wrong* for an iterator that drops results, which is why the interface exists:
+a relation removed between the two reads shifts the window. `search_code` for `BackendLimitAware` returned
+exactly one implementing class, `SubqueryIterator` (the index did not return the interface's own file or
+`LimitAdjustingIterator`, both of which contain the string, so treat it as suggestive). Since
+`SubqueryIterator` is built only on the graph-centric path: **graph-centric re-reads skip; vertex-centric
+re-reads replay.** Also note `maxLimit = Integer.MAX_VALUE - 1` while `Query.NO_LIMIT ==
+Integer.MAX_VALUE`, so an unbounded backend query starts above `maxLimit` and **never grows**; and the
+abstract constructor's `checkArgument(currentLimit > 0 …)` means a limit-0 backend query would *throw*
+here, which only `query.isEmpty()` at `:70` keeps unreachable.
 
-**The re-pin decision stays CLOSED, and it is now DUE NEXT RUN.** Lesson 21 did **not** re-run
-`list_commits` — it is mid-Part, as lessons 18, 19 and 20 instructed. It got **two** free cross-checks,
-both exact: `GraphDatabaseConfiguration` measured **2191** lines, identical to lessons 18 and 19's
-independent counts, and `QueryUtil`'s `processIntersectingRetrievals` sits at **`:463`**, exactly where
-lesson 20 cited it (lesson 20 reported the file's total as 521 lines against this run's 520; since the
-cited member line agrees to the line, the discrepancy is in the reported total, not a moved pin — worth
-knowing when using totals as a pin check). **Lesson 22 is the Part IV/V boundary and owes the review:
-re-run `list_commits` on `JanusGraph/janusgraph` `master` and either re-pin and record the new commit
-here, or record the decline.**
+**Fifth, the pre-sort wall, for lessons 25-28 to cite when discussing ordered queries.**
+`PreSortingIterator` is taken when `query.isSorted() && !subquery.isSorted()`. It reads under
+`updateLimit(MAX_SORT_ITERATION)` where `MAX_SORT_ITERATION = 1_000_000` (`:56`), discards
+`result.isRemoved()` elements *before* sorting (their order values cannot be read), and throws
+`QueryException` on `fetched >= MAX_SORT_ITERATION` **after** the full read. Three consequences:
+it **overrides `query.hard-max-limit` in both directions**, so an operator cannot bound an
+ordered-but-unsortable query; the budget is **per sub-query**, constructed inside the loop at `:102`, so
+three unsorted slices can fetch three million results before the first element; and the boundary
+**rejects a complete result of exactly 1,000,000** (candidate 53). This is the `QueryException` named in
+commit `0f578b3f`'s message, whose #5124 fix works on the *compiler* side precisely because nothing can
+be done about it here.
 
-**The roll-off rule applied again.** The three most recent are now 19, 20 and 21, so **lesson 18's
-`Verified by` block is removed** (it survives verbatim in git history at the 2026-11-16 through
-2026-11-18 commits) and lesson 18's session-log paragraph was compressed this run. The two facts that
-block owed forward are **not** dropped: **lesson 27** still owes the CQL/HBase feature-builder
-classification — `InMemoryStoreManager` never calls `.locking(...)` and does call `.keyConsistent(...)`,
-so it is wrapped and runs the full `ConsistentKeyLocker` protocol, while `BerkeleyJEStoreManager` sets
-`.locking(true)` and is native, so none of the `consistentkey` package runs — and **lesson 25** still
-starts at `ManagementSystem.createCompositeIndex:848-850`, per lesson 17. Next run, lesson 19's block
-and paragraph are the ones that go; carry forward lesson 19's four-tier cache model and its
-`ExpirationKCVSCache` release constants, which lessons 22 and 27 both still need.
+**The re-pin review is PERFORMED and CLOSED for Part IV/V. Next review: the Part V/VI boundary, after
+lesson 24.** `list_commits` on `JanusGraph/janusgraph` `master` was re-run this run and returns the same
+newest commits for the **fourth review in a row**: `a59ae8d8` (2026-10-28, *Restore 1.3.0-SNAPSHOT
+version CTR*), `9a30ff14` (2026-10-28) and `5e3e7bc7` *JanusGraph release 1.2.0* (2026-10-24), followed
+by `0f578b3f` (2026-10-22, fixes #5124) and `b7c14c53` (2026-10-23, fixes #5126). **There is nothing to
+re-pin to; the pin stays and Part V's line numbers stay comparable with lessons 02-22.** Lessons 23 and
+24 are mid-Part and must **not** re-raise it.
 
-**The registers file was out of sync and is now repaired.** `TRACK.md` recorded that lesson 20 appended
-candidates **43-45**, but `tracks/janusgraph-registers.md` still ended at **42** with
-`last-updated: 2026-11-17 (lesson 19 …)` — lesson 20 updated the pointer here and never wrote the
-register. This run recovered 43, 44 and 45 verbatim from lesson 20's own entry (§2, §4 and §7 of
-`2026/11/2026-11-18-janusgraph-vertex-centric-query-builder/README.md`), appended them with that
-provenance stated, and then appended this run's **46-51**. The register and this file now agree: **1-51
-present, next free 52.** *A run that logs candidates must write the register in the same push as
-`TRACK.md`; do not trust the pointer alone.*
+**The cross-check method changed this run, and the new one is strictly better — adopt it.** Instead of
+comparing a line-count total against an earlier lesson's independent count, this run **reconstructed the
+two files it cites by line number and verified their git blob SHAs**: `QueryProcessor.java` at 16,048
+bytes hashes to `b28e68871c9a8a0f655373deaa4185cdf4da9a44` and `LimitAdjustingIterator.java` at 5,961
+bytes to `96a7e3ae38ff3c0138879c5688f8a62053b66220`, both exactly what `get_file_contents` reported for
+those paths at the pinned commit. `sha1("blob " + len + "\0" + bytes)` computed locally is a proof of
+byte-identity, where a line-count match is only evidence. **Do this for every file cited by line number.**
+The mechanics: `get_file_contents` returns small files **inline with no line numbers**, so a file under
+roughly 20 KB must be transcribed to local disk to be numbered at all — and the blob-SHA check is what
+makes that transcription trustworthy. Files read inline and *not* transcribed are cited by member name
+only, per lesson 20's split.
+
+**The registers file was written in the same push as `TRACK.md` this run**, as the rule added on
+2026-11-19 requires. Candidates **52-60** appended (nine, the largest batch the track has filed),
+register now holds **1-60, next free 61**.
 
 - **The mode question is closed. Do not reopen it unprompted.** Entries from lesson 05 on write in
   `lesson` mode without re-litigating the decision, without a notice at the top, and without nagging.
@@ -260,98 +289,298 @@ present, next free 52.** *A run that logs candidates must write the register in 
 - **Never touch an earlier entry's `## My Notes`.** Sessions 01-04 keep their templates. They are his
   to fill at any time; if a future run finds content in any of them, answer those questions in that
   run's entry regardless of mode.
-- **Lesson 22 (`QueryProcessor`) now has a fully specified input, and owes three things.** (a) What the
-  generic processor does with an unfitted or unsorted `BackendQueryHolder` — how `ResultMergeSortIterator`
-  and `ResultSetIterator` compose, and whether the in-memory filter runs before or after the limit.
-  (b) `LimitAdjustingIterator` proper, noting that `SubqueryIterator` implements `BackendLimitAware` with
-  `hasBackendReachedLimit() == subQuery.hasLimit() && position >= subQuery.getLimit()`,
-  `getBackendResultsRead()` and a `skipBackendResults(long)` guarded by
-  `Preconditions.checkState(!started, …)` — and that with `smart-limit` off by default there is often
-  nothing to adjust. (c) The **re-pin review**.
-- **Lesson 23/24 (the strategy layer) inherit a settled answer, not a question.** The strategy layer
-  **cannot** fold a `has()` into a compiled query. `JanusGraphStep` calls
-  `centricQueryBuilder.requireOrderValues()` and then `constructQueryWithoutProfile(…)` on a fresh,
-  mutable builder; `GraphCentricQuery` is immutable and exposes no way to add a condition. The only
-  post-compilation rewrite in the tree is `JointIndexQuery.narrowFirst`, used by
-  `withoutResultsAfter` to add a range on the first order key, and it rewrites the **backend** query,
-  not the condition tree. Start from `JanusGraphStep.executeGraphCentricQuery` and
+- **Lesson 23 (the strategy layer) now has a fully specified input and owes three things.** It inherits
+  lesson 21's settled answer — the strategy layer **cannot** fold a `has()` into a compiled query, and
+  the only post-compilation rewrite in the tree is `JointIndexQuery.narrowFirst`, used by
+  `withoutResultsAfter` — plus this run's additions. (a) The **profiler attachment ordering** above:
+  where `observeWith` is called relative to `constructQueryWithoutProfile` and `new QueryProcessor(...)`,
+  and whether any path can build the stack before the holders are observed. (b) Whether the TinkerPop
+  side ever intended to produce a **multi-sub-query unsorted `ElementQuery`** — candidates 55 and 56 are
+  true only because of what the two current implementations return, and `or()` is handled at the strategy
+  layer by running each branch as its own query, so if a strategy once produced such a query the right
+  PR is a comment rather than a deletion. (c) Whether `TP3ProfileWrapper`'s AND/OR flattening is treated
+  as a stable contract, which decides whether the three-span proposal in lesson 22's *Next Steps* is
+  acceptable at all. Start from `JanusGraphStep.executeGraphCentricQuery` and
   `JanusGraphLocalQueryOptimizerStrategy`.
-- **Lesson 25 (`ManagementSystem`) now inherits three.** (a) and (b) unchanged from lesson 20 — whether
-  any shipped relation type has `isInvisibleType() == true` without being a system type, and
+- **Lesson 24 (`JanusGraphStep`/`JanusGraphVertexStep`) inherits the multi-query annotations.**
+  `QueryProfiler`'s `MULTIQUERY_ANNOTATION = "multi"`, `MULTIPREFETCH_ANNOTATION = "multiPreFetch"`,
+  `NUMVERTICES_ANNOTATION = "vertices"` and `PARTITIONED_VERTEX_ANNOTATION = "partitioned"` are declared
+  in `QueryProfiler` but set nowhere this lesson read — lesson 24 owns whoever writes them, and should
+  say which of them a real `.profile()` of a batched traversal actually shows. Lesson 20's
+  `executeMultiQuery` / `executeMultiSliceMultiQuery` switch is the other half.
+- **Lesson 25 (`ManagementSystem`) inherits three, unchanged from lesson 21.** (a) whether any shipped
+  relation type has `isInvisibleType() == true` without being a system type; (b)
   `mgmt.buildEdgeIndex`/`buildPropertyIndex` with the `TypeDefinitionCategory.RELATIONTYPE_INDEX` schema
-  edge — plus **(c) new this run:** reads skip a **composite** index unless
-  `index.getStatus() == SchemaStatus.ENABLED`, with **no base-type exemption** of the kind lesson 20
-  found on the relation-index path, while a **mixed** index is filtered **per `ParameterIndexField`
-  status** inside `coversAll`. Lesson 25 owns the state machine that moves those statuses and should
-  state which of the two a reindex relies on. Still starts at
-  `ManagementSystem.createCompositeIndex:848-850`.
-- **Lesson 26 (`ElasticSearchIndex`) inherits three feature flags, each of which changes a planner
-  decision this run could only name:** `supportNotQueryNormalForm()` (decides whether a top-level `Or`
-  has any candidate at all, since composite indexes are excluded outright),
-  `supportsOrderingListProperty()` (decides `indexCoversOrder` for a `LIST`/`SET` key — Elasticsearch,
-  OpenSearch and Solr can, Lucene cannot), and `supportsExistsQuery()` (decides whether `has(key)` can
-  be answered from the index, and therefore whether `requireValues` can narrow a subquery).
-- **Lesson 27 (CQL) inherits two.** The `setDirectColumnByStartOnlyAllowed` flag from lesson 20, and now
-  the feature-builder classification lesson 18's block owed: whether `CQLStoreManager` and
-  `HBaseStoreManager` set `.locking(...)` and so whether `ConsistentKeyLocker` runs on them.
+  edge; (c) reads skip a **composite** index unless `index.getStatus() == SchemaStatus.ENABLED`, with no
+  base-type exemption, while a **mixed** index is filtered **per `ParameterIndexField` status** inside
+  `coversAll` — lesson 25 owns the state machine that moves those statuses and should state which of the
+  two a reindex relies on. Still starts at `ManagementSystem.createCompositeIndex:848-850`.
+- **Lesson 26 (`ElasticSearchIndex`) inherits three feature flags, unchanged:**
+  `supportNotQueryNormalForm()`, `supportsOrderingListProperty()` and `supportsExistsQuery()`. **New this
+  run:** commit `b7c14c53` adds `index.[X].solr.max-page-size` (default 10,000) and a page-doubling read
+  in `SolrIndex` — the same growing-batch idea as `LimitAdjustingIterator`, one layer down, with real
+  numbers (31,846 hits in 5.9 s at page size 50 versus 0.52 s at 1,000). Lesson 26 should compare the two
+  doubling loops and say whether `ElasticSearchIndex` has an equivalent.
+- **Lesson 27 (CQL) inherits two, unchanged.** The `setDirectColumnByStartOnlyAllowed` flag from lesson
+  20, and the feature-builder classification lesson 18 owed: whether `CQLStoreManager` and
+  `HBaseStoreManager` set `.locking(...)` and so whether `ConsistentKeyLocker` runs on them. **New this
+  run:** the per-sub-query million-element pre-sort budget and the no-cursor re-read make an unfitted
+  ordered query on CQL the worst case in the tree — lesson 27 should put a number on the re-read cost
+  against a real backend rather than the in-memory store.
+- **Lesson 28 (transaction log, CDC, stale-index repair) inherits the deletion semantics.** Lesson 22
+  established that elements deleted in the "no longer matches" sense are filtered **lazily, as reached**,
+  in both branches, deliberately — *"so that a change which the caller makes while it reads the results
+  is seen"* — while `result.isRemoved()` elements are dropped **eagerly** in `PreSortingIterator` because
+  a removed vertex's order values cannot be read. Lesson 28 should say what that split means when the
+  edgestore and a mixed index disagree.
 - **Open and unresolved, deliberately not filled in.** (a) Lesson 20's
   `BasicVertexCentricQueryBuilder:711` `Preconditions.checkArgument(bestCandidate != null, …)`
-  reachability question is still open and is **not** the same question as this side's: the graph-centric
-  planner has no equivalent assertion, because an empty cover is a legitimate outcome (the full scan).
-  (b) `IndexCandidateGroup.getTotalScore()` memoises with a `Double.NEGATIVE_INFINITY` sentinel while
-  `IndexCandidate`'s default score **is** `Double.NEGATIVE_INFINITY`, so a candidate whose `setScore`
-  was never called makes its group's total `−∞` *and* unmemoisable. Reachable only through a custom
-  strategy; worth one sentence inside candidate 50's issue rather than a candidate of its own.
+  reachability question is still open. (b) Whether any production path passes a real limit to
+  `QueryUtil.processIntersectingRetrievals` (candidate 51 is a reachability claim, not a confirmed
+  defect). (c) Whether `BackendQueryHolder`'s duplicated `isFitted` in `hashCode` (candidate 54) can
+  degrade anything — this run found no map keyed by holders, so it may be a pure tidy-up. (d)
+  `IndexCandidateGroup.getTotalScore()`'s `Double.NEGATIVE_INFINITY` sentinel colliding with
+  `IndexCandidate`'s default score, carried from lesson 21 as one sentence inside candidate 50.
 - **Entry size.** Lesson 05 ~35 KB, 06 ~63, 07 ~78, 08 ~67, 09 ~61, 10 ~70, 11 ~56, 12 ~91, 13 ~72,
-  14 ~75, 15 ~86, 16 ~87, 17 ~64, 18 ~78, 19 ~69, 20 ~76, **21 ~103** (a large share of each is
-  permalink URLs, which are not prose; this run's Sources section alone is ~19 KB of them). The old
-  5-9 KB budget was a `contributor-reading` constraint and does not apply.
+  14 ~75, 15 ~86, 16 ~87, 17 ~64, 18 ~78, 19 ~69, 20 ~76, 21 ~103, **22 ~77** (digest ~15). A large share
+  of each is permalink URLs, which are not prose. The old 5-9 KB budget was a `contributor-reading`
+  constraint and does not apply.
   **Mechanical notes, carried and confirmed this run.** A single `create_or_update_file` call carrying
-  ~103 KB succeeds. `get_file_contents` on a file whose *doubled* output exceeds roughly 40 KB returns
-  an over-limit error that saves the JSON to a local file — the cheap way to read a large source file
-  **and the only way to get trustworthy line numbers**, since a file returned inline has none, and it
-  costs nothing in context. **A warning learned the hard way this run:** the defensive parser must take
-  the **longest** `text` value in the saved JSON, not concatenate all of them — the saved payload
-  contains the file twice (once as `text`, once inside a nested `{"content": …}` resource), and a naive
-  join produces a file with the JSON tail appended, which silently shifts every line number past the
-  real end of file. Verify by checking the byte count against the size `get_file_contents` reports for
-  the path. **Better, and it earned its keep on this run's push:** compute the git blob hash locally,
-  `sha1("blob " + len + "\0" + bytes)`, and compare it against the blob `sha` that
-  `create_or_update_file` returns. This run's first TRACK.md push landed at 103,606 bytes instead of
-  103,607 — a single blank line, between the lesson-16 and lesson-15 session-log entries, was dropped in
-  transit — and the blob-sha comparison caught it immediately where a line-count or eyeball check would
-  not have. It was diffed, corrected and re-pushed, so two TRACK.md commits are on `main` for 2026-11-19.
-  **Do this check on every push over ~50 KB.** Files read inline this run were cited by member name only, per lesson 20's split.
-  `README.md`, `TRACK.md` and `tracks/janusgraph-registers.md` are all far over the limit, so all three
-  are read to local files and edited with a script rather than re-emitted from context.
-- **Method note; lesson 21 is the ninth entry where simulation was not needed.** Lessons 10-12
-  re-implemented the pinned encoding functions and ran them; lessons 13-21 computed from the read
-  sources instead and said so. This run's derived claims — the inert `getIndexTypeScore` branch, the
-  `k`-blind `IN` score, the inert `ALREADY_MATCHED_ADJUSTOR` for composite indexes, the non-deterministic
-  brute-force tie-break, and the unreachable retry loop in `processIntersectingRetrievals` — are each
-  labelled where they appear and each paired with an exercise that runs the real code: Hands-On A makes
-  the profiler print a two-subquery joint query and a `multiKSQ[3]`, B breakpoints
-  `calculateIndexCandidateScore` and `IndexCandidateGroup.compareTo` so the 2008-versus-8 comparison is
-  read off a live planner, and C breakpoints `processIntersectingRetrievals` so `subLimit ==
-  Integer.MAX_VALUE` and the single pass are observed rather than argued. **Keep the rule that produced
-  them:** compute or re-implement rather than assert, say which, and always pair it with an exercise
-  that runs the real code. **Render every Mermaid diagram with `mmdc` before pushing** — both of this
-  run's diagrams and the digest's rendered clean on the first attempt, with the lesson-19 rule observed
-  throughout (quote every node label containing parentheses, commas, `->`, `|` or angle brackets, use
-  HTML entities such as `&lt;` for generics, and never escape a quote inside a label — drop the inner
-  quotes instead).
-- **Daily Diff procedure — the three-run streak of the front page running ahead ENDED this run.** At
-  ~03:40 UTC the front page served **2026-11-18 / 61 stories**, `/archive/` named **2026-11-18** as the
-  newest and listed 2026-11-01 through 2026-11-18, and `https://tdd.cat/2026-11-19/` returned a
-  `client_error`: the two indexes **agreed**, and today's edition had not published. The procedure
-  stands unchanged: (a) read the front page and the archive and take the maximum; (b) probe the dated URL
-  for today and yesterday; (c) check this session log for the newest edition already covered — 13 covered
-  11-10, 14 covered 11-11, 15 covered 11-12, 16 covered 11-13, 17 covered 11-14, 18 covered 11-15,
-  19 covered 11-16, 20 covered 11-17, 21 covered 11-18, so every run so far has found exactly one
-  uncovered edition; (d) the uncovered-item fallback is still the last resort, and the 2026-11-06 edition
-  still has two items spent (Infino ids, Postgres `SKIP LOCKED` queues). WebFetch caches per URL for 15
-  minutes, so a retry must be genuinely later — do other work in between. Edition sizes remain volatile:
-  22, 50, 63, 58, 66, 47, 39, 49, 37, 57, 61 across 11-08 to 11-18.
+  ~100 KB succeeds. `get_file_contents` on a file whose *doubled* output exceeds roughly 40 KB returns an
+  over-limit error that saves the JSON to a local file — the cheap way to read a large file, and it costs
+  nothing in context. **The parser warning from 2026-11-19 was wrong and is corrected here:** do **not**
+  take the longest `text` value. The saved payload holds the file three ways — once as a plain `text`
+  with a `[Resource from github at repo://…]` banner prepended to its first line, once as a nested JSON
+  string, and once inside that string as `content[].resource.text`. The *longest* value is the nested
+  JSON string, and taking it yields a file with JSON wrapping; the plain `text` yields a file with a
+  banner glued onto line 1, which this run hit on `TRACK.md` and caught immediately. **The correct
+  extraction is `json.loads(longest_text)["content"][*]["resource"]["text"]`**, and the check that proves
+  it is the blob SHA: `sha1("blob " + len + "\0" + bytes)` must equal the `sha` the directory listing
+  reported. Verified this run on `TRACK.md` (104,247 bytes, `abad7cd9`), `README.md` (56,366, `d22a9b3d`)
+  and `tracks/janusgraph-registers.md` (104,806, `0f8ba8b8`). **Do the blob-SHA check on every file read
+  to disk and on every push over ~50 KB.** All three of those files are far over the inline limit, so all
+  three are read to disk and edited with a script rather than re-emitted from context.
+- **Method note; lesson 22 is the tenth entry where simulation was not needed.** Lessons 10-12
+  re-implemented the pinned encoding functions and ran them; lessons 13-22 computed from the read sources
+  instead and said so. This run's derived claims — the unreachable `concat` arm, the dead
+  `filterDuplicates`, the exactly-1,000,000 pre-sort rejection, the `toString` limit-for-orders bug, and
+  the complete absence of profiler spans — are each labelled where they appear and each paired with an
+  exercise that runs the real code: Hands-On A runs `QueryProcessorTest` and has the reader add the
+  two-sub-query merge test the suite lacks (then invert `c <= 0` to prove the test can fail), B prints
+  every `getNewIterator` limit so the doubling is read off a live run next to
+  `QueryTest#testQueryLimitAdjustment`'s compile-time `2^uncovered` multiplier, and C prints the
+  `LimitAdjusting`-versus-`PreSorting` choice and reproduces both the `toString` bug and the
+  exactly-at-budget `QueryException` by temporarily lowering `MAX_SORT_ITERATION` to 3. **Keep the rule
+  that produced them:** compute or re-implement rather than assert, say which, and always pair it with an
+  exercise that runs the real code. **Render every Mermaid diagram with `mmdc` before pushing** — this
+  run's three diagrams (two in the lesson, one in the digest) were extracted from the finished Markdown
+  and rendered, all clean on the first attempt, with the lesson-19 rule observed throughout (quote every
+  node label containing parentheses, commas, `->`, `|` or angle brackets, use HTML entities such as
+  `&lt;` for comparisons, and never escape a quote inside a label — drop the inner quotes instead).
+- **Daily Diff procedure — a SECOND consecutive run with no new edition. The fallback was used.** At
+  ~03:40 UTC the front page served **2026-11-18 / 61 stories**, `/archive/` reported *143 Editions* with
+  **2026-11-18** as its *Latest* and no linked cell for 11-19 or 11-20, and both
+  `https://tdd.cat/2026-11-19/` and `https://tdd.cat/2026-11-20/` returned `client_error`. The two
+  indexes **agreed**, and 2026-11-18 was already digested by lesson 21 (its item 1, the Postgres
+  `CREATE TEMP TABLE` catalog churn). So this run took an **uncovered item from the same 61-story
+  edition** — #15, Percona on Galera `pc.weight` — which is the documented last resort. Running tally of
+  spent items: 2026-11-06 has two spent (Infino ids, Postgres `SKIP LOCKED`), **2026-11-18 now has two**
+  (the temp-table item, and #15). The procedure stands unchanged: (a) read the front page and the archive
+  and take the maximum; (b) probe the dated URL for today and yesterday; (c) check this session log for
+  the newest edition already covered — 13 covered 11-10 through 21 covering 11-18, one uncovered edition
+  per run until 11-19; (d) the uncovered-item fallback. **New constraint learned this run:** there is no
+  `WebFetch` tool in this environment — web pages must be fetched through the `web-fetch` subagent, which
+  returns a *report* rather than the page, flags which parts are verbatim and which are an extracted
+  summary, and whose summary portion is **not** reliable enough to quote. Take story titles and URLs only
+  from the verbatim portion. Edition sizes remain volatile: 22, 50, 63, 58, 66, 47, 39, 49, 37, 57, 61
+  across 11-08 to 11-18.
+
+### Verified by lesson 22, for lessons 23, 24, 25, 26, 27 and 28 to cite rather than re-derive
+
+- **The stack, outward from the backend, built at `QueryProcessor:101-107`.**
+  `executor.execute(query, backendQuery, executionInfo, profiler)` → `LimitAdjustingIterator` (or
+  `PreSortingIterator`) → `filter !allNewSet.contains` (graph-centric only, `:103-105`) →
+  `getFilterIterator(hasDeletions, !subquery.isFitted())` (`:107`) → the merge fold (`:109-111`) →
+  `ResultSetIterator` (`:69-74`). **The in-memory filter is below the element count and above the backend
+  limit.** `getUnfoldedIterator` runs **eagerly inside `iterator()`**: `hasDeletions` and `getNew` are
+  both called, and in the sorted branch the new elements are drained to a list and sorted, before any
+  caller asks for an element.
+- **Three limits, and only the middle one moves.** `query.getLimit()` counts **elements emitted** and is
+  enforced by `ResultSetIterator`, which reads one element ahead and calls `close()` the instant the
+  count is reached — which is what releases backend resources such as an Elasticsearch scroll context.
+  `backendQueryHolder.getBackendQuery().getLimit()` counts **raw backend results** and is the one that
+  **doubles**. `MAX_SORT_ITERATION = 1_000_000` (`:56`) bounds a pre-sort and **throws** rather than
+  truncating. `ResultSetIterator.remove()` is the only `remove()` in the stack that is not an
+  `UnsupportedOperationException`; it calls `current.remove()` on the previously returned element.
+- **`getFilterIterator` is absent when there is nothing to filter** (`:239-245`): `if (filterDeletions ||
+  filterMatches)` wraps, `else return iterator;`. A fitted sub-query in a transaction with no deletions
+  gets no wrapper at all, so a typed fitted vertex-centric `limit(10)` is three objects:
+  `ResultSetIterator` → `LimitAdjustingIterator` → entry iterator.
+- **The branch map, from four one-line bodies.** `VertexCentricQuery.isSorted()` → **`true`**
+  unconditionally; `getSortOrder()` → `new RelationComparator(vertex, getOrders())`, **not** an
+  `OrderList`; `numSubQueries()` → `queries.size()`; `hasDuplicateResults()` → `false` (comment: *"We
+  wanna count self-loops twice"*). `GraphCentricQuery.isSorted()` → `!orders.isEmpty()`;
+  `numSubQueries()` → literal **`1`**; `hasDuplicateResults()` → `false`; `isEmpty()` → `getLimit() <= 0`,
+  identical to `BaseVertexCentricQuery.isEmpty()`. `search_code` for `implements ElementQuery` returns
+  **exactly these two classes**.
+- **Three consequences of that map, all dead code in the shipped tree.** (1) The unsorted branch's
+  `iterators.size() > 1` arm — `CloseableIteratorUtils.concat(iterators)` plus the `seenResults`
+  de-duplication block, `:139-150` — is **unreachable**, because the only unsorted family has
+  `numSubQueries() == 1`; every unsorted query falls to `else iterator = iterators.get(0);` (`:151`).
+  (2) `ResultMergeSortIterator`'s `filterDuplicates` is always `false`, so its
+  `do { … } while (next != null && filterDuplicates && comp.compare(current, next) == 0)` always runs one
+  iteration. (3) `lastFirstOrderValueWithinLimit` returns `null` for every vertex-centric query, via the
+  `!(query.getSortOrder() instanceof OrderList)` guard. The class javadoc (`:48`) still documents (2) as
+  live.
+- **The merge fold is binary, right-leaning, and left-biased.** The loop runs **backwards**
+  (`for (int i = numSubQueries() - 1; i >= 0; i--)`, `:93`) so that sub-query 0 ends up the outermost
+  **left** operand. `ResultMergeSortIterator` holds one lookahead per side (`nextFirst`, `nextSecond`) and
+  breaks ties with **`if (c <= 0)`** — left wins — so equal-ordering results emerge in sub-query order,
+  deterministically. There is no *k*-way heap: *n* sub-queries cost up to *n−1* comparator calls per
+  emitted element. `Preconditions.checkArgument(iterator != null)` (`:114`) is the backstop for
+  `numSubQueries() == 0`, unreachable because such a query is compiled to a limit-0 `emptyQuery`.
+- **`sorted()` (`:187-224`) is a bounded top-*k* heap with an explicit stability tie-break.** Fast path
+  (`!(sortOrder instanceof OrderList) || size < 2`) is a plain `List.sort` — every vertex-centric query
+  lands there. Graph-centric path boxes each element into `Ranked<R>{element, Object[] values =
+  orders.values(element), int position}`, compares with `orders.compareValues` then
+  `Integer.compare(position, position)`, and when `kept = min(limit, size) < size` fills a
+  `PriorityQueue<>(kept + 1, byValues.reversed())`, polling the head so the heap holds the best *kept*:
+  Θ(*m* log *k*) comparisons, Θ(*k*) memory, *m* order-value reads instead of Θ(*m* log *m*). `first =
+  new ArrayList<>(heap)` is then **re-sorted** because heap order is not sorted order. The `position`
+  tie-break is a **correctness** property, not a nicety: a `PriorityQueue` is not stable, so without it
+  `limit(10)` and `limit(20)` in one transaction could disagree on the first ten.
+- **`withoutResultsAfter` is the only downward flow in the stack, and it signals success by reference
+  inequality.** Guard (`:170-176`): there is a limit, `!hasDuplicateResults()`, the new elements **fill**
+  the limit, and the sort order **is** an `OrderList`; then the value is
+  `((OrderList) getSortOrder()).value(sortedNew.get(getLimit() - 1), 0)` — the first order key's value on
+  the last new element inside the limit — and may still be `null` if that element has no value, since a
+  missing value sorts last. Per sub-query (`:95-100`) it is offered only when `subquery.isSorted()`, and
+  acceptance is `narrowed != subquery.getBackendQuery()`. `QueryExecutor.withoutResultsAfter` is a
+  `default` method returning its argument, so **identity is the negative answer** — the same idiom as
+  lesson 21's `requireValues`. `BackendQueryHolder.withBackendQuery` exists for this and copies the
+  profiler across (`holder.profiler = profiler;`) so the narrowed query is timed under the original span.
+- **`LimitAdjustingIterator`: the doubling and the two resumption units.** Concrete subclass is
+  `QueryProcessor:298-318`; `super(Integer.MAX_VALUE-1, backendQueryHolder.getBackendQuery().getLimit())`.
+  `hasNext` (`LimitAdjustingIterator:76-113`): grow only when `currentLimit < maxLimit` **and** either the
+  limit is used up (`count >= currentLimit`) or the wrapped iterator ended while being `BackendLimitAware`
+  with `hasBackendReachedLimit()`. Growth is
+  `currentLimit = (int) Math.min(maxLimit, Math.round(currentLimit * 2.0))`, then a **fresh**
+  `getNewIterator(currentLimit)` — there is no cursor, the backend is re-read from the start — then either
+  `skipBackendResults(getBackendResultsRead())` (backend results, no element built) or
+  `for (int i = 0; i < count; i++) iterator.next()` (elements, rebuilt). `count` is incremented in
+  `next()`, so it counts results handed **upward to the filters**, not to the user: **growth is the price
+  of an unfitted query and nothing else.** `Query.NO_LIMIT == Integer.MAX_VALUE > maxLimit`, so an
+  unbounded read never grows; and `checkArgument(currentLimit > 0 && maxLimit > 0)` means a limit-0
+  backend query throws here, kept unreachable by `query.isEmpty()`.
+- **`BackendLimitAware` exists because element-count resumption is wrong for a filtering iterator.**
+  `hasBackendReachedLimit()` is `subQuery.hasLimit() && position >= subQuery.getLimit()`;
+  `getBackendResultsRead()` is `position`, advanced only when an element is actually handed out and
+  deliberately **not** by `close()`'s lookahead probe; `skipBackendResults(long)` is guarded by
+  `Preconditions.checkState(!started, "Ids can only be skipped before the iterator looks for its first
+  element")`. `search_code` returned one implementing class, **`SubqueryIterator`** (treat as suggestive:
+  the index did not return the interface's own file or `LimitAdjustingIterator`). Practical split:
+  **graph-centric skips, vertex-centric replays.** The comment at `LimitAdjustingIterator:93-94` —
+  *"Close old iterator. This is needed otherwise it would not be timed properly by profiler."* — is
+  load-bearing: `SubqueryIterator` starts its timer in its constructor and stops it in `close()`, and
+  `SimpleQueryProfiler.startTimer` opens with `checkArgument(!runningTimer, "A timer is already
+  running")`, so a skipped `close()` would **throw** on the next read of that span, not merely lose a
+  measurement.
+- **`PreSortingIterator` (`:247-296`, constructor `:257-275`).** Taken when
+  `query.isSorted() && !subquery.isSorted()`. Reads under `updateLimit(MAX_SORT_ITERATION)`, so it
+  **overrides `query.hard-max-limit` in both directions**; counts every result in `fetched` but adds only
+  `!result.isRemoved()` ones to the list, because a removed vertex's order values cannot be read (and
+  `QueryProcessorTest#leavesOutTheRemovedElementsBeforeSortingWhatTheBackendReturns` pins it with a mock
+  whose `valueOrNull` throws); throws `QueryException` on `fetched >= MAX_SORT_ITERATION` **after** the
+  full read, with no incremental bail-out; and is constructed **inside the per-sub-query loop**, so the
+  million is per sub-query. The boundary **rejects a complete 1,000,000-element result** (candidate 53).
+  This is the exception named in `0f578b3f`'s message for `g.V().order().by("name").limit(10)`.
+- **Deletion semantics, two different timings, both deliberate.** `result.isRemoved()` elements are
+  dropped **eagerly** inside `PreSortingIterator`. Everything else the transaction deleted — including
+  elements changed so they no longer match — is filtered **lazily as reached** by `getFilterIterator`, in
+  both branches, with the in-tree reason: *"so that a change which the caller makes while it reads the
+  results is seen."* `isDeleted` is therefore called once per backend result on an unfitted query with
+  deletions, which is visible in Metrics as a high-count timer.
+- **The profiler, complete.** `QueryProfiler` is five instance methods (`addNested(String, boolean)`,
+  `setAnnotation`, `startTimer`, `stopTimer`, `setResultSize`), a `NO_OP` whose `addNested` returns
+  `this`, and four `static profile(...)` helpers that wrap a `Function` in start/stop/`setResultSize`.
+  Group names: `OR-query`, `AND-query`, `backend-query`, `optimization`,
+  `constructGraphCentricQuery`, `GraphCentricQuery`, `MixedIndexCountQuery` (constant name is
+  `MIXED_INEX_COUNT_QUERY` — typo in the identifier, value correct). Annotations: `condition`, `orders`,
+  `limit`, `multi`, `multiPreFetch`, `vertices`, `partitioned`, `isFitted`, `isOrdered`, `query`,
+  `fullscan`, `index`, `queries`, `queriesAmount`, `multiSlices`, `limitsPerQuery`.
+- **Two profiler implementations produce different tree shapes from identical instrumentation.**
+  `TP3ProfileWrapper.addNested` **flattens** a single-child `AND-query`/`OR-query` into its parent
+  (`if (!hasSiblings && (groupName.equals(AND_QUERY) || groupName.equals(OR_QUERY))) return this;`), ids
+  children `parentId + "." + groupName + "_" + subMetricCounter++`, `toString()`s any non-`String`/
+  `Number` annotation value, and **accumulates** result size via
+  `metrics.incrementCount(TraversalMetrics.ELEMENT_COUNT_ID, size)`. `SimpleQueryProfiler.addNested`
+  **ignores `hasSiblings`** and always allocates a child, stores annotations as-is (`convert` is a no-op
+  with its type-narrowing lines commented out in-tree), and **assigns** `resultSize`. `hasSiblings` is
+  computed in exactly one place: `BaseVertexCentricQuery.observeWith` →
+  `boolean consistsOfMultipleQueries = queries.size() > 1;`. `GraphCentricQuery.observeWith` calls the
+  one-argument `indexQuery.observeWith(profiler)`, i.e. `hasSiblings == false`, so a graph query's
+  `OR-query` span is **always** flattened in a TinkerPop profile and **always** present in a
+  `SimpleQueryProfiler` tree (candidate 60).
+- **`BackendQueryHolder.observeWith` is the sole annotator of a sub-query**, and the origin of
+  `isFitted=`/`isOrdered=` in a profile: `addNested(OR_QUERY, hasSiblings)` then `FITTED_ANNOTATION`,
+  `ORDERED_ANNOTATION`, `QUERY_ANNOTATION`, then `if (backendQuery instanceof ProfileObservable)
+  ((ProfileObservable) backendQuery).observeWith(profiler)`. A holder never observed still carries
+  `QueryProfiler.NO_OP`, and `QueryProcessor` reads `getProfiler()` at **construction** — so `observeWith`
+  must precede the stack build or the read is silently unprofiled. Its `hashCode()` is
+  `Objects.hash(backendQuery, isFitted, isFitted)` — `isFitted` twice, `isSorted` never — while `equals`
+  compares `isSorted` (candidate 54).
+- **`QueryProcessor` creates no profiler span.** Three `profiler` uses, all pass-through. No `addNested`,
+  `startTimer`, `stopTimer` or `setResultSize` anywhere in the file. So merge, `sorted()`, `allNewSet` and
+  `matches` time is absent from `.profile()` **and** from Metrics; a `backend-query` span's result size is
+  `SubqueryIterator`'s `readCount`, i.e. **ids read** including skipped and null-converting ones; and a
+  growing `LimitAdjustingIterator` emits **several sibling `backend-query` spans with doubling `limit`
+  annotations**, which is the only external signature of the doubling.
+- **`GraphCentricQuery.toString()` prints the limit where it means the orders**:
+  `if (!orders.isEmpty()) b.append(getLimit());` followed by
+  `if (hasLimit()) b.append("(").append(getLimit()).append(")");`, so an ordered limited graph query
+  renders `[condition]10(10):vertex`. Because `TP3ProfileWrapper.setAnnotation` `toString()`s it, that is
+  what lands in a real profile's `query` annotation (candidate 52).
+- **`MetricsQueryExecutor` is unrelated to the profiler** and wraps `getNew`, `hasDeletions`, `isDeleted`
+  and `execute` with `<prefix>.query.<name>.<op>.{calls,time,exceptions}` on `MetricManager.INSTANCE`.
+  **`withoutResultsAfter` is the one method it does not wrap** — straight delegation, no counter — so the
+  narrowing path is invisible to Metrics as well as to the profiler.
+- **Iterator plumbing.** `CloseableIteratorUtils.filter` is a `CloseableAbstractIterator` that calls
+  `close()` on its delegate when the source is exhausted; `concat` is `MultiIterator`, which closes each
+  inner iterator as it is exhausted and, on `close()`, closes the current one and drains and closes the
+  rest. `emptyIterator()` is a shared singleton (`EMPTY_CLOSABLE_ITERATOR`) cast per call.
+- **Construction sites and the bypass.** `search_code` for `new QueryProcessor` returns **three**:
+  `GraphCentricQueryBuilder.iterables` (wrapped in a `CloseableIteratorUtils.filter` on
+  `aClass::isInstance`), `BasicVertexCentricQueryBuilder.executeIndividualRelations`, and
+  `QueryProcessorTest.run`. The vertex-centric site is guarded —
+  `if (useSimpleQueryProcessor(query, vertex)) return new SimpleVertexQueryProcessor(query, tx).relations(); else return new QueryProcessor<>(query, tx.edgeProcessor);`
+  — and `useSimpleQueryProcessor` begins `if (!query.isSimple()) return false;`, where
+  `BaseVertexCentricQuery.isSimple()` is `queries.size() == 1 && queries.get(0).isFitted() &&
+  queries.get(0).isSorted()`. **So the single-slice fitted sorted case, the common one, does not use
+  `QueryProcessor` at all** — it goes to `SimpleVertexQueryProcessor`, which lessons 23/24 own.
+- **The test surface.** `QueryProcessorTest`
+  (`janusgraph-core/src/test/java/org/janusgraph/graphdb/query/QueryProcessorTest.java`) is the dedicated
+  unit test: 7 `@Test` methods, a Mockito `ElementQuery`, a `FakeBackendQuery extends BaseQuery` whose
+  `updateLimit` returns a copy, and a fake `Executor` that counts `newTaken`, records every executed
+  query and marks narrowing by returning a **new** instance. Its fixture hard-codes
+  `when(query.numSubQueries()).thenReturn(1)`, so the backwards fold, `ResultMergeSortIterator`, the
+  `<=` tie-break and the `concat` arm have **no coverage here** (candidate 57). The seven names are
+  worth knowing verbatim: `takesTheNewElementsOfAnUnorderedQueryOnlyAsFarAsItsLimit`,
+  `readsTheBackendOfAnUnorderedQueryOnceItsNewElementsRunOut`,
+  `asksTheBackendOfAnOrderedQueryForTheResultsUpToItsLastNewValueWithinTheLimit`,
+  `asksNothingWhereTheNewElementsDontFillTheLimit`,
+  `asksNothingWhereTheLastNewElementWithinTheLimitHasNoValue`,
+  `asksNothingOfABackendWhichDoesntSort`,
+  `leavesOutTheRemovedElementsBeforeSortingWhatTheBackendReturns`.
+- **Two upstream commits read this run that belong in later lessons' citations.** `0f578b3f` (2026-10-22,
+  fixes #5124) re-selects a **sorting mixed index** when the first index selection covered nothing, and
+  its message is the clearest in-tree English on why a joint query reads all but its first sub-query
+  whole; it also names the `PreSortingIterator` `QueryException` as the failure it avoids. `b7c14c53`
+  (2026-10-23, fixes #5126) adds `index.[X].solr.max-page-size` (default **10,000**) and reads Solr
+  results in **doubling pages** after a first page of `max-result-set-size`, with measurements: 31,846
+  hits in **5.9 s** at page size 50 versus **0.52 s** at 1,000, because Solr re-collects and re-sorts
+  every hit before each offset. **The growing-batch read therefore appears independently at three levels
+  of this system** — `LimitAdjustingIterator`, `SolrIndex`, and the compile-time `2^uncovered`
+  multiplier.
 
 ### Verified by lesson 21, for lessons 22, 23, 24, 25, 26, 27 and 28 to cite rather than re-derive
 
@@ -668,135 +897,6 @@ present, next free 52.** *A run that logs candidates must write the register in 
   relation indexes including two on the same label in opposite orders). **None of the three is in
   `InMemoryGraphTest`'s `@Disabled` list**, so all three run on `janusgraph-inmemory`. A `search_code`
   for `VertexCentricQueryTest` returns **0 hits** — this compiler has no dedicated unit test.
-
-### Verified by lesson 19, for lessons 20, 21, 22, 25, 27 and 28 to cite rather than re-derive
-
-- **Every user vertex in an ordinary transaction is a `CacheVertex`.** `VertexConstructor.get`
-  (`StandardJanusGraphTx:624-664`) ends `if (idInspector.isUserVertexId(vertexId)) { if
-  (createStubVertex) vertex = new PreloadedVertex(...); else vertex = new CacheVertex(...); }`, and
-  `createStubVertex` is `config.hasPreloadedData()`. `StandardVertex` is never instantiated directly for
-  user data; it is only the base class. Schema ids branch earlier to `PropertyKeyVertex`,
-  `EdgeLabelVertex`, `VertexLabelVertex`, `JanusGraphSchemaVertex`, or `SystemTypeManager.getSystemType`.
-- **Three `VertexConstructor`s, built once per transaction at `:346-348`**, differing only in
-  `verifyExistence`: `externalVertexRetriever` = `hasVerifyExternalVertexExistence()` (default **true**,
-  used by `getVertex`, i.e. `g.V(id)`), `internalVertexRetriever` = `hasVerifyInternalVertexExistence()`
-  (default **false**, used by `getInternalVertex`), `existingVertexRetriever` = **false** (schema and
-  partitioned lookups). `verifyExistence` costs **one slice query per id** —
-  `graph.edgeQuery(canonicalVertexId, graph.vertexExistenceQuery, txHandle)` — batched in
-  `getVertices(Object...)` as `graph.edgeMultiQuery(vertexIds, graph.vertexExistenceQuery, txHandle)`
-  (`:570-577`) for ids not already cached.
-- **Tier 1 is keyed by `SliceQuery`; tier 2 is keyed by `KeySliceQuery`, not by row key** (for lessons
-  20 and 22). So one edgestore row holds **one db-cache entry per distinct query shape**, while
-  `invalidate` works on the row key — which is the entire reason the `expiredKeys` side table exists:
-  there is no index from key to the `KeySliceQuery`s that mention it.
-- **`CacheVertex` lookup is two-stage: exact `HashMap` hit, then a linear `subsumes` scan.**
-  `loadRelations` does `queryCache.get(query)` under `synchronized (queryCache)`; on a miss, `load`
-  calls `getSuperResultSet(query)`, which iterates the map asking `entry.getKey().subsumes(query)`, and
-  on a hit returns `query.getSubset(superKey, superVal)` **with no backend read**. The map is
-  `new HashMap<>(4)` and its own monitor. `hasLoadedRelations` = `queryCache.get(query) != null ||
-  getSuperResultSet(query) != null`.
-- **The refresh counter is a lost-update guard with two entry points.** `refresh()` does
-  `refreshes++; queryCache.clear();`; `addToQueryCache(q, entries, refreshesBefore)` stores **only if**
-  `refreshes == refreshesBefore`. The two-argument `loadRelations` reads the count itself via
-  `refreshes()`; the three-argument overload takes it from the caller, because a multi-query reads many
-  vertices in one backend call and hands out results afterwards — `executeMultiQuery:1428-1451`
-  snapshots `((CacheVertex) v).refreshes()` per vertex before the read, and
-  `executeMultiSliceMultiQuery:1453-1467` does the same into a `Map<Object, Long>` keyed by vertex id
-  (for **every** `CacheVertex` in the collection, not only the ones it reads).
-- **The public two-argument `CacheVertex.addToQueryCache(query, entries)` skips the refresh check**, and
-  its only caller is `StandardJanusGraphTx`'s `vertexIDConversionFct` (`:2091-2103`), which stuffs
-  `VertexWithInlineProps.getInlineProperties()` into the vertex's query cache after a graph-centric
-  index read. **PR candidate 42**, derived from reading.
-- **`CaffeineVertexCache` pins reactively, not preventively.** `add` eagerly puts into
-  `volatileVertices` when `vertex.isNew() || vertex.hasAddedRelations()`; the **removal listener**
-  catches everything else on the way out, with the wider predicate
-  `((AbstractVertex) v).isTxOpen() && (v.isModified() || v.isRemoved())` → `putIfAbsent`. `get` consults
-  `cache.getIfPresent`, then `volatileVertices`, then the `Retriever`, and **re-admits** via
-  `cache.get(id, k -> v)`, which also guarantees one object per id per transaction under concurrency.
-  `volatileVertices` is a jctools `NonBlockingHashMap` and is **unbounded**, so `cache.tx-cache-size`
-  bounds clean vertices only. `getAllNew()` filters `volatileVertices.values()` by `isNew()` — the
-  mechanism `prepareCommit` relies on. The listener's `assert removalCause == SIZE || REPLACED` is a
-  real statement about configuration: no `expireAfter*`, no weak/soft values, and `EXPLICIT` only from
-  `close()`, which clears `volatileVertices` first.
-- **Tier-0 sizing.** `MIN_VERTEX_CACHE_SIZE = 100L` (`:206`) is applied as
-  `Math.max(MIN_VERTEX_CACHE_SIZE, config.getVertexCacheSize())` **only when
-  `!config.isReadOnly()`** (`:350-355`). `StandardTransactionBuilder.readOnlyOLAP()` sets
-  `vertexCacheSize = 0` *and* `dirtyVertexSize = 0`, so an OLAP transaction gets `maximumSize(0)` —
-  every `add` is evicted immediately with cause `SIZE`. `indexCacheWeight` is **not** a separate
-  option: `StandardTransactionBuilder.vertexCacheSize(int size)` sets `indexCacheWeight = size / 2`,
-  which is where the docs' *"half the transaction cache size"* and the 9,998-element ceiling come from.
-  `CaffeineVertexCache` uses `.executor(Runnable::run)` and enables `recordStats()` only
-  `if (log.isDebugEnabled())` **at construction**.
-- **`releaseTransaction()` (`:2200-2210`) swaps in five empty singletons** — `EmptyVertexCache`,
-  `EmptySubqueryCache`, `EmptyAddedRelations`, `Collections.emptyMap()` for deleted relations and locks,
-  `EmptyIndexCache`, `Collections.emptyMap()` for `newTypeCache`. `EmptyVertexCache.get` returns
-  **null** and logs a warning, which is why `getVertices` ends `result.removeIf(v -> v == null ||
-  v.isRemoved())` with a comment naming the `graph.close()`-on-another-thread race.
-- **Which stores are cached.** `Backend:257`: `cacheEnabled = !configuration.get(STORAGE_BATCH) &&
-  configuration.get(DB_CACHE)`. `Backend:344-376`: `edgestore` and `graphindex` get
-  `ExpirationKCVSCache` when enabled, `NoKCVSCache` otherwise; split
-  `EDGESTORE_CACHE_PERCENT = 0.8` / `INDEXSTORE_CACHE_PERCENT = 0.2` (`:162-163`, `public static final`,
-  with a `Preconditions` check that they sum to 1.0 — **not configurable**). `txLogStore` is
-  `NoKCVSCache` off **`storeManager`** (`:381`). `DB_CACHE_TIME == 0` becomes
-  `ETERNAL_CACHE_EXPIRATION = 1000L*3600*24*365*200` (`:165`, `:352`). A fractional `DB_CACHE_SIZE` is
-  resolved against `runtime.maxMemory() - (runtime.totalMemory() - runtime.freeMemory())` — free heap
-  **at graph-open time**.
-- **Defaults, from `GraphDatabaseConfiguration:610-698`:** `cache.db-cache` **false** (MASKABLE),
-  `cache.db-cache-size` **0.3** (Double), `cache.db-cache-time` **10000** ms (Long),
-  `cache.db-cache-clean-wait` **50** ms (Integer), `cache.tx-cache-size` **20000** (Integer),
-  `cache.tx-dirty-size` **unset** → `32` without batch loading, `4096` with
-  (`TX_DIRTY_SIZE_DEFAULT_WITHOUT_BATCH` / `_WITH_BATCH`, `:691`/`:698`; resolved at `:2058-2066`).
-- **Invalidation marks, never evicts, and never writes through.**
-  `ExpirationKCVSCache.invalidate(key, entries)` is `expiredKeys.put(key, now + cacheTimeMS)` plus a
-  1-in-`INVALIDATE_KEY_FRACTION_PENALTY` (1000) `penaltyCountdown.countDown()`. `isExpired(query)`
-  looks up `expiredKeys.get(query.getKey())`, self-heals if `until < now`, otherwise counts the latch
-  down and returns true. A true `isExpired` means `store.getSlice` **with no `cache.put`**. Release
-  needs `PENALTY_THRESHOLD = 5` countdowns **and** `getAge(until) = now - (until - cacheTimeMS) >=
-  invalidationGracePeriodMS`; `clearExpiredCache(true)` then scans `cache.asMap().keySet()` and resets
-  the latch. Called from `CacheTransaction.flushInternal()` **after** `persist(subMutations)`.
-- **The "expired ⇒ do not repopulate" rule is enforced by a sentinel, not a second check.**
-  `fillResultAndReturnMisses` returns `Pair<List<StaticBuffer>, Map<StaticBuffer, KeySliceQuery>>` and
-  puts `key -> null` for an expired key, `key -> ksqs` for a plain miss; both multi-key paths then do
-  `if (ksqs != null) cache.put(ksqs, subresult)`.
-- **`ExpirationKCVSCache.getMultiSlices` rewrites the query plan in place** (for lessons 20 and 22):
-  per group it drops fully-served queries via `keyQueriesGroup.setQueries(...)`, collects
-  `Pair.of(query, remainingCurrentGroupKeys)` for partially-served ones, calls
-  `MultiSliceQueriesGroupingUtil.moveQueriesToNewLeafNode(updatedQueryGroups, allKeysArr,
-  groupingRootTreeNode, allQueryGroups)`, then `filterEmptyGroups` and
-  `multiKeysQueryGroups.setQueryGroups(allQueryGroups)`. The db-cache is **not** a transparent wrapper
-  on this path.
-- **`KCVSCache.mutate` throws `UnsupportedOperationException("Only supports mutateEntries()")`.**
-  Writes go `mutateEntries` → `((CacheTransaction) txh).mutate(this, key, additions, deletions,
-  wholeRowDeletion)` and are buffered; `unwrapTx` is `final` and asserts `txh instanceof
-  CacheTransaction`. Deletions are kept as `Entry` (with values) until `CacheTransaction.convert`
-  strips them to columns via `KCVEntryMutation.ENTRY2COLUMN_FCT`. The three documented escape hatches
-  are `getSliceNoCache(KeySliceQuery, txh)`, `getSliceNoCache(List<StaticBuffer>, SliceQuery, txh)` and
-  `getMultiSlicesNoCache(...)`; lesson 18's expected-value read reaches past even these via
-  `getBackingStore()`.
-- **The db-cache's weigher is an estimate, by the authors' admission.**
-  `CAFFEINE_CACHE_ENTRY_SIZE + KEY_QUERY_SIZE + entries.getByteSize()` with
-  `KEY_QUERY_SIZE = OBJECT_HEADER + 4 + 1 + 3 * (OBJECT_REFERENCE + STATICARRAYBUFFER_RAW_SIZE + 10)`,
-  i.e. serialized bytes for objects Caffeine holds deserialized — the known limitation the docs page
-  links as [issue 2369](https://github.com/JanusGraph/janusgraph/issues/2369). Only
-  `expireAfterWrite(cacheTimeMS)` is configured; there is **no** `expireAfterAccess`, so a hot entry
-  still dies at `db-cache-time`.
-- **Deserialization is cached at no tier.** All tiers store `EntryList`s, so a tier-1 or tier-2 hit
-  still re-runs lesson 11's `parseRelation` per entry. `RelationConstructor.readRelation(v, iterable,
-  tx)` sits *after* `loadRelations` in `edgeProcessorImpl.execute` (`:1562-1573`), whose `Retriever` is
-  the lambda `query1 -> QueryProfiler.profile(profiler, query1, q -> graph.edgeQuery(v.id(), q,
-  txHandle))` — the vertex never holds a store reference, which is what makes `CacheVertexRefreshTest`
-  possible against a mocked transaction.
-- **Test entry points established this run.**
-  `janusgraph-core/src/test/.../graphdb/vertices/CacheVertexRefreshTest.java` —
-  `aLoadWhichARefreshOverlapsIsNotKept` (two `CountDownLatch`es, a pausing `Retriever`, asserts
-  `loads == 2`) and `aResultLoadedBeforeTheCallIsKeptOnlyIfNoRefreshCameSince`; both build a
-  `CacheVertex` over a Mockito-mocked `StandardJanusGraphTx` with `isNew()` overridden, so the
-  transaction is never consulted. `janusgraph-test/src/test/.../diskstorage/cache/ExpirationCacheTest.java`
-  extends `KCVSCacheTest`, `CACHE_SIZE = 48 MB`, `METRICS_STRING = "metrics"`; `testExpiration` and
-  `testGracePeriod` are both `@RepeatedIfExceptionsTest(repeats = 3)` and both flaky by issue number
-  ([2934](https://github.com/JanusGraph/janusgraph/issues/2934),
-  [3352](https://github.com/JanusGraph/janusgraph/issues/3352)) **for exactly the reason this lesson
-  found** — the release is a counter race, not a clock.
 
 ## Paused Subjects
 
