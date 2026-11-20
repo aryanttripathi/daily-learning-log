@@ -4,13 +4,12 @@ track: JanusGraph
 upstream: JanusGraph/janusgraph
 pinned-commit: a59ae8d8024207598eada34998d867617df51adf
 split-from: TRACK.md on 2026-11-14 (lesson 16)
-last-updated: 2026-11-19 (lesson 21; candidates 43-45 recovered from lesson 20's entry and 46-51
-  appended, next free number 52)
-sync-note: TRACK.md recorded candidates 43-45 as added by lesson 20 on 2026-11-18, but this file was
-  never written in that run and still ended at 42. Lesson 21 recovered 43-45 verbatim from
-  2026/11/2026-11-18-janusgraph-vertex-centric-query-builder/README.md and appended them with that
-  provenance marked, then appended its own 46-51. TRACK.md and this file now agree: 1-51 present.
-  A run that logs candidates must write this file in the SAME push as TRACK.md.
+last-updated: 2026-11-20 (lesson 22; candidates 52-60 appended, next free number 61)
+sync-note: RESOLVED and not repeated. The 2026-11-19 desync (TRACK.md recorded candidates 43-45 from
+  lesson 20 while this file still ended at 42) was repaired by lesson 21, which recovered 43-45 verbatim
+  from lesson 20's entry and appended its own 46-51. Lesson 22 appended 52-60 and wrote this file in the
+  SAME push as TRACK.md, per the rule that desync produced. TRACK.md and this file agree: 1-60 present,
+  next free 61. A run that logs candidates must write this file in the same push as TRACK.md.
 -->
 
 # JanusGraph track — PR candidates and open questions
@@ -31,13 +30,17 @@ PR candidate and needs the next free number.
 ## PR candidates, all verified at the pinned commit
 
 Numbering is **stable** — earlier entries reference these numbers, so new candidates are appended rather
-than inserted in size order. **Candidates 46-51 are new this run** (lesson 21, the graph-centric index
-selector — six, tying lesson 18's batch, and **51 is the first reachability argument the track has filed
-rather than a defect**). **Candidates 43-45 were recovered this run**: lesson 20 found them and recorded
-them in `TRACK.md`, but never wrote them here, so they are reproduced from lesson 20's own entry with
-their provenance marked — see the `sync-note` in the header. Candidate **44 and candidate 47 are the same
-defect on the two different planners, in opposite directions**, and are best filed together or at least
-cross-referenced. **The best first contributions are now 46, 29, 31, 28, 21 and 24** — 46 is two constant
+than inserted in size order. **Candidates 52-60 are new this run** (lesson 22, `QueryProcessor` and the
+profiler — **nine, the largest batch the track has filed**, of which three are reachability or design
+questions rather than defects). Two groupings matter for filing: **55, 56 and 59 are one story** —
+`QueryProcessor` is generic in form and specific in fact, with two documented behaviours no shipped query
+can trigger and one `instanceof` standing in for an interface method — and should go up as a single
+documentation/design issue rather than three patches or three deletions. **52 and 58 are both cosmetic and
+both in strings a user reads**, so they bundle. Candidate **44 and candidate 47 are the same defect on the
+two different planners, in opposite directions**, and are best filed together or at least cross-referenced.
+**The best first contributions are now 53, 57, 46, 29, 31, 28, 21 and 24** — 53 is a two-token boundary fix
+with a mechanical test and 57 is additive test coverage with no behaviour change, which makes them the two
+lowest-risk patches in the register; 46 is two constant
 declarations and a misspelling, 29 and 31 are one-line comment/message corrections, 28 is a one-line error
 message with no behavioural risk, 21 is doc-only and 24 is a two-line guard fix; every one of them forces
 a maintainer to confirm a reading. Candidates 46-51 were verified at this pinned commit on 2026-11-19 and
@@ -720,11 +723,161 @@ because lesson 14 found a second, configuration-driven call site for `getBackend
     adaptive path is meant to come back, in which case the dead machinery is a deliberate placeholder
     and deserves a comment saying so. Verify there is no reflective or test caller supplying a real
     limit before writing anything. Found by lesson 21.
+52. **NEW: `GraphCentricQuery.toString()` appends the limit where it means the orders, so an ordered
+    query prints its limit twice and its order never.**
+    [`GraphCentricQuery.toString`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/query/graph/GraphCentricQuery.java)
+    is `b.append("[").append(condition).append("]"); if (!orders.isEmpty()) b.append(getLimit());
+    if (hasLimit()) b.append("(").append(getLimit()).append(")"); b.append(":").append(resultType);`.
+    The guard tests `orders` and the body appends `getLimit()`, so
+    `g.V().has("status","x").order().by("name").limit(10)` renders `[condition]10(10):vertex`. This is
+    **user-visible**: `BackendQueryHolder.observeWith` sets `QUERY_ANNOTATION` to the query object and
+    `TP3ProfileWrapper.setAnnotation` `toString()`s anything that is not a `String` or `Number`, so the
+    doubled limit lands in the `query` annotation of a real `.profile()`. Reproduce without a test by
+    printing `query` at `QueryProcessor:101` (lesson 22, Hands-On C). Fix is one token — append `orders`
+    — but **open it as a question with the patch attached**, because the right rendering is a decision:
+    `BaseVertexCentricQuery.toString()` omits orders entirely, so matching it (drop the line) is as
+    defensible as printing them. Found by lesson 22.
+53. **NEW, and the cleanest first PR in the register: `PreSortingIterator` rejects a complete result of
+    exactly `MAX_SORT_ITERATION` elements.**
+    [`QueryProcessor:257-275`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/query/QueryProcessor.java#L257-L275)
+    reads under `backendQueryHolder.getBackendQuery().updateLimit(MAX_SORT_ITERATION)` with
+    `MAX_SORT_ITERATION = 1_000_000` ([`:56`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/query/QueryProcessor.java#L56)),
+    counts every returned result in `fetched`, and then throws
+    `QueryException("Could not execute query since pre-sorting requires fetching more than 1000000
+    elements…")` on **`fetched >= MAX_SORT_ITERATION`**. Because the read was performed *under* that
+    limit, `fetched` can never exceed it, so the predicate actually means "the backend filled the limit"
+    — which is not the same as "there were more". An ordered query over an index holding **exactly**
+    1,000,000 matching elements, returned in full and perfectly sortable, is refused with a message
+    claiming more than a million exist. **Fix:** read at `MAX_SORT_ITERATION + 1` and test
+    `fetched > MAX_SORT_ITERATION`. Two tokens, no API change, and it is mechanically demonstrable:
+    temporarily set the constant to `3` and run any ordered in-memory query returning exactly three
+    matching elements (lesson 22, Hands-On C). Worth filing **with** a test that pins both sides of the
+    boundary — three elements succeed, four throw. Found by lesson 22.
+54. **NEW: `BackendQueryHolder.hashCode()` hashes `isFitted` twice and `isSorted` never, while `equals`
+    compares `isSorted`.**
+    [`BackendQueryHolder`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/query/BackendQueryHolder.java)
+    has `return Objects.hash(backendQuery, isFitted, isFitted);` against
+    `return isFitted == oth.isFitted && isSorted == oth.isSorted && Objects.equals(backendQuery, oth.backendQuery);`.
+    This does **not** violate the `equals`/`hashCode` contract — equal objects still hash equally — so it
+    is a hash-quality defect, not a correctness one: two holders of the same backend query differing only
+    in `isSorted` are unequal but collide. A one-token fix (`isFitted, isSorted`). **Before filing,
+    establish whether it can degrade anything:** lesson 22 found no map or set keyed by
+    `BackendQueryHolder` anywhere it read, so this may be a pure tidy-up, in which case it belongs folded
+    into another patch rather than opened on its own. Found by lesson 22.
+55. **NEW, a reachability claim: the multi-sub-query arm of `QueryProcessor`'s unsorted branch cannot
+    execute in the shipped tree.**
+    [`QueryProcessor:139-151`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/query/QueryProcessor.java#L139-L151)
+    guards `CloseableIteratorUtils.concat(iterators)` and a `seenResults` de-duplication filter behind
+    `if (iterators.size() > 1)`. Reaching it needs a query with `numSubQueries() > 1` that is **not**
+    sorted. `search_code` for `implements ElementQuery` returns exactly two classes:
+    [`VertexCentricQuery`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/query/vertex/VertexCentricQuery.java),
+    whose `isSorted()` is an unconditional `return true;`, and
+    [`GraphCentricQuery`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/query/graph/GraphCentricQuery.java),
+    whose `numSubQueries()` is a literal `return 1;`. So every unsorted query falls through to
+    `else iterator = iterators.get(0);`. **Open as a question, not a patch.** The generality may be
+    historical, and `or()` is handled one layer up by running each branch as its own query — lesson 23
+    owns establishing whether the strategy layer ever produced such a query. If it did not, the honest
+    change is a comment; if a maintainer wants it kept for a future `GraphCentricQuery` fan-out, it needs
+    a test, because it currently has none. Found by lesson 22.
+56. **NEW, same family as 55: `ResultMergeSortIterator`'s duplicate filter is dead, and the javadoc
+    documents it as live.**
+    [`ResultMergeSortIterator.next`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/query/ResultMergeSortIterator.java)
+    is `do { next = nextInternal(); } while (next != null && filterDuplicates && comp.compare(current, next) == 0);`,
+    and `filterDuplicates` comes from `query.hasDuplicateResults()`. Both `ElementQuery` implementations
+    return a constant `false` — `VertexCentricQuery` with the comment *"We wanna count self-loops twice"*,
+    `GraphCentricQuery` with a bare `return false;` — so the loop always runs exactly one iteration and
+    the extra `compare` never happens. Meanwhile `QueryProcessor`'s class javadoc at
+    [`:48`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/query/QueryProcessor.java#L48)
+    still states *"when ElementQuery#hasDuplicateResults() is true … then the merge sort iterator filters
+    out immediate duplicates"*. Best filed **together with 55** as one documentation issue — "two
+    documented behaviours of `QueryProcessor` that no shipped query can trigger" — rather than as two
+    deletions. Found by lesson 22.
+57. **NEW, test coverage: `QueryProcessorTest` pins only `numSubQueries() == 1`, so the merge fold has no
+    unit test.**
+    [`QueryProcessorTest`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/test/java/org/janusgraph/graphdb/query/QueryProcessorTest.java)
+    has seven `@Test` methods and a single private fixture whose Mockito query hard-codes
+    `when(query.numSubQueries()).thenReturn(1)` with one `when(query.getSubQuery(0))`. So the backwards
+    fold at `QueryProcessor:93`, the right-leaning `ResultMergeSortIterator` chain at `:109-111`, and in
+    particular the **left-biased `if (c <= 0)` tie-break** are untested here; a refactor to `c < 0` would
+    silently change which sub-query's element comes first on a tie and no test would fail. **This is the
+    best-value contribution of the batch** because it is additive, needs no behaviour change, and the
+    fixture already supports it: set `numSubQueries()` to 2, stub `getSubQuery(0)` and `getSubQuery(1)`
+    with two `BackendQueryHolder`s marked sorted, and have the fake `Executor` return a different list per
+    `execute` call. Assert the merged order and the tie-break. Verify the test can fail by inverting `<=`
+    locally before filing. Found by lesson 22.
+58. **NEW, a nit worth bundling rather than filing alone: `QueryProfiler.MIXED_INEX_COUNT_QUERY` is
+    misspelled in the identifier.**
+    [`QueryProfiler`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/query/profile/QueryProfiler.java)
+    declares `String MIXED_INEX_COUNT_QUERY = "MixedIndexCountQuery";` — "INEX" for "INDEX". The **value**
+    is correct, so no profile output changes and renaming the constant is source-compatible within the
+    repo but is a public-field rename on a public interface. Bundle it into any other change in this file
+    rather than opening it on its own; if filed alone, note explicitly that the string value is unchanged
+    so a reviewer does not have to check. Found by lesson 22.
+59. **NEW, a design observation: the generic `QueryProcessor` branches on `instanceof GraphCentricQuery`.**
+    [`QueryProcessor:87-88`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/query/QueryProcessor.java#L87-L88)
+    is `final Set<R> allNewSet = allNew.isEmpty() || !(query instanceof GraphCentricQuery) ?
+    Collections.emptySet() : new HashSet<>(allNew);` — the only `instanceof` on a query type in the file.
+    The reason is sound and stated in the comment above it: a graph query's backend can return an element
+    that the transaction also reports as *new* (so it must be de-duplicated against `allNewSet`), whereas
+    a vertex-centric query's backend returns the relations as stored before the transaction, none of which
+    is new. But that is a **property of the query family**, and `ElementQuery` is the interface that
+    exists to express such properties — a default method such as `newElementsMayAlsoComeFromTheBackend()`
+    would remove the cast and make the rule testable. **Open as a question**: it is a readability and
+    extensibility argument with no behaviour change, so it needs a maintainer's appetite before any code.
+    Pairs naturally with 55 and 56 as "`QueryProcessor` is generic in form and specific in fact". Found by
+    lesson 22.
+60. **NEW: `SimpleQueryProfiler.addNested` accepts `hasSiblings` and ignores it, so the two profilers
+    produce differently shaped trees from identical instrumentation.**
+    [`SimpleQueryProfiler.addNested`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/query/profile/SimpleQueryProfiler.java)
+    is `SimpleQueryProfiler nested = new SimpleQueryProfiler(groupName); nestedProfilers.add(nested);
+    return nested;` — the parameter is unused. [`TP3ProfileWrapper.addNested`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/tinkerpop/profile/TP3ProfileWrapper.java)
+    uses it to flatten a single-child `AND-query`/`OR-query` into its parent. Since
+    `GraphCentricQuery.observeWith` calls the one-argument `indexQuery.observeWith(profiler)` —
+    i.e. `hasSiblings == false` — a graph query's `OR-query` span is **always** flattened away in a
+    TinkerPop `.profile()` and **always** present in a `SimpleQueryProfiler` tree. Anyone writing a test
+    against `SimpleQueryProfiler` and expecting it to match what users see is wrong by one level of
+    nesting. Not obviously a bug — `SimpleQueryProfiler` may be deliberately verbatim — so **file as a
+    javadoc question**: either document that `SimpleQueryProfiler` does not flatten, or make it flatten.
+    Low risk either way; worth confirming first whether the flattening is considered a stable contract,
+    which lesson 23 owes anyway before proposing new spans. Found by lesson 22.
 
 ---
 
 ## Still open, and who owns it
 
+- **Closed by lesson 22 — all three debts lesson 21 handed forward, plus the Part IV/V re-pin review.**
+  (a) *What the generic processor does with an unfitted or unsorted `BackendQueryHolder`, and whether the
+  in-memory filter runs before or after the limit.* **Before the query limit and after the backend
+  limit.** The per-sub-query chain is built at `QueryProcessor:101-107` as `executor.execute` →
+  `LimitAdjustingIterator` (or `PreSortingIterator` when the sub-query is not sorted) → `filter
+  !allNewSet.contains` (graph-centric only) → `getFilterIterator` (`isDeleted` and/or `query.matches`,
+  and **absent entirely** when neither applies) → the merge fold → `ResultSetIterator`. `ResultSetIterator`
+  counts **emitted elements** and `close()`s the whole stack at the limit; `LimitAdjustingIterator` counts
+  **raw backend results**. `ResultMergeSortIterator` is strictly binary, right-leaning (the loop runs
+  backwards so sub-query 0 is the outermost left operand) and left-biased on ties (`if (c <= 0)`).
+  `PreSortingIterator` materialises and sorts under a 1,000,000-result budget, per sub-query, and throws
+  rather than truncating. (b) *`LimitAdjustingIterator` proper.* Growth is
+  `currentLimit = min(maxLimit, round(currentLimit * 2.0))` with `maxLimit = Integer.MAX_VALUE - 1`, a
+  **full re-read** of the backend each time (there is no cursor), and resumption by one of two units:
+  `skipBackendResults(getBackendResultsRead())` for a `BackendLimitAware` iterator (backend results, no
+  element construction) or `for (i < count) iterator.next()` otherwise (elements, all rebuilt). Element
+  replay is *wrong* for an iterator that drops results, which is why `BackendLimitAware` exists. Since
+  `SubqueryIterator` is the only implementor and is built only on the graph-centric path: **graph-centric
+  skips, vertex-centric replays.** `Query.NO_LIMIT == Integer.MAX_VALUE > maxLimit`, so an unbounded read
+  never grows — and with `query.smart-limit` shipping `false` the *compile-time* adjustment is often
+  nothing, but the *runtime* doubling here still fires on any unfitted query. (c) *The re-pin review.*
+  **Performed; the pin stays for the fourth review in a row** — see `TRACK.md`'s front matter. Lesson 22
+  also replaced the line-count cross-check with git blob-SHA verification of the two files it cites by
+  line number, which is the method to use from here on.
+- **New, and lesson 23 owns it: nothing in the iterator stack is profiled.** `QueryProcessor` has three
+  `profiler` references and all three are pass-through; it never calls `addNested`, `startTimer`,
+  `stopTimer` or `setResultSize`. Merge time, `sorted()` heap time, `allNewSet` hashing and `matches`
+  filtering are invisible in `.profile()` and in Metrics, and a `backend-query` span's result size is
+  `SubqueryIterator`'s `readCount` (**ids read**, skipped and null-converting ones included), not elements
+  emitted. Three `addNested` calls would close the gap with no behaviour change — but adding spans changes
+  the shape of every published `.profile()` output, so **lesson 23 must first establish whether
+  `TP3ProfileWrapper`'s AND/OR flattening is treated as a stable contract.** Until that is answered this
+  is a question, not a patch; see also candidate 60.
 - **Closed by lesson 21 — all three debts lesson 20 handed forward.** (a) *The second scoring function,
   and whether it consults statistics.* It does not: four constants on
   `AbstractIndexSelectionStrategy` (`EQUAL_CONDITION_SCORE = 4`, `OTHER_CONDITION_SCORE = 1`,
