@@ -4,12 +4,12 @@ track: JanusGraph
 upstream: JanusGraph/janusgraph
 pinned-commit: a59ae8d8024207598eada34998d867617df51adf
 split-from: TRACK.md on 2026-11-14 (lesson 16)
-last-updated: 2026-11-20 (lesson 22; candidates 52-60 appended, next free number 61)
+last-updated: 2026-11-21 (lesson 23; candidates 61-64 appended, next free number 65)
 sync-note: RESOLVED and not repeated. The 2026-11-19 desync (TRACK.md recorded candidates 43-45 from
-  lesson 20 while this file still ended at 42) was repaired by lesson 21, which recovered 43-45 verbatim
-  from lesson 20's entry and appended its own 46-51. Lesson 22 appended 52-60 and wrote this file in the
-  SAME push as TRACK.md, per the rule that desync produced. TRACK.md and this file agree: 1-60 present,
-  next free 61. A run that logs candidates must write this file in the same push as TRACK.md.
+  lesson 20 while this file still ended at 42) was repaired by lesson 21. Lessons 22 and 23 both wrote this
+  file in the SAME push as TRACK.md, per the rule that desync produced. TRACK.md and this file agree:
+  1-64 present, next free 65. A run that logs candidates must write this file in the same push as
+  TRACK.md.
 -->
 
 # JanusGraph track — PR candidates and open questions
@@ -30,7 +30,7 @@ PR candidate and needs the next free number.
 ## PR candidates, all verified at the pinned commit
 
 Numbering is **stable** — earlier entries reference these numbers, so new candidates are appended rather
-than inserted in size order. **Candidates 52-60 are new this run** (lesson 22, `QueryProcessor` and the
+inserted in size order. **Candidates 61-64 are new this run** (lesson 23, the optimizer strategy layer — four, of which two are ordering-metadata observations and one is a design question). Two groupings matter for filing: **61 and 63 are both about missing or odd ordering metadata in the same registry** and bundle cleanly; **62 is the only reportable defect of the batch** and should go up on its own with the profile output attached. Candidates **55, 56 and 59 are one story** — `QueryProcessor` is generic in form and specific in fact — and lesson 23 confirmed they are *correct*: the TinkerPop side never produces a multi-sub-query `ElementQuery`, so the right PR is a comment rather than three deletions. **52 and 58 are both cosmetic and both in strings a user reads**, so they bundle. Candidate **44 and candidate 47 are the same defect on the two different planners, in opposite directions**, and are best filed together or at least cross-referenced.
 profiler — **nine, the largest batch the track has filed**, of which three are reachability or design
 questions rather than defects). Two groupings matter for filing: **55, 56 and 59 are one story** —
 `QueryProcessor` is generic in form and specific in fact, with two documented behaviours no shipped query
@@ -840,11 +840,135 @@ because lesson 14 found a second, configuration-driven call site for `getBackend
     javadoc question**: either document that `SimpleQueryProfiler` does not flatten, or make it flatten.
     Low risk either way; worth confirming first whether the flattening is considered a stable contract,
     which lesson 23 owes anyway before proposing new spans. Found by lesson 22.
+61. **NEW: `JanusGraphStepStrategy` and `JanusGraphLocalQueryOptimizerStrategy` have no direct ordering
+    declaration; their order is pinned only through the two mixed-index aggregation strategies.**
+    [`StandardJanusGraph.java:165-185`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/database/StandardJanusGraph.java#L165-L185)
+    registers twelve `ProviderOptimizationStrategy` instances.
+    [`JanusGraphStepStrategy`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/tinkerpop/optimize/strategy/JanusGraphStepStrategy.java)
+    declares neither `applyPrior()` nor `applyPost()`.
+    [`JanusGraphLocalQueryOptimizerStrategy:57`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/tinkerpop/optimize/strategy/JanusGraphLocalQueryOptimizerStrategy.java#L57)
+    declares only `singleton(AdjacentVertexFilterOptimizerStrategy.class)`. The only paths between the two
+    are `JanusGraphStepStrategy` → `JanusGraphMixedIndexCountStrategy` (its `applyPrior`) →
+    `JanusGraphLocalQueryOptimizerStrategy` (the abstract base's `applyPost`), and the same through
+    `JanusGraphMixedIndexAggStrategy`. `withoutStrategies(JanusGraphMixedIndexCountStrategy.class,
+    JanusGraphMixedIndexAggStrategy.class)` therefore leaves the order of the two principal rewriters to
+    TinkerPop's topological sort over the remaining edges. **This is a missing declaration, not a
+    demonstrated defect:** the two target disjoint step classes (`GraphStep` versus
+    `VertexStep`/`PropertiesStep`/`PropertyMapStep`/`ElementMapStep`/`LabelStep`/`DropStep`/`LocalStep`),
+    and `HasStepFolder`'s walk loops break on any step that is not `HasContainerHolder`, `IdentityStep` or
+    `NoOpBarrierStep`, so a `JanusGraphVertexStep` terminates a walk exactly as a `VertexStep` does; no
+    traversal was found where the order is observable. **File only after running the experiment** (lesson
+    23 Hands-On B: print `traversal.asAdmin().getStrategies()` with and without the two aggregation
+    strategies) and attach the output, since the value of the issue is almost entirely in whether the
+    order changes. The fix, if accepted, is two lines: add `applyPost()` on `JanusGraphStepStrategy` or
+    `applyPrior()` on `JanusGraphLocalQueryOptimizerStrategy`. Found by lesson 23.
+62. **NEW, and the best-value candidate of this batch: `JanusGraphMixedIndexAggStep`'s constructor
+    compiles and memoizes the step's `GraphCentricQuery` during strategy application, under
+    `QueryProfiler.NO_OP`, and mutates the step even when the push-down is declined.**
+    [`AbstractJanusGraphMixedIndexAggStrategy`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/tinkerpop/optimize/strategy/AbstractJanusGraphMixedIndexAggStrategy.java)'s
+    `buildMixedIndexAggStep` constructs `new JanusGraphMixedIndexAggStep<>(originalGraphStep, traversal,
+    agg)`, whose constructor calls the public no-arg
+    [`JanusGraphStep.buildGlobalGraphCentricQuery()`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/tinkerpop/optimize/step/JanusGraphStep.java),
+    and then **discards** the new step when `getMixedIndexAggQuery() == null`. That method memoizes
+    (`if (globalQuery != null) return globalQuery;`) and, when `hasLocalContainers.isEmpty()`, inserts
+    `hasLocalContainers.put(null, {[]})`. At that moment TinkerPop has not called
+    `setMetrics(MutableMetrics)`, so `queryProfiler` is still `QueryProfiler.NO_OP`. Three consequences
+    for any traversal ending in `count()`, `min()`, `max()`, `sum()` or `mean()` — the only shapes whose
+    `getAggregation` is non-null: **(i)** index selection happens at traversal-compile time rather than at
+    first iteration; **(ii)** the `constructGraphCentricQuery` span is created against `NO_OP` and lost, so
+    `.profile()` on such a traversal shows no compile span at all, while `GraphCentricQuery` and
+    `backend-query` are still present because `observeWith` re-observes the memoized query with the live
+    `TP3ProfileWrapper`; **(iii)** a declined probe leaves the surviving step mutated. Lesson 23 traced
+    `toString()`, `hashCode()` and the `or()`-fallback switch
+    (`hasLocalContainers.size() != 1`) and found no behaviour change from (iii), so **(ii) is the
+    reportable defect and (iii) a hygiene note in the same issue**. Reproduce with lesson 23 Hands-On C
+    (profile `g.V().has(k,v)` and `g.V().has(k,v).count()` on a graph with no mixed index and compare the
+    metrics trees) before filing. Two candidate fixes worth offering: pass the live profiler at
+    `observeWith` time into a re-run of the construct span, or invalidate `globalQuery` in `setMetrics`.
+    Found by lesson 23.
+63. **NEW, a nit with a real smell: `JanusGraphIoRegistrationStrategy` is a decoration concern registered
+    as a `ProviderOptimizationStrategy`, with no ordering declaration.**
+    [`JanusGraphIoRegistrationStrategy`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/tinkerpop/optimize/strategy/JanusGraphIoRegistrationStrategy.java)
+    extends `AbstractTraversalStrategy<TraversalStrategy.ProviderOptimizationStrategy>` and its whole
+    `apply()` is `if (traversal.getStartStep() instanceof IoStep) ioStep.configure(IO.registry,
+    JanusGraphIoRegistry.instance())`. It declares neither `applyPrior` nor `applyPost`, so it is the one
+    strategy in the set with no edge in either direction. TinkerPop's `DecorationStrategy` category exists
+    for exactly this kind of registration and runs before the optimization categories. **Nothing depends
+    on it today** — no other strategy touches `IoStep` — so this is a correctness-of-classification
+    argument, not a bug, and changing the category is a behavioural change to strategy ordering that needs
+    a maintainer's appetite. **Open as a question, or bundle with 61** since both are about missing/odd
+    ordering metadata in the same registry. Found by lesson 23.
+64. **NEW, a design observation worth a maintainer's opinion: `validFoldInOrBranch` is all-or-nothing
+    across an entire `or()`, so one unrecognised step in one branch abandons the fold for every branch.**
+    [`HasStepFolder:181-214`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/tinkerpop/optimize/step/HasStepFolder.java#L181-L214)
+    loops over `((OrStep<?>) currentStep).getLocalChildren()` and does `if (!validFoldInOrBranch(child))
+    return;` — a bare `return` out of `foldInHasContainer`, abandoning not just the `or()` but the rest of
+    the forward walk. So `g.V().or(has("a",1), has("b",2), has("c",3), where(__.out()))` folds **nothing**,
+    and the three indexable branches are evaluated by TinkerPop over whatever the step produces. The
+    behaviour is correct — an `or()` is a disjunction, so a branch that cannot be expressed as conditions
+    cannot be narrowed away — and a partial fold is **not** obviously sound, because the folded condition
+    would have to be the disjunction of the expressible branches *unioned with everything*, i.e. no
+    constraint at all. **That is exactly why it is worth asking rather than patching:** the cheap, sound
+    improvement is not a partial fold but **not abandoning the remaining forward walk** — the `return`
+    could be a `break` out of the `or()` handling that leaves `currentStep` advanced, so a later
+    `has("d", 4)` outside the `or()` still folds. Verify that reading against
+    `JanusGraphStepStrategyTest`'s `or()` rows (`:342-380`) before filing; if correct this is a small,
+    testable patch with a clear benefit. Found by lesson 23.
 
 ---
 
 ## Still open, and who owns it
 
+- **Closed by lesson 23 — all three debts lesson 22 handed forward.** (a) *Where `observeWith` is called
+  relative to `constructQueryWithoutProfile` and `new QueryProcessor(...)`, and whether any path can build
+  the stack before the holders are observed.* **On the normal path, no.** Inside the lambda
+  `JanusGraphStep`'s constructor installs via `setIteratorSupplier`, the order is
+  `buildGlobalGraphCentricQuery()` → `addNested(CONSTRUCT_GRAPH_CENTRIC_QUERY)` + `startTimer` →
+  `disableSmartLimit()` iff the end step is a `CountGlobalStep` → `requireOrderValues()` →
+  `constructQueryWithoutProfile(VERTEX|EDGE)` → `stopTimer` →
+  `globalQuery.observeWith(queryProfiler.addNested(GRAPH_CENTRIC_QUERY))` → `executeGraphCentricQuery`
+  reads `query.getProfiler()` and wraps `builder.iterables(...)` in a `ProfiledIterator` → `iterables`
+  constructs the `QueryProcessor`. Holders are observed strictly before anything reads the profiler. **The
+  one path that loses a span is candidate 62**, where `buildGlobalGraphCentricQuery()` returns a query
+  memoized at strategy time under `QueryProfiler.NO_OP`. (b) *Whether the TinkerPop side ever intended to
+  produce a multi-sub-query unsorted `ElementQuery`.* **No, and candidates 55 and 56 are confirmed
+  correct.** `or()` is folded only for a `JanusGraphStep` (`HasStepFolder:185`) and executed either as one
+  disjunctive `GraphCentricQuery` (`numSubQueries() == 1`) or as N single-sub-query `GraphCentricQuery`
+  objects merged **in the step** by `MultiDistinctUnorderedIterator<>(lowLimit, highLimit, responses)` /
+  `MultiDistinctOrderedIterator<>(lowLimit, highLimit, responses, comparator)`. The de-duplicating
+  multi-query merge exists one layer above `QueryProcessor`, where the step's *low* limit can also be
+  applied — which is why `QueryProcessor`'s generic `concat` + `seenResults` arm is unreachable. **The
+  right PR for 55/56/59 is a comment, not a deletion.** Note the fallback switch counts `or()` *steps*
+  (`hasLocalContainers.size() != 1`), not branches, so with two folded `or()`s the per-branch split never
+  happens; and the ordered merge's cross-query ordering invariant is an `assert`, disabled in production —
+  carried to **lesson 28**. (c) *Whether `TP3ProfileWrapper`'s AND/OR flattening is treated as a stable
+  contract.* **Not a tested one.** `search_code` for `AND_QUERY OR_QUERY TP3ProfileWrapper assert metrics`
+  and for `"backend-query" profile test assertion` both returned **0 results** repository-wide. Treat as
+  suggestive rather than proof (the index does not reliably return every file containing a string), but
+  it means **nothing in the repository asserts profile-tree shape**, so a span added as an only child of
+  an `AND-query`/`OR-query` group would be silently reparented in a TinkerPop profile and nested in a
+  `SimpleQueryProfiler` tree. **Candidate 60 must be filed before any new-span patch**; lesson 22's
+  three-span proposal is blocked on it.
+- **Opened by lesson 23, owned by lesson 24: the batch-size asymmetry.**
+  `JanusGraphLocalQueryOptimizerStrategy.inspectLocalTraversals` calls `setBatchSize(txVertexCacheSize)`
+  on the `JanusGraphVertexStep` it creates (`:170`) and on the `JanusGraphPropertiesStep` (`:185`), and
+  `applyJanusGraphPropertiesSteps` does the same at `:158` — but `applyJanusGraphVertexSteps` (`:99-117`)
+  **never calls `setBatchSize` at all**. So a top-level `out()` and a `local(out())` may not get the same
+  batch size. Lesson 24 owns `JanusGraphVertexStep` and `JanusGraphMultiQueryStep` and must say whether
+  the top-level step picks up `txVertexCacheSize` by another route — most plausibly
+  `JanusGraphMultiQueryStrategy`, which runs after and attaches clients to every `MultiQueriable` — or
+  keeps a different default. **Nothing is to be filed on this until those two files are read**; lesson 23
+  deliberately left it as a question rather than guessing.
+- **Opened by lesson 23, owned by lesson 25: what the one backend-touching strategy does with a
+  non-`ENABLED` index.** `AdjacentVertexHasUniquePropertyOptimizerStrategy` is the only strategy permitted
+  to read from the backend — gated on `GraphDatabaseConfiguration#optimizerBackendAccess()` — and it does
+  so by **running a side traversal during strategy application** (`DefaultGraphTraversal` + `GraphStep` +
+  the original `HasStep` + `IdStep`, then `filterTraversal.next()`), substituting a `DiscardStep` when the
+  unique key resolves to nothing. Its validity test is `IndexSelectionUtil.existsMatchingIndex(...)`
+  requiring a **composite** index with `Cardinality.SINGLE`. Lesson 25 owns the `INSTALLED → REGISTERED →
+  ENABLED` state machine and should state what this strategy does when the matching unique index is not
+  yet `ENABLED` — a `DiscardStep` substituted on the strength of an index that is not yet readable would
+  turn a schema transition into wrong results, which is worth checking rather than assuming.
 - **Closed by lesson 22 — all three debts lesson 21 handed forward, plus the Part IV/V re-pin review.**
   (a) *What the generic processor does with an unfitted or unsorted `BackendQueryHolder`, and whether the
   in-memory filter runs before or after the limit.* **Before the query limit and after the backend
