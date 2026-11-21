@@ -30,11 +30,15 @@ PR candidate and needs the next free number.
 ## PR candidates, all verified at the pinned commit
 
 Numbering is **stable** — earlier entries reference these numbers, so new candidates are appended rather
-inserted in size order. **Candidates 61-64 are new this run** (lesson 23, the optimizer strategy layer — four, of which two are ordering-metadata observations and one is a design question). Two groupings matter for filing: **61 and 63 are both about missing or odd ordering metadata in the same registry** and bundle cleanly; **62 is the only reportable defect of the batch** and should go up on its own with the profile output attached. Candidates **55, 56 and 59 are one story** — `QueryProcessor` is generic in form and specific in fact — and lesson 23 confirmed they are *correct*: the TinkerPop side never produces a multi-sub-query `ElementQuery`, so the right PR is a comment rather than three deletions. **52 and 58 are both cosmetic and both in strings a user reads**, so they bundle. Candidate **44 and candidate 47 are the same defect on the two different planners, in opposite directions**, and are best filed together or at least cross-referenced.
-profiler — **nine, the largest batch the track has filed**, of which three are reachability or design
-questions rather than defects). Two groupings matter for filing: **55, 56 and 59 are one story** —
-`QueryProcessor` is generic in form and specific in fact, with two documented behaviours no shipped query
-can trigger and one `instanceof` standing in for an interface method — and should go up as a single
+than inserted in size order. **Candidates 61-64 are new this run** (lesson 23, the optimizer strategy
+layer — four, of which two are ordering-metadata observations and one is a design question). Groupings
+that matter for filing: **61 and 63 are both about missing or odd ordering metadata in the same
+registry** and bundle cleanly, while **62 is the only reportable defect of this batch** and should go up
+on its own with the Hands-On C profile output attached. From the previous batch, **55, 56 and 59 are one
+story** — `QueryProcessor` is generic in form and specific in fact, with two documented behaviours no
+shipped query can trigger and one `instanceof` standing in for an interface method — and **lesson 23
+confirmed all three are correct**: the TinkerPop side never produces a multi-sub-query `ElementQuery`,
+because `JanusGraphStep` merges an `or()`'s per-branch queries itself, so the right PR is a single
 documentation/design issue rather than three patches or three deletions. **52 and 58 are both cosmetic and
 both in strings a user reads**, so they bundle. Candidate **44 and candidate 47 are the same defect on the
 two different planners, in opposite directions**, and are best filed together or at least cross-referenced.
