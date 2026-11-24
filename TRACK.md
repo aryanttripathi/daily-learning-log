@@ -5,24 +5,26 @@ mode: lesson
 mode-history: contributor-reading 2026-10-30 .. 2026-11-02 (sessions 01-04); lesson from 2026-11-03 (lesson 05 on)
 started: 2026-10-30
 lessons-total: 28
-lessons-done: 25
+lessons-done: 26
 pinned-commit: a59ae8d8024207598eada34998d867617df51adf
 pinned-commit-date: 2026-10-28
 pinned-commit-reviewed: 2026-11-22 at the Part V/VI boundary (lesson 24) — PERFORMED, and the pin stays
-  for the FIFTH review in a row. list_commits on JanusGraph/janusgraph master returned a59ae8d8
-  (2026-10-28, Restore 1.3.0-SNAPSHOT version CTR), 9a30ff14 (2026-10-28) and 5e3e7bc7 JanusGraph
-  release 1.2.0 (2026-10-24). The pinned commit is still the tip; there is nothing to re-pin to.
-  Method: every file cited by line number has its git blob SHA computed locally and compared against
-  what the API reported. Lesson 25 improved the method: a directory listing with
-  fields: ["name","sha","size"] returns every file's blob SHA in ONE cheap call, so a large file read
-  through the over-limit path can be verified with no transcription step at all. Lesson 25 verified
-  ManagementSystem.java (86,864 bytes = a722a7d9) and ManagementLogger.java (24,707 = 1980d1fb) that way.
-  NEXT REVIEW: the Part VI boundary — after lesson 28, or at the capstone. Lessons 26 and 27 are
-  mid-Part and must NOT re-raise it; lesson 25 correctly did not.
+  for the FIFTH review in a row. Lesson 26 was mid-Part and correctly did NOT re-raise it, as lesson 25
+  also did not. The method is blob-SHA identity and nothing weaker: every file cited by line number has
+  its git blob SHA computed locally and compared against what the API reported. Lesson 25 established the
+  cheap form — a directory listing with fields: ["name","sha","size"] returns every file's blob SHA in ONE
+  call, so a large file read through the over-limit path is verified with no transcription step at all.
+  Lesson 26 used it on ElasticSearchIndex.java (119,295 bytes = d80949e3), matching on the first attempt,
+  which is incidental confirmation that the pin has not moved under the track. Lesson 26 also used
+  DELEGATED transcription for one of this repository's own files (tracks/janusgraph-registers-2.md,
+  18,388 bytes = 642bd570), verified the same way — the first time the method was applied to a file being
+  edited rather than read.
+  NEXT REVIEW: the Part VI boundary — after lesson 28, or at the capstone. Lesson 27 is mid-Part and must
+  NOT re-raise it.
 upstream: JanusGraph/janusgraph
 reader-fork: aryanttripathi/janusgraph
 registers: tracks/janusgraph-registers.md (candidates 1-64, FROZEN, plus the "Still open, and who owns
-  it" ledger) and tracks/janusgraph-registers-2.md (candidates 65-70, next free 71)
+  it" ledger) and tracks/janusgraph-registers-2.md (candidates 65-73, next free 74)
 paused-tracks: PostgreSQL (resume at lesson 11; full state in tracks/postgresql.md)
 -->
 
@@ -30,7 +32,7 @@ paused-tracks: PostgreSQL (resume at lesson 11; full state in tracks/postgresql.
 
 Sequential deep dive through the JanusGraph source, one entry per day, each building on the last.
 The destination is unchanged: contributing to JanusGraph before the January 2027 LFX Mentorship
-applications open. **Part VI opened on 2026-11-23 with lesson 25. Three lessons remain: 26, 27 and 28.**
+applications open. **Part VI opened on 2026-11-23 with lesson 25. Lesson 26 shipped 2026-11-24. Two lessons remain: 27 and 28.**
 
 **Mode: `lesson`, switched 2026-11-03.** Sessions 01–04 ran as `contributor-reading`: a short
 reading guide per day, with four to six questions deliberately left unanswered and the `## My
@@ -54,7 +56,7 @@ are reference material rather than reading material (`GraphDatabaseConfiguration
 **Pinned source.** All line numbers and permalinks use commit `a59ae8d8` (2026-10-28) on
 `JanusGraph/janusgraph` `master`. Re-pin only at a Part boundary, and record the new commit here.
 **Reviewed 2026-11-22 at the Part V/VI boundary (lesson 24): PERFORMED, and the pin stays for the fifth
-time.** `list_commits` on `master` returns the same three newest commits as at lessons 13, 18 and 22 —
+time. Lessons 25 and 26 were mid-Part and correctly did not re-raise it; lesson 27 must not either.** `list_commits` on `master` returns the same three newest commits as at lessons 13, 18 and 22 —
 `a59ae8d8`, `9a30ff14` (both 2026-10-28) and `5e3e7bc7` *JanusGraph release 1.2.0* (2026-10-24) — so the
 repository has not moved in 25 days and Part VI's line numbers will stay comparable with lessons 02–24.
 **The verification method is now blob-SHA identity and nothing weaker.** Lesson 22 introduced it, lesson
@@ -88,19 +90,23 @@ both land before the run ends, and both did.
 Newest first. **Session-log roll-off:** the full `**Findings.**` paragraph is kept for the three most
 recent lessons only — the same window as the `Verified by lesson NN` blocks below. Lessons 09-12 were
 compressed on 2026-11-13, lesson 13 on 2026-11-14, lesson 14 on 2026-11-15, lesson 15 on 2026-11-16,
-lesson 16 on 2026-11-17, lesson 17 on 2026-11-20, lesson 20 on 2026-11-21, lesson 21 on 2026-11-22, and
-**lesson 22's paragraph was compressed this run with its `Verified by lesson 22` block removed**. The full
-paragraphs remain verbatim in git history at the commit each line names. Next run, lesson 23's block and
-paragraph are the ones that go.
+lesson 16 on 2026-11-17, lesson 17 on 2026-11-20, lesson 20 on 2026-11-21, lesson 21 on 2026-11-22,
+lesson 22 on 2026-11-23, and **lesson 23's paragraph was compressed this run with its
+`Verified by lesson 23` block removed**. The full paragraphs remain verbatim in git history at the commit
+each line names. Next run, lesson 24's block and paragraph are the ones that go.
 
 **On 2026-11-22 the one-line entries for lessons 01–19 were dropped from this log; lesson 20's went on
-2026-11-23.** They carried
+2026-11-23 and lesson 21's this run.** They carried
 nothing the rest of the repository does not carry better — the **Syllabus** below lists all 28 lesson
 titles as taught, and the root [`README.md`](README.md) index links every entry and every digest by date
 and number — while costing ~23 KB of a file that is read in full at the start of every run and
 re-emitted in full on every push. Their full text is in git history at the commit immediately preceding
 the 2026-11-22 entry. Entries roll off this log one per run from here; the window is the five most
 recent lessons.
+
+- **26 — 2026-11-24** · [`2026/11/2026-11-24-janusgraph-index-provider-elasticsearch/README.md`](2026/11/2026-11-24-janusgraph-index-provider-elasticsearch/README.md) · **Mid-Part, so the re-pin question was correctly NOT re-raised.** Read the mixed-index SPI and its Elasticsearch implementation at the pinned commit. **Blob-SHA verified and cited by line number:** `ElasticSearchIndex` (2,028 lines, 119,295 bytes = `d80949e3`; cited at `:120`, `:185-188`, `:215-222`, `:224-232`, `:234-250`, `:252-266`, `:526-536`, `:543-562`, `:564-566`, `:568-576`, `:770-800`, `:802-813`, `:815-824`, `:826-835`, `:837-844`, `:846-854`, `:855-876`, `:866-868`, `:869-873`, `:874-875`, `:881-888`, `:897-916`, `:932-958`, `:1010-1047`, `:1015-1017`, `:1018-1023`, `:1025-1038`, `:1039-1046`, `:1162-1167`, `:1169-1171`, `:1173-1217`, `:1179-1192`, `:1197-1201`, `:1219-1238`, `:1275-1381`, `:1292-1295`, `:1300-1306`, `:1307-1350`, `:1314-1315`, `:1319`, `:1322`, `:1326-1330`, `:1336`, `:1344`, `:1346`, `:1352-1356`, `:1364-1368`, `:1369-1380`, `:1371-1372`, `:1383-1406`, `:1408-1422`, `:1424-1462`, `:1436-1441`, `:1451-1452`, `:1457-1458`, `:1459-1461`, `:1464-1468`, `:1507-1708`, `:1709-1728`, `:1718`, `:1730-1735`, `:1794-1804`, `:1806-1825`, `:1816`, `:1827-1847`, `:1854-1856`, `:1864-1870`, `:1872-1881`, `:1883-1925`, `:1928-1942`, `:1944-1956`, `:1959-1962`, `:1964-1967`, `:1995-2007`). **Read inline, member-name citations only:** `IndexProvider` (`b7b342bb`), `IndexFeatures` (`6651e246`), `IndexInformation` (`ded18cc9`), `IndexMutation` (`d2c44e46`), `IndexSelectionUtil` (`3ec0ec2a`), `AbstractESCompat` (`89543cd9`), and all four compat subclasses read in full — `ES6Compat` (`d686ce02`), `ES7Compat` (`fb0efe32`), `ES8Compat` (`bbd2b413`), `ES9Compat` (`73af9fc2`). **Seen only as `search_code` fragments:** `AdjacentVertexHasUniquePropertyOptimizerStrategy`, `AbstractIndexSelectionStrategy`, `BruteForceIndexSelectionStrategy`, `ApproximateIndexSelectionStrategy`, `IndexSerializer`, `HasStepFolder`, `IndexSelectionUtilTest`. Three directory listings with `fields: ["name","sha","size"]`; two `search_code` queries, both returning results. Three PR candidates logged (**71-73**) in [`tracks/janusgraph-registers-2.md`](tracks/janusgraph-registers-2.md), written in the same push as this file — **the register was brought to local disk by a delegated transcription and blob-SHA verified (18,388 bytes = `642bd570`) before being appended to**, the first time that method was used on a file being edited rather than read. Daily Diff: **today's edition had not published** (`2026-11-24.md` and `2026-11-23.md` both client errors), so the **fallback pool was drawn on for the first time** — the uncovered **2026-11-20** edition, 50 items, read in full across two fetches; deep dive on **Valkey 9.2's forkless snapshots**.
+
+  **Findings.** **THE finding: the index SPI is the only write path in JanusGraph that is not idempotent by construction, and `LIST` cardinality is the entire reason.** Audit the five mutation primitives against the Painless scripts and exactly two are non-idempotent: `ctx._source[field].add(value)` for a `LIST` field, which appends a duplicate on a second application, and `remove(indexOf(value))`, which removes another occurrence or none. `SET` is saved by one guard — `field.cardinality != 'SET' || indexOf(value) == -1` — and every `SINGLE` operation is naturally idempotent (`ctx._source.remove(name)` on an absent key, and `putAll(params.doc)` rewriting the same value). **The fix reached up into the core rather than down into the backend**: `IndexMutation` gained a `completeDocument` field carrying the element's whole indexed state, *"supplied once, from the element's state at commit"*, with the design note that *"reading the element again would read the same state"* — so it costs no read. `addUpdatesCarryingTheCompleteDocument` (`:855-876`) then collapses every change to one document into **one** update whose upsert is the complete document, exploiting three mechanisms at once: Elasticsearch **writes the upsert and skips the script** when the document is missing, so "recreate whole" and "apply the delta" become the same request; one item per document is the **maximum atomicity** the bulk API offers; and a retried item therefore never replays a *part* that had applied. The in-source comment at `:846-854` is the clearest statement of the problem in the codebase. Second: **`mutate` has three request shapes and the non-idempotent one is still live.** Shape A is a whole-document delete, guarded on `hasDeletions() && isDeleted()`; shape B is the single complete-document update; shape C — reached whenever `completeDocument` is `null` for an existing document — emits up to **three** separate bulk items for one `_id` (field-deletion script `:1314-1315`, addition script `:1336`, `{"doc": …}` merge `:1344`), with `upsert` deliberately `null` when deletions are present (`:1326-1330`). That is exactly the shape shape B's own javadoc argues against (candidate **73**, reachability untraced: `IndexSerializer` and `IndexTransaction` were not read). Third: **the retry machinery and the idempotence machinery are a matched pair.** `retainUnappliedDocuments` (`:770-800`) **mutates the caller's map in place** — a contract declared in `IndexProvider.mutate`'s own javadoc, *"a caller must not rely on the map being unchanged after a failure"* — in four independent steps, each wrapped by `narrowQuietly` (`:805-813`) so that an immutable map simply resends that store whole, and guarded by `namesPendingDocuments` (`:826-835`) so that a response naming documents the mutation no longer holds narrows nothing. Every step fails **toward** resending more, which is only sound because shape B makes the duplicate work correct. The residual hazard the lesson does **not** claim either way: shape B guarantees all-or-nothing within a document, not script idempotence against a document that already holds the outcome, so a bulk item that applied and was then reported failed still double-applies a `LIST` add. Fourth: **`register` is a non-transactional side effect of a transaction.** Called synchronously from `ManagementSystem.addIndexKey:802` (lesson 25), it can `checkForOrCreateIndex` **and** `pushMapping` before the management transaction commits, and nothing compensates in either direction — a failed register can leave a stray ES index, and a successful register followed by a rollback leaves ES holding a mapping the schema has never heard of. ES mappings being additive and practically irremovable, the drift accumulates one way, with no documented repair. Fifth, **debt (d) is settled and the answer is "no filter at all"**: `IndexSelectionUtil` has six public static methods and **not one reference to `SchemaStatus`**; `existsMatchingIndex`/`getMatchingIndexes` apply only the caller's `Predicate<IndexType>`, and `AdjacentVertexHasUniquePropertyOptimizerStrategy` passes `indexType -> indexType.isCompositeIndex() && …`. So a unique composite index at `INSTALLED`, `REGISTERED` or `DISABLED` still drives the rewrite although the composite read gate is `== ENABLED`. **The absence is verified; the consequence is not** (candidate **72**, Hands-On B). Sixth, a **correction to the handover**: there is no `supportsExistsQuery()` in `IndexFeatures` at the pinned commit — the file was read in full and the nearest member is `supportsGeoExists()`. Seventh: **all four `*Compat` classes produce identical `IndexFeatures`**, each being `coreFeatures().setWildcardField(CUSTOM_ALL_FIELD).supportsGeoContains().build()`, so `coreFeatures()`'s `setWildcardField("_all")` is **unreachable** (candidate **71**) and version dependence lives in a boolean field, an `IllegalArgumentException` and an `unmapped_type` comment instead. `supportsDocumentTTL` is `false` for every ES version, leaving `IndexMutation.determineTTL()`'s uniform-TTL `checkArgument` with no ES consumer. Eighth, inherited item (b) settled: **Elasticsearch has no page-doubling equivalent of `SolrIndex`'s** — it sizes pages once, with three options (`limited-result-max-page-size` **250**, `adaptive-point-in-time-max-page-size` **500**, `adaptive-point-in-time-max-shards` **1**), all three carrying `positiveInt()` verifiers where lesson 24's candidate 66 found none on the core batching options. The doubling that does affect an ES-backed query is `LimitAdjustingIterator`'s, one layer up.
 
 - **25 — 2026-11-23** · [`2026/11/2026-11-23-janusgraph-management-index-lifecycle/README.md`](2026/11/2026-11-23-janusgraph-management-index-lifecycle/README.md) · **Part VI opened. Mid-Part, so the re-pin question was correctly NOT re-raised.** Read the management and index-lifecycle surface at the pinned commit. **Blob-SHA verified against the directory listing and cited by line number:** `ManagementSystem` (1,815 lines, 86,864 bytes = `a722a7d9`; cited at `:190-207`, `:209-213`, `:241-268`, `:253`, `:256-257`, `:340-393`, `:365`, `:367`, `:368`, `:387`, `:389-391`, `:622-639`, `:628-639`, `:655-679`, `:704-706`, `:720-724`, `:746-767`, `:758`, `:770-808`, `:785-791`, `:791`, `:802`, `:807`, `:831-879`, `:841-846`, `:852`, `:860`, `:877`, `:967`, `:977`, `:980-1140`, `:987-996`, `:1000-1019`, `:1013-1016`, `:1026-1032`, `:1033-1051`, `:1052-1056`, `:1100-1112`, `:1130-1135`, `:1142-1147`, `:1154-1166`, `:1207-1301`, `:1227-1287`, `:1237-1242`, `:1244-1254`, `:1289-1299`, `:1303-1305`, `:1310-1319`, `:1321-1326`, `:1328-1341`, `:1334`, `:1343-1361`, `:1351`, `:1392-1459`, `:1436-1458`) and `ManagementLogger` (505 lines, 24,707 bytes = `1980d1fb`; `:71`, `:169-230`, `:176-207`, `:208-224`, `:235-237`, `:239-260`, `:275-286`, `:288-296`, `:306-315`, `:317-326`, `:328-339`, `:341-357`, `:382-441`). **Read inline, member-name citations only:** `SchemaStatus` (`7b40611d`), `SchemaAction` (`b2bf7951`), `JanusGraphIndexWrapper` (`94d0458d`), `GraphIndexStatusWatcher` (`3ebe2f6a`), `AbstractIndexStatusWatcher` (`e0ab9913`), `IndexUpdateJob` (`f1b9b521`), `IndexRepairJob` (`434abee9`). Two directory listings, one with `fields: ["name","sha","size"]` — **the cheap SHA-verification method this run introduced**. One `search_code` query, returning nothing. Three PR candidates logged (**68-70**) in [`tracks/janusgraph-registers-2.md`](tracks/janusgraph-registers-2.md), written in the same run as this file, as the second of two consecutive pushes. Daily Diff: the **2026-11-22** edition (38 items, **read in full**), deep dive on **Apache Kvrocks**, Redis mapped onto RocksDB, with a sidebar on **ParadeDB**'s filter-aware vector search.
 
@@ -110,13 +116,9 @@ recent lessons.
 
   **Findings.** **THE finding: the batch size of a `JanusGraphVertexStep` is written by two strategies, and on the shipped default the second write always wins.** `JanusGraphVertexStep.batchSize` defaults to **`Integer.MAX_VALUE`** (`:54`), not to zero or one. `JanusGraphLocalQueryOptimizerStrategy` pass 1 never calls `setBatchSize` (lesson 23) and pass 5 calls `setBatchSize(txVertexCacheSize)` (`:170`, default **20000**). Then `JanusGraphMultiQueryStrategy:179` executes `boolean barrierSizeSet = !limitedBatch;` — and `query.batch.limited` defaults to **`true`** (`GraphDatabaseConfiguration:379-384`), so `barrierSizeSet` starts `false` and the strategy writes a size over whatever pass 5 left: a user `barrier(n)` if there is one (`:219-222`), else the generated barrier's size (`:224-227`) which is `query.batch.limited-size`, default **2500** (`:386-391`), else `limitedBatchSize` directly (`:199-201`). **So on a default graph `g.V().out()` and `g.V().local(out())` both batch at 2500 and `cache.tx-cache-size` has no effect on batching at all.** The asymmetry lesson 23 asked about only becomes observable with `query.batch.limited=false`, where `barrierSizeSet` starts `true`, no `setBatchSize` call happens anywhere in the strategy, and the top-level step keeps `Integer.MAX_VALUE` — one multi-query over every start vertex — while the local one keeps 20000. The two halves agree: at `limited=false` `JanusGraphMultiQueryStep.initialize()` (`:93-103`) also drains its **entire** upstream into an `ArrayList` before passing it on. **Nobody has run the experiment; Hands-On A is it.** Second: **the two steps are not a matched pair.** `JanusGraphStep` implements `HasContainerHolder` and compiles a `GraphCentricQuery` inside itself; `JanusGraphVertexStep` implements `MultiQueriable` and only forwards arguments to a `BaseVertexQuery` builder. Only `JanusGraphStep` supports an offset (`setLimit`'s low bound, consumed by `MultiDistinct*Iterator` at `:110`/`:119`, never passed to a query); `JanusGraphVertexStep.setLimit` asserts `low == 0` (`:174`). Only `JanusGraphVertexStep` batches. Third: **both of `JanusGraphStep`'s execution arms converge on the same merge**, so the de-duplicating offset-applying `MultiDistinctUnorderedIterator`/`MultiDistinctOrderedIterator` is *the* execution path, not a special case for split `or()`s — and the split arm gives each of N branch queries the **full** `highLimit` (`:179`), so a `limit(10)` over a three-branch `or()` can read 30 elements. The `ids != null && ids.length > 0` arm consults **no index at all**: `iteratorList`/`holdsConditions` (`:322-357`) re-check every folded `has()` and every `or()` in Java. Fourth, **debt (b) is fully settled: all four multi-query annotations are set in one class, `MultiVertexCentricQueryBuilder`** — `multi=true` and `vertices=N` in `constructQuery`, `partitioned=true` in the partitioned-vertex branch, `multiPreFetch=true` in `preFetch()`. **`vertices` is the only one carrying a number, and it is the batch size actually used**, which makes it the observable for Hands-On A. Fifth, the **insert-then-remove** design is deliberate and javadoc'd (`JanusGraphMultiQueryStrategy:113-114`): a `JanusGraphMultiQueryStep` is inserted before every `MultiQueriable` *and* every `TraversalParent`, and `JanusGraphUnusedMultiQueryRemovalStrategy` deletes the ones with three empty client lists **together with the barrier they generated**, identified by reference equality on `getGeneratedBarrierStep()` — the same identity test that distinguishes a generated barrier from a user's `barrier(n)` when choosing a batch size (`JanusGraphTraversalUtil:361`). Sixth: `JanusGraphNoOpBarrierVertexOnlyStep` is a four-line subclass whose entire content is `break`ing out of the fill loop on a non-vertex traverser (`:53-55`) plus refusing to top up a non-empty barrier (`:46-48`). Three PR candidates: **65** (`isLegalMultiQueryPosition` walks `currentStep` and tests `step`, so the walk is a no-op and the answer depends only on the position step's own labels — the one reportable defect, and **not yet confirmed by a run**), **66** (`BatchProcessingQueue.setBatchSize` drops the constructor's `Math.max(batchSize,1)`, and neither `query.batch.limited-size` nor `cache.tx-cache-size` has a `positiveInt()` verifier where `MAX_KEYS_PER_READ` at `:401` does), **67** (`JanusGraphVertexStep`'s copy constructor does not copy `batchSize`; latent, no reachable path found).
 
-- **23 — 2026-11-21** · [`2026/11/2026-11-21-janusgraph-optimizer-strategy-layer/README.md`](2026/11/2026-11-21-janusgraph-optimizer-strategy-layer/README.md) · **Part V opened. Mid-Part, so the re-pin question was correctly NOT re-raised.** Read the strategy layer at the pinned commit. **Blob-SHA verified and cited by line number:** `JanusGraphLocalQueryOptimizerStrategy` (whole, 245 lines, 13,515 bytes = `01de0bed`), `HasStepFolder` (whole, 532 lines, 27,466 bytes = `0232fc9b`), `StandardJanusGraph` (whole, 1,489 lines, 80,408 bytes = `f650acb2`) and `JanusGraphStepStrategyTest` (whole, 546 lines, 46,982 bytes = `abd23a81`). **Read inline, cited by member name:** `JanusGraphStepStrategy`, `JanusGraphStep`, `JanusGraphMixedIndexCountStrategy`, `AbstractJanusGraphMixedIndexAggStrategy`, `OptimizerStrategyTest`. **Read by a delegated reader** (text not locally transcribed, so member-name citations only): the four `AdjacentVertex*` strategies and their abstract base, `JanusGraphHasStepStrategy`, `JanusGraphMultiQueryStrategy`, `JanusGraphUnusedMultiQueryRemovalStrategy`, `JanusGraphMixedIndexAggStrategy`, `JanusGraphIoRegistrationStrategy`. Four PR candidates logged (**61-64**). Daily Diff: the 2026-11-19 / 61-story edition; deep dive on PostgreSQL 19's `REPACK CONCURRENTLY` and the `pg_plan_advice` / `pg_stash_advice` extensions.
-
-  **Findings.** **THE finding: the content of the strategy layer is its dependency graph, and two of the twelve strategies declare no ordering at all.** `StandardJanusGraph`'s one `static` block (`:165-185`) registers twelve strategies, **all** of them `ProviderOptimizationStrategy` — including `JanusGraphIoRegistrationStrategy`, whose entire `apply()` configures an `IoStep` — and registers the same object for `StandardJanusGraph.class` and `StandardJanusGraphTx.class`. OLAP gets **one** of the twelve (`FulgoraUtil.FULGORA_STRATEGIES` is `JanusGraphLocalQueryOptimizerStrategy` alone). Reading the full `applyPrior`/`applyPost` graph produces the fact Part V turns on: **`JanusGraphStepStrategy` and `JanusGraphLocalQueryOptimizerStrategy` have no direct ordering edge**, and the only paths between them run through `JanusGraphMixedIndexCountStrategy` and `JanusGraphMixedIndexAggStrategy`, which a user disables with one `withoutStrategies(...)` call. No traversal was found where the order is observable, so it is filed as a missing declaration (candidate 61), not a defect. Second: **`local()` is the only construct that gets an order or a range to the storage layer.** Pass 1 folds a `has()` only for an edge-returning step, folds no order and no range (`:106`: *"We cannot fold in orders or ranges since they are not local"*) and folds only a *high* limit from a following `RangeGlobalStep` **without removing it**; pass 5 calls `foldInHasContainer`, `foldInOrder` **and** `foldInRange`, sets `setBatchSize(txVertexCacheSize)`, and `unfoldLocalTraversal` deletes the `LocalStep` entirely when its child collapses to one step. A vertex-centric query folds **at most one** order key (`:423-425`); a graph-centric one folds any number. **Pass 1 never calls `setBatchSize` at all** — handed to lesson 24, and answered there. Third, lesson 22's profiler debt: **the attachment order on the normal path is safe**, but `buildGlobalGraphCentricQuery()` **memoizes**, and `JanusGraphMixedIndexAggStep`'s constructor calls it during strategy application, before TinkerPop's `setMetrics`, so a traversal ending in `count()`/`min()`/`max()`/`sum()`/`mean()` is **compiled under `QueryProfiler.NO_OP`, has its index selection done at strategy time, and shows no `constructGraphCentricQuery` span in `.profile()`** when the push-down is declined — the common case with no mixed index. The probe also mutates the step it declined to replace (`hasLocalContainers.put(null, {[]})`); `toString()`, `hashCode()` and the or()-fallback switch were traced and none changes behaviour (candidate 62). Fourth, the second debt is answered **no**: the TinkerPop side never produces a multi-sub-query `ElementQuery`; `or()` is folded only for a `JanusGraphStep` (`:185`), each branch flattened into a `List<HasContainer>` — with an `order().by(k)` inside a branch becoming `has(k, neq(null))` — and then executed either as **one** disjunctive `GraphCentricQuery` or as **N** single-sub-query ones merged **in the step**. So candidates 55 and 56 stand and the right PR is a **comment**, not a deletion. Fifth, the third debt: `search_code` found **nothing** in the repository asserting profile-tree shape, so the `AND-query`/`OR-query` flattening is not a tested contract and candidate 60 must be filed before any new-span patch. Also: `validFoldInOrBranch` is **all-or-nothing across a whole `or()`** (candidate 64), and `AdjacentVertexHasUniquePropertyOptimizerStrategy` is the one strategy permitted to touch the backend, gated on `optimizerBackendAccess()`, which it uses to **run a side traversal during strategy application**.
+- **23 — 2026-11-21** · [`2026/11/2026-11-21-janusgraph-optimizer-strategy-layer/README.md`](2026/11/2026-11-21-janusgraph-optimizer-strategy-layer/README.md) · **Findings.** Paragraph compressed 2026-11-24 under the roll-off rule, and the `Verified by lesson 23` block removed in the same run; the full versions are in git history at the 2026-11-21 through 2026-11-23 commits, and the facts lessons 27 and 28 were promised are carried in *Notes For The Next Run* below. The one-line substance: **the content of the strategy layer is its dependency graph, and two of the twelve strategies declare no ordering at all** — `StandardJanusGraph`'s one static block registers twelve `ProviderOptimizationStrategy` objects and OLAP gets one of them; **`local()` is the only construct that gets an order or a range to the storage layer**, pass 1 folding neither; `or()` is folded only for a `JanusGraphStep` and merged *in the step*, so the TinkerPop side never produces a multi-sub-query `ElementQuery`; and a traversal ending in an aggregation is compiled during strategy application under `QueryProfiler.NO_OP` and **memoized**, so `.profile()` shows no compile span at all. `AdjacentVertexHasUniquePropertyOptimizerStrategy` is the one strategy permitted to touch the backend, gated on `optimizerBackendAccess()`, and it runs a side traversal during strategy application — which is what makes lesson 26's candidate 72 worth running. Four PR candidates, **61-64**.
 
 - **22 — 2026-11-20** · [`2026/11/2026-11-20-janusgraph-query-processor-iterator-stack/README.md`](2026/11/2026-11-20-janusgraph-query-processor-iterator-stack/README.md) · **Findings.** Paragraph compressed 2026-11-23 under the roll-off rule, and the `Verified by lesson 22` block removed in the same run; the full versions are in git history at the 2026-11-20 through 2026-11-22 commits, and the facts lessons 26, 27 and 28 were promised are carried in *Notes For The Next Run* below. The one-line substance: **the in-memory filter sits between the backend limit and the element count**, so `limit(10)` bounds what the caller receives and not what is read, and the backend limit **doubles** — `L, 2L, 4L …` with a full cursor-less re-read each time — until enough survive; **`QueryProcessor` creates no profiler span at all**, so merge, sort and filter time is invisible in `.profile()`; half the class is dead (`VertexCentricQuery.isSorted()` hard-coded `true`, `GraphCentricQuery.numSubQueries()` hard-coded `1`); and the single-slice fitted sorted vertex-centric case does not use `QueryProcessor` at all. Nine PR candidates, **52-60**.
-
-- **21 — 2026-11-19** · [`2026/11/2026-11-19-janusgraph-graph-centric-query-builder/README.md`](2026/11/2026-11-19-janusgraph-graph-centric-query-builder/README.md) · **Findings.** Paragraph compressed 2026-11-22 under the roll-off rule, and the `Verified by lesson 21` block removed in the same run; the full versions are in git history at the 2026-11-19 through 2026-11-21 commits, and the facts lessons 25–28 were promised are carried in *Notes For The Next Run* below. The one-line substance: **the two planners are the same kind of function and a different shape** — `GraphCentricQueryBuilder` consults no statistics either, but solves a **weighted set cover** with a lexicographic objective (more clauses covered, then *fewer* indexes, then higher total score), may choose several indexes, and may choose none, which is the full scan. Index selection sits behind a swappable SPI (`IndexSelectionStrategy`), the default `threshold-based` strategy admits `2^10 = 1024` candidate groups per compiled query, a composite index is all-or-nothing and excluded outright under a top-level `Or`, and execution is stream-one/intersect-the-rest with the non-first sub-queries materialised **eagerly and unbounded**. Six PR candidates, **46-51**.
 
 
 ## Syllabus
@@ -163,73 +165,74 @@ recent lessons.
 ### Part VI — Schema, indexes, and production backends
 
 - [x] 25 — `ManagementSystem` and the index lifecycle: INSTALLED → REGISTERED → ENABLED, and reindex jobs
-- [ ] 26 — Mixed indexes: the `IndexProvider` SPI and `ElasticSearchIndex`
+- [x] 26 — Mixed indexes: the `IndexProvider` SPI and `ElasticSearchIndex`
 - [ ] 27 — The CQL backend: `CQLKeyColumnValueStore` compared line-for-line with the in-memory store
 - [ ] 28 — Transaction log, CDC, and stale-index repair: what happens when the edgestore and a mixed index disagree
 
 ## Notes For The Next Run
 
 **Syllabus unchanged this run. No items added, split, merged or reordered; the 28 stand as written on
-2026-10-30. Lesson 25 opened Part VI; three lessons remain.**
+2026-10-30. Two lessons remain: 27 and 28.**
 
 **Re-pin: NOT re-raised, correctly.** Lesson 24 performed the Part V/VI review on 2026-11-22 and the pin
-stays for the fifth time. Lessons 25, 26 and 27 are mid-Part and must NOT re-raise it. The next review
-is the Part VI boundary — after lesson 28, or at the capstone. Lesson 25 did re-verify the two large
-files it cites by line number by blob SHA (`ManagementSystem.java` 86,864 bytes = `a722a7d9`,
-`ManagementLogger.java` 24,707 bytes = `1980d1fb`), both matching what the API reported, which is
-incidental confirmation that the pin has not moved under the track.
+stays for the fifth time. Lessons 25 and 26 were mid-Part and did not re-raise it; **lesson 27 must not
+either.** The next review is the Part VI boundary — after lesson 28, or at the capstone. Lesson 26 did
+re-verify the one large file it cites by line number by blob SHA (`ElasticSearchIndex.java`, 119,295
+bytes = `d80949e3`), matching what the directory listing reported.
 
-**THE fact to carry forward from lesson 25: most indexes never enter the lifecycle at all, and one
-expression decides it.** `canIndexBeEnabled` — `oneNewKey || (constraint != null && constraint.isNew())`
-at `ManagementSystem:852` for a composite index, `type.isNew() || any sortKey isNew` at `:365` for a
-vertex-centric one — makes the index `ENABLED` at birth (`:860` / `:367`) and skips `REGISTER_INDEX`
-entirely (`:877` / `:389-391`). It is sound because a composite index is all-or-nothing over its fields,
-so a field key created in this management transaction means **no pre-existing element can qualify**.
-Lessons 26–28 must not describe the lifecycle as if every index goes through it.
+**THE fact to carry forward from lesson 26: the index SPI is the only write path in JanusGraph that is
+not idempotent by construction, and `LIST` cardinality is the whole reason.** Of the five mutation
+primitives, `SINGLE` delete, `SINGLE` assign and `SET` add are idempotent (the last by the explicit
+`field.cardinality != 'SET' || indexOf(value) == -1` guard); `LIST` add appends a duplicate on a second
+application and `LIST`/`SET` remove removes another occurrence or none. **The fix was a core SPI change,
+not a backend change**: `IndexMutation.completeDocument` carries the element's whole indexed state,
+supplied free at commit, and `addUpdatesCarryingTheCompleteDocument` (`ElasticSearchIndex:855-876`)
+collapses a document's changes into one update whose upsert is that whole document — Elasticsearch writes
+the upsert and **skips the script** when the document is missing, and one item per document is the maximum
+atomicity the bulk API offers. Lesson 27 should hold this as the contrast case: a `KeyColumnValueStore`
+mutation is idempotent because a cell write is last-writer-wins on a fixed column, which is exactly what
+a JSON array field is not.
 
-**Second, and the structural fact lesson 26 needs before it opens `ElasticSearchIndex`: a mixed index's
-index-level status is a constant and means nothing.** `createMixedIndex:758` sets the index vertex to
-`SchemaStatus.ENABLED` **unconditionally**. The real statuses are **per field**, stored as the **last
-`Parameter` of each `INDEX_FIELD` schema edge**, written once by `addIndexKey:791`
-(`key.isNew() ? ENABLED : INSTALLED`) and changed by `setStatusEdges:1343-1361`, which **removes and
-re-adds the edge** rather than updating it, carrying `MAPPED_NAME` — the backend field name — along in
-the copy. `JanusGraphIndexWrapper.getIndexStatus(key)` hides the split by **ignoring its key argument on
-a composite index**. A mixed index is therefore not one lifecycle but N, one per `addIndexKey` call.
+**Second, the structural fact to keep straight: `mutate` has three request shapes and the
+non-idempotent one is still live.** Shape A whole-document delete (guarded `hasDeletions() &&
+isDeleted()`); shape B the single complete-document update; shape C — whenever `completeDocument` is
+`null` for an existing document — up to **three** bulk items for one `_id`, which is the shape shape B's
+own javadoc argues against. **Candidate 73's reachability is untraced**: `IndexSerializer` and
+`IndexTransaction` were not read, so which core call sites invoke `setCompleteDocument` is unknown. One
+`search_code` query settles it and it is the cheapest open item in the register.
 
-**Third, lesson 23's debt (c) is settled: which status a reindex relies on.** Composite and
-relation-type: the **vertex** status, tested against `SchemaAction.REINDEX.getApplicableStatus()` in
-`IndexRepairJob.validateIndexStatus`. Mixed: the **field** statuses, in the same method's else-branch,
-which additionally **skips `DISABLED` fields explicitly** (`status != SchemaStatus.DISABLED && !acceptable`)
-and fails only if *no* field is acceptable. So a partly-disabled mixed index reindexes; a composite index
-has no partial mode. Debts (a) and (b) are also settled: **every** vertex-centric index's backing
-relation type is invisible and is not a system type (`buildRelationTypeIndex:368` calls
-`maker.invisible()`), and the `RELATIONTYPE_INDEX` schema edge is written at `:387`.
+**Third, debt (d) is settled: `IndexSelectionUtil` applies no `SchemaStatus` filter anywhere.** Six public
+static methods, not one reference to `SchemaStatus`. `existsMatchingIndex`/`getMatchingIndexes` collect
+`((InternalRelationType) key).getKeyIndexes()` per `PredicateCondition` and apply only the caller's
+`Predicate<IndexType>`; `AdjacentVertexHasUniquePropertyOptimizerStrategy` passes
+`indexType -> indexType.isCompositeIndex() && …` with no status test. So a unique composite index at
+`INSTALLED`, `REGISTERED` or `DISABLED` still drives the rewrite although the composite read gate is
+`== ENABLED`. **The absence is verified; the consequence is not** — candidate 72, Hands-On B. Do not
+restate this as a confirmed defect without the run.
 
-**Fourth, debt (d) is NOT settled and is handed to lesson 26.** What
-`AdjacentVertexHasUniquePropertyOptimizerStrategy` does with an index whose status is not `ENABLED`:
-`IndexSelectionUtil` was **not located** at the pinned commit by the one `search_code` query lesson 25
-spent on it, and the lesson declined to guess rather than invent a status filter. Lesson 26 is in
-index-selection code anyway and should settle it. Starting point: `IndexSelectionUtil.existsMatchingIndex`
-and whatever `JanusGraphIndex`-level predicate it applies.
+**Fourth, a correction worth not losing: there is no `supportsExistsQuery()` in `IndexFeatures` at the
+pinned commit.** The file was read in full; it has eleven flags and the nearest member is
+`supportsGeoExists()`. The lesson-24 handover named a method that does not exist. The three real flags
+are `supportNotQueryNormalForm()` (no trailing `s` on the accessor), `supportsOrderingListProperty()` and
+`IndexInformation.supportsOrdering(KeyInformation)`, the last being a `default true` on the interface.
+Also settled: `IndexSerializer.allMixedIndexBackendSupportsOrderingListProperty()` **returns `false` when
+there are no mixed indexes at all**, so a pure-composite graph cannot fold a vertex order on a `LIST`
+key — the empty-set quantifier is implemented as `false` rather than as vacuous truth.
 
-**Fifth, the operational fact worth more than the rest put together: the INSTALLED → REGISTERED
-transition is a callback in the issuing JVM's heap and nothing persists it.** `REGISTER_INDEX` sets
-`INSTALLED` and arms an `UpdateStatusTrigger` in `updatedTypeTriggers` (`:1026-1032`); `commit` hands the
-list to `ManagementLogger.sendCacheEviction` (`:256-257`, **after** `transaction.commit()` at `:253`);
-the `EvictionTrigger` constructor snapshots `getOpenInstancesInternal()` as the acknowledgement roster;
-each receiving instance queues a `SendAckOnTxClose` that waits for **every transaction that was open when
-the message arrived** to close before acking; and only when the roster empties does `runTriggers()` call
-`UpdateStatusTrigger.call()`, which opens a **new** management transaction and writes `REGISTERED` —
-but only for elements still `INSTALLED`, so a concurrent `DISABLE_INDEX` supersedes it. Lose the issuing
-JVM mid-handshake and the index is stranded at `INSTALLED` with no recovery path in the code; re-issuing
-`REGISTER_INDEX` works because `INSTALLED` is in its applicable set, and nothing documents that.
+**Fifth, the operational fact: `register` is a side effect that no rollback undoes.** Called synchronously
+from `ManagementSystem.addIndexKey:802`, `ElasticSearchIndex.register` can create the ES index
+(`checkForOrCreateIndex`) and push a field mapping before the management transaction commits. A failed
+register can leave a stray ES index; a successful register followed by a rollback leaves ES holding a
+mapping the schema has never heard of. ES mappings are additive and practically irremovable, so the drift
+is one-directional with no documented repair. Lesson 28 should state this as one of the three concrete
+ways the edgestore and a mixed index can disagree.
 
-**Sixth, the unfinished business, now two lessons old: none of lesson 24's three Hands-On experiments
-has been run, and none of lesson 25's four has either.** Lesson 24's Hands-On A is the only direct
-evidence for the batch-size paragraph below; its Hands-On B is what turns candidate 65 from a reading
-into a reportable defect, and **candidate 65 must not be filed upstream until B has been run**. Lesson
-25's Hands-On A (three console blocks on `inmemory`) settles `canIndexBeEnabled` and is the cheapest
-unrun experiment in the track.
+**Sixth, the unfinished business, now three lessons old: eleven Hands-On experiments are outstanding** —
+lesson 24's three, lesson 25's four and lesson 26's four. **Candidate 65 must not be filed upstream until
+lesson 24's Hands-On B has been run; candidate 70 not until lesson 25's Hands-On D; candidate 72 not until
+lesson 26's Hands-On B.** Lesson 26's Hands-On B is the cheapest of the three — `inmemory`, one unique
+composite index, `DISABLE_INDEX`, re-profile, compare `toList()` against the baseline, no Docker — and it
+settles a question the track has carried since lesson 23.
 
 **Carried from lesson 24, unchanged: the batch size of a `JanusGraphVertexStep` is written twice and on
 the default configuration the second write wins.** Default field value `Integer.MAX_VALUE`; pass 5 of
@@ -237,29 +240,8 @@ the default configuration the second write wins.** Default field value `Integer.
 writes 2500 over it because `boolean barrierSizeSet = !limitedBatch` (`:179`) and `query.batch.limited`
 defaults to `true`. **So `cache.tx-cache-size` has no effect on batching on a default graph**, and the
 pass-1/pass-5 asymmetry is only observable at `query.batch.limited=false`. Do not re-derive it and do not
-state the asymmetry without the `limited` qualifier. Also settled and not to be re-searched: all four of
-`QueryProfiler`'s `multi` / `multiPreFetch` / `vertices` / `partitioned` annotations are set in
-`MultiVertexCentricQueryBuilder` and nowhere else, `vertices` is the batch size actually used, and
-`JanusGraphAssert.queryProfilerAnnotationIsPresent` matches the literal string `"<annotation>=true"` so
-it **cannot** assert on a numeric one.
+state the asymmetry without the `limited` qualifier.
 
-- **Lesson 26 (`ElasticSearchIndex`) inherits five.** (a) the four feature flags —
-  `supportNotQueryNormalForm()`, `supportsOrderingListProperty()`, `supportsExistsQuery()` and
-  `supportsOrdering(KeyInformation)` (added by `18594751`, fixes #5120) — with lesson 23's caller for the
-  second: `HasStepFolder.validJanusGraphOrder` (`:102-143`) consults
-  `graph.getIndexSerializer().allMixedIndexBackendSupportsOrderingListProperty()` to decide whether a
-  **vertex** order on a non-`SINGLE` key is foldable at all, so that flag changes query *compilation*.
-  (b) `b7c14c53` added `index.[X].solr.max-page-size` (default 10,000) and a page-doubling read in
-  `SolrIndex`; compare it with `LimitAdjustingIterator`'s doubling and say whether `ElasticSearchIndex`
-  has an equivalent. (c) debt (d) above. (d) **new from lesson 25:** `IndexSerializer.register(...)` is
-  called synchronously from `addIndexKey:802` and `IndexSerializer.clearStore(...)` synchronously from
-  `updateIndex`'s `DISCARD_INDEX` mixed arm (`:1100-1112`) — both inside the management transaction, both
-  wrapping `BackendException` into a user-facing message. Say what each does on the ES side and whether
-  either can leave the schema and the index backend disagreeing on failure. (e) **also new:** the four
-  `mixed-index-*` scan metrics in `IndexRepairJob` (`mixed-index-flushes`, `mixed-index-flushed-docs`,
-  `mixed-index-flush-time-ms` rounded not truncated, plus `doc-updates`) and
-  `MIXED_INDEX_REINDEX_BATCH_SIZE` / `MIXED_INDEX_REINDEX_BATCH_ENABLED`, which also govern
-  `MixedIndexStaleEntryRemover`.
 - **Lesson 27 (CQL) inherits four, three unchanged.** The `setDirectColumnByStartOnlyAllowed` flag from
   lesson 20; the feature-builder classification lesson 18 owed (whether `CQLStoreManager` and
   `HBaseStoreManager` set `.locking(...)`, and so whether `ConsistentKeyLocker` runs on them); from
@@ -268,96 +250,252 @@ it **cannot** assert on a numeric one.
   `MAX_SORT_ITERATION = 1_000_000` budget — **per sub-query**, reading the whole result before throwing,
   and rejecting a complete 1,000,000-element result (candidate 53) — which combined with
   `LimitAdjustingIterator`'s cursor-less doubling re-read makes an unfitted ordered query on CQL the worst
-  case in the tree. Put a number on it against a real backend.
-- **Lesson 28 (transaction log, CDC, stale-index repair) inherits five.** (a) **The deletion window
-  lesson 25 named, which is lesson 28's subject stated precisely:** `REINDEX` only adds and
-  `REMOVE_STALE_ENTRIES` only removes, they scan **different stores** (edgestore vs graphindex), and a
-  delete that lands while an index is `DISABLED` is invisible to a reindex forever. Returning a disabled
-  index to trustworthy is two complete passes over the data. (b) From lesson 22: `result.isRemoved()`
-  elements are dropped **eagerly** inside `PreSortingIterator` while everything else the transaction
-  deleted is filtered **lazily as reached** by `getFilterIterator`, deliberately, *"so that a change which
-  the caller makes while it reads the results is seen."* (c) lesson 23's `MultiDistinctOrderedIterator`
-  cross-query ordering invariant, which is an `assert`. (d) from lesson 24, the same invariant one layer
-  up — `JanusGraphStep:118`'s `assert queries.stream().allMatch(q -> q.getOrder().isEmpty() || q.getOrder().equals(order))`
-  is the only thing between two differently-ordered branch queries and a silently mis-ordered merged
-  result, and assertions are off in production; a stale mixed index is exactly the condition that produces
-  it. (e) **new from lesson 25:** `REMOVE_STALE_ENTRIES` is the only action that changes no status, is
-  unsupported for vertex-centric indexes, and routes mixed indexes to `MixedIndexStaleEntryRemover.submit`
-  rather than a scan job.
-- **Open and unresolved, deliberately not filled in.** (a) Lesson 20's
-  `BasicVertexCentricQueryBuilder:711` `Preconditions.checkArgument(bestCandidate != null, …)`
-  reachability question — **lesson 25 did not reach it and it now belongs to lesson 27 alone.**
-  (b) Whether any production path passes a real limit to `QueryUtil.processIntersectingRetrievals`
-  (candidate 51 is a reachability claim, not a confirmed defect). (c) Whether `BackendQueryHolder`'s
-  duplicated `isFitted` in `hashCode` (candidate 54) can degrade anything. (d)
-  `IndexCandidateGroup.getTotalScore()`'s `Double.NEGATIVE_INFINITY` sentinel colliding with
-  `IndexCandidate`'s default score (inside candidate 50). (e) Lesson 23's §2.2 ordering question — is the
-  `JanusGraphStepStrategy` / `JanusGraphLocalQueryOptimizerStrategy` order observable by any traversal?
-  (f) From lesson 24: whether `BatchProcessingQueue.removeLast()` has any caller at all — `HasStepBatchFetcher`
-  and `DropStepBatchFetcher` were not read, so it must **not** be called dead code.
+  case in the tree. Put a number on it against a real backend. **New from lesson 26:** the idempotence
+  contrast above is the frame for the whole lesson — say explicitly why a `mutate` on a
+  `KeyColumnValueStore` needs none of §4's machinery, and whether CQL's client-side timestamps change that
+  answer. Also still owned by 27 alone: lesson 20's `BasicVertexCentricQueryBuilder:711`
+  `Preconditions.checkArgument(bestCandidate != null, …)` reachability question.
+- **Lesson 28 (transaction log, CDC, stale-index repair) inherits six.** (a) **The deletion window:**
+  `REINDEX` only adds and `REMOVE_STALE_ENTRIES` only removes, they scan **different stores** (edgestore
+  vs graphindex), and a delete that lands while an index is `DISABLED` is invisible to a reindex forever;
+  returning a disabled index to trustworthy is two complete passes. (b) From lesson 22:
+  `result.isRemoved()` elements are dropped **eagerly** inside `PreSortingIterator` while everything else
+  the transaction deleted is filtered **lazily as reached** by `getFilterIterator`, deliberately, *"so
+  that a change which the caller makes while it reads the results is seen."* (c) lesson 23's
+  `MultiDistinctOrderedIterator` cross-query ordering invariant, which is an `assert`. (d) from lesson 24,
+  the same invariant one layer up — `JanusGraphStep:118`'s
+  `assert queries.stream().allMatch(q -> q.getOrder().isEmpty() || q.getOrder().equals(order))` is the
+  only thing between two differently-ordered branch queries and a silently mis-ordered merged result, and
+  assertions are off in production; a stale mixed index is exactly the condition that produces it. (e)
+  from lesson 25: `REMOVE_STALE_ENTRIES` changes no status, is unsupported for vertex-centric indexes, and
+  routes mixed indexes to `MixedIndexStaleEntryRemover.submit` rather than a scan job. (f) **new from
+  lesson 26, and this is lesson 28's subject stated concretely — the three ways schema and mixed index
+  diverge:** a `register` whose management transaction then fails or rolls back (§3.1 of the lesson 26
+  entry); a `LIST` value duplicated by a retried bulk item that had already applied (§5, unproven,
+  Hands-On C); and shape C's split requests, where one of three bulk items for a document can fail
+  independently of the others. **Reassigned to lesson 28 from lesson 26, which did not reach them:** the
+  four `mixed-index-*` scan metrics in `IndexRepairJob` (`mixed-index-flushes`, `mixed-index-flushed-docs`,
+  `mixed-index-flush-time-ms` rounded not truncated, plus `doc-updates`) and
+  `MIXED_INDEX_REINDEX_BATCH_SIZE` / `MIXED_INDEX_REINDEX_BATCH_ENABLED`, which also govern
+  `MixedIndexStaleEntryRemover`. They sit more naturally in the stale-entry lesson than in the SPI lesson.
+- **Open and unresolved, deliberately not filled in.** (a) Whether any production path passes a real limit
+  to `QueryUtil.processIntersectingRetrievals` (candidate 51 is a reachability claim, not a confirmed
+  defect). (b) Whether `BackendQueryHolder`'s duplicated `isFitted` in `hashCode` (candidate 54) can
+  degrade anything. (c) `IndexCandidateGroup.getTotalScore()`'s `Double.NEGATIVE_INFINITY` sentinel
+  colliding with `IndexCandidate`'s default score (inside candidate 50). (d) Lesson 23's §2.2 ordering
+  question — is the `JanusGraphStepStrategy` / `JanusGraphLocalQueryOptimizerStrategy` order observable by
+  any traversal? (e) From lesson 24: whether `BatchProcessingQueue.removeLast()` has any caller at all —
+  `HasStepBatchFetcher` and `DropStepBatchFetcher` were not read, so it must **not** be called dead code.
+  (f) **New from lesson 26:** whether `ElasticSearchBulkFailureException` can report an item as failed
+  after it applied, which decides whether shape B has a residual duplication hazard. `TransientFailures`
+  (`6aba13b8`) and `ElasticSearchBulkFailureException` (`e52ae410`) are unread. (g) **Also new:** which
+  core call sites invoke `IndexMutation.setCompleteDocument`, i.e. whether shape C is reachable for a real
+  update — one `search_code` query.
 - **Never touch an earlier entry's `## My Notes`.** Sessions 01-04 keep their templates. They are his
   to fill at any time; if a future run finds content in any of them, answer those questions in that
   run's entry regardless of mode.
 - **Entry size.** Lesson 05 ~35 KB, 06 ~63, 07 ~78, 08 ~67, 09 ~61, 10 ~70, 11 ~56, 12 ~91, 13 ~72,
-  14 ~75, 15 ~86, 16 ~87, 17 ~64, 18 ~78, 19 ~69, 20 ~76, 21 ~103, 22 ~77, 23 ~59, 24 ~59,
-  **25 ~51** (digest ~20). A large share of each is permalink URLs, which are not prose.
+  14 ~75, 15 ~86, 16 ~87, 17 ~64, 18 ~78, 19 ~69, 20 ~76, 21 ~103, 22 ~77, 23 ~59, 24 ~59, 25 ~51,
+  **26 ~62** (digest ~25). A large share of each is permalink URLs, which are not prose.
 
 **Mechanical notes, carried and extended this run. Read this section before planning a run's pushes.**
 `get_file_contents` on a file whose doubled output exceeds roughly 40 KB returns an over-limit error that
 saves the JSON to a local file — the cheap way to read a large file, costing nothing in context. The
 correct extraction is `json.loads(longest_text)["content"][-1]["resource"]["text"]`, **not** the plain
 `text` value (which has a `[Resource from github at repo://…]` banner glued onto line 1). A file under
-roughly 20 KB comes back inline with no line numbers and must be written to local disk to be numbered.
-**The transcription can be delegated to a sub-agent and the blob SHA verified locally afterwards** —
-lesson 24 did this for fourteen files, including a 137,928-byte one. **Lesson 25 found it is often
-unnecessary:** a directory listing with `fields: ["name","sha","size"]` gives every file's blob SHA in one
-cheap call, so a large file read through the over-limit path can be SHA-verified against that listing
-without any transcription step at all. That is now the preferred method; delegated transcription is for
-files the over-limit path cannot deliver.
+roughly 20 KB comes back inline with no line numbers; such a file must be written to local disk to be
+cited by line number, and **a lesson that does not do that must cite it by member name only** — lesson 26
+did exactly this for the six SPI and compat files and said so in the entry. A directory listing with
+`fields: ["name","sha","size"]` gives every file's blob SHA in one cheap call, so a large file read
+through the over-limit path is SHA-verified against that listing with no transcription step at all; that
+remains the preferred method. **Lesson 26 added one thing: the same delegated-transcription trick works
+for this repository's own files.** `tracks/janusgraph-registers-2.md` came back inline (18 KB), which
+would have meant retyping it to append to it; instead a sub-agent was asked to fetch it and write it to
+disk verbatim with a short python script, and the result was blob-SHA verified locally (18,388 bytes =
+`642bd570`) before anything was appended. **Use this for every inline-returned file that has to be
+edited rather than merely read.** It turns a retyping risk into a verified copy for the cost of one
+sub-agent.
 
 **The real constraint on a run is OUTPUT, not input, and it is now the binding one.** Every file pushed
 must be emitted in full as a tool argument; there is no server-side copy or patch. Reading a 134 KB file
-costs almost nothing; *rewriting* it costs ~37 K output tokens. Lesson 24's two structural changes —
-dropping the session-log entries for lessons 01–19 and splitting the register into
-`tracks/janusgraph-registers-2.md` — took this file from **126 KB to ~90 KB**. **Watch the trend.** If it
-passes ~110 KB again, the next structural move is to split the `Verified by lesson NN` blocks into
+costs almost nothing; *rewriting* it costs ~37 K output tokens. This run emitted four files —
+the lesson (~62 KB), the digest (~25 KB), this file (~82 KB) and the root `README.md` (~66 KB) — plus the
+register (~29 KB), which is about 265 KB of output for one day. **Watch the trend.** If this file passes
+~110 KB, the next structural move is to split the `Verified by lesson NN` blocks into
 `tracks/janusgraph-verified.md` — they are ~45 KB of the total, they are append-and-roll-off material,
 and a run would then emit two medium files instead of one large one. **That is a decision for Aryant**,
 and it is flagged rather than taken, because it changes where a run looks for the facts it is told to
-cite rather than re-derive. The root `README.md` (64 KB, regenerated in full every run) is the second
-such file; its index is one row per line, so a run should edit the row in place rather than rebuild the
-table by re-reading every entry's `entry-meta`.
+cite rather than re-derive. The root `README.md` is the second such file; its index is one row per line,
+so a run should edit the row in place rather than rebuild the table by re-reading every entry's
+`entry-meta`. Lesson 26 did that: it fetched the README through the over-limit path, edited the Current
+Track section and appended one index row with a python script, and emitted the result — no row was retyped.
 
-**Mermaid.** Render every diagram with `mmdc` before pushing. Lesson 25's three (two in the lesson, one
-in the digest) needed one fix: **a semicolon inside a `sequenceDiagram` message is a statement separator**
-and produces `Expecting … got 'NEWLINE'`. Use a comma. The lesson-19 rule still holds otherwise: quote
-every node label containing parentheses, commas, `->`, `|` or angle brackets, use HTML entities such as
-`&lt;` for comparisons, and never escape a quote inside a label — drop the inner quotes instead.
+**Mermaid.** Render every diagram with `mmdc` before pushing. Lesson 26's three (two in the lesson, one
+in the digest) all rendered on the first attempt. The accumulated rules still hold: quote every node
+label containing parentheses, commas, `->`, `|` or angle brackets; use HTML entities such as `&lt;` for
+comparisons; never escape a quote inside a label — drop the inner quotes instead; and **a semicolon
+inside a `sequenceDiagram` message is a statement separator** (lesson 25) — use a comma. One new one from
+this run: a `sequenceDiagram` tolerates `--x` for a failed/aborted message and renders it as a crossed
+arrow, which is the right mark for an error return.
 
-**Daily Diff procedure — REPLACED this run. The site has a markdown endpoint and it is ahead of the HTML.**
+**Daily Diff procedure — the fallback pool was drawn on for the first time this run, and it worked.**
 `https://tdd.cat/llms.txt` documents endpoints the HTML site does not advertise: `llms-full.txt`, `/md`
 and `/json` for the latest edition, **`https://tdd.cat/{YYYY-MM-DD}.md` for any edition by date**,
-`/rss.xml` and `/stats/`. On 2026-11-23 the front page served **2026-11-21 / 47 stories**, `/archive/`
-reported *146 Editions* with `Latest >` at `/2026-11-21/` and no link for 11-22, and
-`https://tdd.cat/2026-11-22/` returned `client_error` — while **`https://tdd.cat/2026-11-22.md` returned
-HTTP 200** with a complete, correctly dated 57,157-character edition of 38 items. That is a fifth
-disagreement shape and the first where the tiebreaker is a different *endpoint* rather than a different
-page. The `.md` form is also strictly better to read: 57 KB against the HTML's 84 KB for the same content,
-no chrome, and it fits in two fetches, so lesson 25's digest covered **all 38 items verbatim** where
-recent digests covered roughly the first 21 of 47. **New procedure: (a) fetch
-`https://tdd.cat/{today}.md`; (b) on a client error walk back one day at a time; (c) check this session
-log in both directions as a floor and a ceiling; (d) use the front page and `/archive/` only to
-cross-check the story count, which the `.md` file does not state; (e) only then the uncovered-item
-fallback.** `https://tdd.cat/2026-11-23.md` did return a client error, so today's edition genuinely had
-not published. **2026-11-20 (50 stories) remains uncovered** and stays in the fallback pool alongside the
-unspent items from 2026-11-06 (two) and 2026-11-18 (two). Edition sizes remain volatile: 22, 50, 63, 58,
-66, 47, 39, 49, 37, 57, 61, 61, 50, 47, 38 across 11-08 to 11-22. **Constraint still in force: there is
-no `WebFetch` tool in this environment** — pages are fetched through a sub-agent which flags which parts
-are verbatim and which are an extracted summary, and the summary portion is not reliable enough to quote.
-A PDF or any page over ~40 K characters splits the same way, so plan a deep dive around the readable half;
+`/rss.xml` and `/stats/`. The procedure is: **(a)** fetch `https://tdd.cat/{today}.md`; **(b)** on a
+client error walk back one day at a time; **(c)** check this session log in both directions as a floor and
+a ceiling; **(d)** use the front page and `/archive/` only to cross-check the story count, which the `.md`
+file does not state; **(e)** only then the uncovered-item fallback. On 2026-11-24 both `2026-11-24.md` and
+`2026-11-23.md` returned client errors — **the second time 11-23 has failed, so that edition appears never
+to have published rather than being late** — and 11-22 and 11-21 were already covered by lessons 25 and
+24, so step (e) fired and the digest covered the **2026-11-20** edition (50 items, 77,940 characters, read
+in full across two fetches at offsets 0 and 39,958). **The fallback pool now holds only the unspent items
+from 2026-11-06 (two) and 2026-11-18 (two).** If 11-25 also fails to publish, the pool is nearly empty and
+the next run should say so plainly rather than stretching two leftover items into a digest. Edition sizes
+remain volatile: 22, 50, 63, 58, 66, 47, 39, 49, 37, 57, 61, 61, 50, 47, 38 across 11-08 to 11-22, with
+11-23 and 11-24 absent. **Constraint still in force: there is no `WebFetch` tool in this environment** —
+pages are fetched through a sub-agent which flags which parts are verbatim and which are an extracted
+summary, and the summary portion is not reliable enough to quote. Lesson 26 hit this squarely: the
+sub-agent's first extracted summary of the 11-20 edition reported 25 items and was **wrong**, and the
+second, full-text read found 50. **Always require the full-text read and ignore a first-pass summary.** A
+PDF or any page over ~40 K characters splits the same way, so plan a deep dive around the readable half;
 the `.md` endpoint is valuable precisely because a second fetch at an offset covers the remainder.
 
-### Verified by lesson 25, for lessons 26, 27 and 28 to cite rather than re-derive
+### Verified by lesson 26, for lessons 27 and 28 to cite rather than re-derive
+
+- **`IndexProvider` is twelve abstract methods plus one constant and one static helper, and it
+  `extends IndexInformation`.** Schema: `register`. Write: `mutate`, `restore`. Read: `query(IndexQuery)`
+  → `Stream<String>`, `query(RawQuery)` → `Stream<RawQuery.Result<String>>`, `totals(RawQuery)` → `Long`,
+  `queryAggregation(IndexQuery, …, Aggregation)` → `Number`. Lifecycle: `beginTransaction`, `close`,
+  `clearStorage`, `clearStore(String)`, `exists`. Inherited: `supports(KeyInformation,
+  JanusGraphPredicate)`, `supports(KeyInformation)`, `supportsOrdering(KeyInformation)` (**`default
+  true`**), `mapKey2Field`, `getFeatures`. The two-level map is **store → documentId → mutation**; "store"
+  is the mixed index name. `REPLACEMENT_CHAR` is `'•'` and `IndexProvider.checkKeyValidity` is a
+  `static` interface method rejecting any key containing it; `ElasticSearchIndex.mapKey2Field`
+  (`:1959-1962`) uses it for exactly one substitution, `' '` → `'•'`.
+- **`mutate`'s javadoc declares a mutability contract**: *"A provider may remove from this map the
+  documents it knows to have applied before it throws a `TemporaryBackendException` … a caller must not
+  rely on the map being unchanged after a failure."* `restore`'s declares the other half: it *"does not do
+  a delta-update, but entirely replaces the documents"*, and an **empty entry list means delete**, not
+  "no change".
+- **`IndexFeatures` has exactly eleven fields.** `supportsDocumentTTL`, `defaultStringMapping`,
+  `supportedStringMappings`, `wildcardField`, `supportedCardinalities`, `supportsNanoseconds`,
+  `supportsCustomAnalyzer`, `supportsGeoContains`, `supportsGeoExists`, `supportsNotQueryNormalForm`,
+  `supportsOrderingListProperty`. Builder defaults: `false`, `Mapping.TEXT`, empty, `"*"`, empty, and
+  `false` for the rest. The constructor enforces `defaultMap != null && defaultMap != Mapping.DEFAULT` and
+  `supportedMap` non-empty **and containing** `defaultMap`. The accessor for the not-normal-form flag is
+  `supportNotQueryNormalForm()` — **no trailing `s`**. **There is no `supportsExistsQuery()`.**
+- **All four Elasticsearch compat classes produce identical features.** `AbstractESCompat.coreFeatures()`
+  sets `TEXT` default, `{TEXT, TEXTSTRING, STRING}` mappings, wildcard `"_all"`, cardinalities
+  `{SINGLE, LIST, SET}`, `supportsNanoseconds`, `supportsCustomAnalyzer`, `supportsGeoExists`,
+  `supportNotQueryNormalForm`, `supportsOrderingListProperty`. Every subclass is then exactly
+  `coreFeatures().setWildcardField(CUSTOM_ALL_FIELD).supportsGeoContains().build()` — `ES6Compat`
+  (`d686ce02`, 1,132 bytes), `ES7Compat` (`fb0efe32`, 1,065), `ES8Compat` (`bbd2b413`, 1,065),
+  `ES9Compat` (`73af9fc2`, 1,065), all four read in full. So **`"_all"` is unreachable** (candidate 71),
+  **`supportsDocumentTTL` is `false` for every ES version**, and `IndexFeatures` carries no
+  version-dependent information for Elasticsearch at all.
+- **`ElasticSearchIndex.supportsOrdering` is narrower than it looks.** A string key is sortable only when
+  its mapping is `STRING` or `TEXTSTRING` **and** it carries no `ParameterType.STRING_ANALYZER` parameter
+  (`:1946-1956`), because `pushMapping` maps an analysed `STRING` key to ES `text`. Non-string: `Number`,
+  `Date`, `Instant`, `Boolean`, `UUID` all sortable. **Adding a custom analyser to a `STRING` key silently
+  removes the index's ability to sort by it**, and the consequence lands in query compilation.
+- **`IndexSelectionUtil.indexCoversOrder(index, orders, serializer)` tests three things per order key**:
+  `index.indexesKey(key)`, `serializer.supportsOrdering(index, index.getField(key))`, and — for a `LIST`
+  or `SET` key — `serializer.features(index).supportsOrderingListProperty()`. The two-argument overload is
+  `@Deprecated` and tests only the first. `IndexSerializer.allMixedIndexBackendSupportsOrderingListProperty()`
+  **returns `false` when `mixedIndexes.isEmpty()`**, so a pure-composite graph cannot fold a vertex order
+  on a `LIST` key. `AbstractIndexSelectionStrategy.createIndexRawCandidates` applies
+  `supportNotQueryNormalForm()` as a **candidacy filter** under a top-level `Or`, alongside the composite
+  exclusion lesson 21 found.
+- **`IndexSelectionUtil` contains no `SchemaStatus` reference.** Six public static methods:
+  `indexCoversOrder` ×2, `getMatchingIndexes` ×2, `existsMatchingIndex` ×2, plus
+  `isIndexSatisfiedByGivenKeys` and the private `getKeyIndexesForCondition`. Discovery is
+  `ConditionUtil.traversal` collecting `((InternalRelationType) key).getKeyIndexes()` per
+  `PredicateCondition`, filtered **only** by the caller's `Predicate<IndexType>`.
+  `AdjacentVertexHasUniquePropertyOptimizerStrategy` passes `indexType -> indexType.isCompositeIndex() && …`.
+  Test-only strategies `DeprecatedOrderCoverageIndexSelectionStrategy` and
+  `CandidateIgnoringIndexSelectionStrategy` ship from `janusgraph-backend-testutils/src/main/java` — the
+  same pattern lesson 06 found for the backend suites.
+- **`IndexMutation` carries the element's complete indexed state, and that is the load-bearing SPI fact.**
+  Fields beyond `Mutation`'s: `storeRetriever`, `isNew`, `isDeleted`, `completeDocument`, `reAdditions`.
+  `hasCompleteDocument()` is `completeDocument != null` and **includes an empty one**;
+  `getCompleteDocument()` has a `checkState`. `merge` resolves by recency — *"the one merged in was
+  supplied later and stands"*. `consolidate()` additionally records, for **collection fields only**, every
+  value present in both deletions and additions as a `reAddition`, because `super.consolidate` drops that
+  deletion; `entryConversionFunction` is the **`(field, value)` pair** for a collection field and the
+  **field name** for `SINGLE`, with an unknown field treated as `SINGLE` via a `keyInformation != null`
+  guard. `determineTTL()` returns 0 if there are deletions, and otherwise enforces a **uniform** TTL
+  across all additions with a `checkArgument` plus `assert ttl >= 0` — a check no ES path can act on.
+- **The three Painless scripts, and the idempotence audit.** `PARAMETERIZED_DELETION_SCRIPT` (`:526-536`),
+  `PARAMETERIZED_MUTATION_SCRIPT` (`:543-562`, the shape-B script, ending `ctx._source.putAll(params.doc)`
+  **last**), `PARAMETERIZED_ADDITION_SCRIPT` (`:568-576`). Idempotent: `SINGLE` delete
+  (`ctx._source.remove(name)`), `SINGLE` assign (`putAll`), `SET` add (guarded by
+  `field.cardinality != 'SET' || indexOf(value) == -1`). **Not idempotent: `LIST` add and `LIST`/`SET`
+  remove** — `add(value)` appends a duplicate, `remove(indexOf(value))` removes another occurrence or
+  none. Within one document a `SINGLE` assignment always wins over a `SINGLE` deletion of the same field,
+  because `putAll` runs after the deletion loop.
+- **`mutate`'s three request shapes, and the preconditions.** Checks at `:1292-1295`:
+  `assert mutation.isConsolidated()` (**off in production**), `!(isNew && isDeleted)`,
+  `!isNew || !hasDeletions`, `!isDeleted || !hasAdditions`. Shape **A** `:1300-1303` whole-document delete,
+  guarded `hasDeletions() && isDeleted()` — a mutation flagged `isDeleted()` with no deletion entries falls
+  through. Shape **B** `:1304-1306` → `addUpdatesCarryingTheCompleteDocument` `:855-876`, **one** update
+  with three parameter lists in one stored script and the complete document as upsert; early-returns at
+  `:866-868` when all three are empty; the last argument of
+  `createUpdateRequestWithCompleteDocument` is `collectionAdditions.isEmpty() && singleValuedAdditions.isEmpty()`.
+  Shape **C** `:1307-1350`, up to three items for one `_id`: field-deletion script `:1314-1315`;
+  `createIndexRequest` `:1322` if `isNew()`; otherwise addition script `:1336` **and** `{"doc": …}` merge
+  `:1344`, with `upsert` deliberately `null` when `hasDeletions()` (`:1326-1330`). Per store: an ingest
+  pipeline means its own `bulkRequest` and immediate `appliedStores` marking (`:1352-1356`); everything
+  else pools into one bulk (`:1364-1368`).
+- **Why shape B works, in one sentence from `:846-854`:** *"Elasticsearch writes the upsert of an update
+  whose document is missing and skips that update's script"*, so one item per document is both the maximum
+  atomicity the bulk API offers and the mechanism that makes "recreate whole" and "apply the delta" the
+  same request. `completeDocument(mutation, …)` (`:881-888`) returns `null` on `isNew()`, `isDeleted()`,
+  `!hasCompleteDocument()`, **or an empty entry list**.
+- **`retainUnappliedDocuments` (`:770-800`) edits the caller's map, fail-safe toward duplication.** Step 1
+  `mutations.keySet().removeAll(appliedStores)` — on `UnsupportedOperationException` it **returns
+  immediately** and the whole mutation is resent. Step 2 `findBulkFailure` walks
+  `TransientFailures.causalChain` for an `ElasticSearchBulkFailureException`. Step 3 `documentsToResend`
+  unions `getFailedDocumentsByStore()` with `getUnsentDocumentsByStore()`. Step 4 `namesPendingDocuments`
+  aborts the narrowing unless every named document is still present. Then per store in `storesInBulk`,
+  `retainAll`, removing the store if it empties. `narrowQuietly` (`:805-813`) logs at **debug** and returns
+  `false` per step. The catch block reserves `log.error` for a mutation about to be dropped and
+  `log.warn` for a reattemptable one (`:1371-1372`).
+- **`restore` (`:1424-1462`) is unconditionally idempotent** — two shapes, no scripts, no narrowing, plain
+  `throw convert(e)` — which is why `IndexRepairJob` needs none of the above.
+- **Read-side specifics.** `query(IndexQuery)` sets `setDisableSourceRetrieval(true)` (`:1718`), as does
+  the raw-query path (`:1816`), which `AbstractESCompat.createRequestBody` turns into `"_source": false`.
+  `addOrderToQuery` (`:1794-1804`) sorts a `TEXTSTRING` key by its dual field `key__STRING`
+  (`STRING_MAPPING_SUFFIX` at `:120`) and always passes an `unmapped_type`, which cannot be null and
+  cannot be `"string"` from ES 8 on (`:1730-1735`). `countBound(offset, query)` (`:1864-1870`) passes
+  `offset + limit` or **0 meaning no bound**, including on `int` overflow, *"as a bound no count reaches
+  would only keep Elasticsearch from answering a count from its statistics"*; `countsNothing(query)`
+  (`:1854-1856`) short-circuits `limit <= 0` to 0 with no request. `queryAggregation` (`:1827-1847`)
+  dispatches COUNT/MIN/MAX/AVG/SUM and throws `UnsupportedOperationException` on anything else.
+- **Elasticsearch paging is sized once, not doubled** — the answer to lesson 24's inherited item (b).
+  `limited-result-max-page-size` **250**, `adaptive-point-in-time-max-page-size` **500**,
+  `adaptive-point-in-time-max-shards` **1**, `scroll-keep-alive` **60 s** (`GLOBAL_OFFLINE`),
+  `paging-mode` default `adaptive_point_in_time`, `allow-partial-results` **false**. All three page-size
+  options carry `ConfigOption.positiveInt()`. The documented measurements: on ES 9.5.4 a PIT read pages of
+  an index of 2–3 shards **4% to 37% slower** than a scroll even in index order, and kept up with a scroll
+  at pages up to 500 hits but not 1,000. `index.max_result_window` is 10,000 by default and **JanusGraph
+  lifts it only on the indexes it creates** (`MAX_RESULT_WINDOW` at `:586`). The doubling that affects an
+  ES-backed query is `LimitAdjustingIterator`'s, one layer up in `QueryProcessor`.
+- **`register` (`:1010-1047`), and what it can leave behind.** Validates mapping against data type
+  (`:1015-1017`); rejects `PREFIX_TREE` on ES 8+ with a logged `IllegalArgumentException` — **not** a
+  `BackendException` — (`:1018-1023`); then either checks an external mapping, throwing
+  `PermanentBackendException` if it is absent or non-dynamic and lacks the field (`:1025-1038`), or calls
+  `checkForOrCreateIndex` **and** `pushMapping` (`:1039-1046`). Called synchronously from inside the
+  management transaction, so a stray ES index or an orphaned field mapping are both reachable states with
+  no compensating code at either end.
+- **`getNewDocument` (`:1173-1217`) de-duplicates in a `LinkedListMultimap` and resolves `SINGLE` with
+  `Iterators.getLast`** (`:1190`), so last-wins is decided by additions-list order. `SET`/`LIST` go through
+  `.toArray()` and reject `byte[]` with a `checkArgument` **inside a stream `filter`** (`:1197-1201`) — a
+  side-effecting predicate, sound only because the stream is sequential and fully consumed. A dual-mapped
+  key is written twice, under `key` and `key__STRING` (`:1209-1211`). `convertToEsType` (`:1219-1238`)
+  narrows every whole `Number` to `long` and every other to `double`, converts `Instant` → `Date`, `UUID` →
+  `String`, and throws `IllegalArgumentException` on anything else.
+
+### Verified by lesson 25, for lessons 27 and 28 to cite rather than re-derive
 
 - **`canIndexBeEnabled` is the whole gate on the lifecycle.** Composite: `oneNewKey || (constraint != null
   && constraint.isNew())` (`ManagementSystem:852`), where `oneNewKey` is set in the key loop at `:841-846`
@@ -428,7 +566,7 @@ the `.md` endpoint is valuable precisely because a second fetch at an offset cov
   `ManagementSystem.filter:628-639`, which includes an index if **any** field's status differs from the
   filter, and `printIndexes:655-679`, which prints one row per key.
 
-### Verified by lesson 24, for lessons 25, 26, 27 and 28 to cite rather than re-derive
+### Verified by lesson 24, for lessons 27 and 28 to cite rather than re-derive
 
 - **`JanusGraphStep` is a `GraphStep` + `HasStepFolder` + `Profiling` + `HasContainerHolder` (`:61`) and
   is NOT a `MultiQueriable`.** `JanusGraphVertexStep` is a `VertexStep` + `HasStepFolder` + `Profiling` +
@@ -532,127 +670,6 @@ the `.md` endpoint is valuable precisely because a second fetch at an offset cov
   `mvn test -pl janusgraph-test -am -Dtest=JanusGraphMultiQueryStrategyTest#<method> -DfailIfNoTests=false -Dsurefire.failIfNoSpecifiedTests=false`.
   The only dedicated test for the queue is
   `janusgraph-core/src/test/java/.../fetcher/BatchProcessingQueueTest.java`.
-
-### Verified by lesson 23, for lessons 24, 25, 26, 27 and 28 to cite rather than re-derive
-
-- **The registry, verbatim, at [`StandardJanusGraph.java:165-185`](https://github.com/JanusGraph/janusgraph/blob/a59ae8d8024207598eada34998d867617df51adf/janusgraph-core/src/main/java/org/janusgraph/graphdb/database/StandardJanusGraph.java#L165-L185)**
-  (blob-SHA verified, 80,408 bytes = `f650acb2`). One `static` block clones
-  `TraversalStrategies.GlobalCache.getStrategies(Graph.class)` and `addStrategies` **twelve** instances, in
-  source order: `AdjacentVertexFilterOptimizerStrategy`, `AdjacentVertexHasIdOptimizerStrategy`,
-  `AdjacentVertexIsOptimizerStrategy`, `AdjacentVertexHasUniquePropertyOptimizerStrategy`,
-  `JanusGraphLocalQueryOptimizerStrategy`, `JanusGraphHasStepStrategy`, `JanusGraphMultiQueryStrategy`,
-  `JanusGraphUnusedMultiQueryRemovalStrategy`, `JanusGraphMixedIndexAggStrategy`,
-  `JanusGraphMixedIndexCountStrategy`, `JanusGraphStepStrategy`, `JanusGraphIoRegistrationStrategy`. The
-  same object is registered for **both** `StandardJanusGraph.class` and `StandardJanusGraphTx.class`
-  (`:183-184`). **All twelve are `TraversalStrategy.ProviderOptimizationStrategy`** — none is a
-  `DecorationStrategy` — so TinkerPop's category sort puts the whole JanusGraph layer in one block and
-  every ordering question is an edge *inside* it. `ReadOnlyStrategy` is added separately and
-  per-traversal, at `:377`. **OLAP gets one strategy, not twelve:** `FulgoraUtil`'s
-  `FULGORA_STRATEGIES` is `…getStrategies(Graph.class).clone().addStrategies(JanusGraphLocalQueryOptimizerStrategy.instance())`.
-- **The complete `applyPrior`/`applyPost` graph.** `JanusGraphLocalQueryOptimizerStrategy.applyPrior()` =
-  `Collections.singleton(AdjacentVertexFilterOptimizerStrategy.class)` (`:57`, `:238-239`), no `applyPost`.
-  `AdjacentVertexOptimizerStrategy` (abstract base of HasId, Is and HasUniqueProperty) `applyPost()` =
-  `singleton(JanusGraphLocalQueryOptimizerStrategy)`; `AdjacentVertexHasUniquePropertyOptimizerStrategy`
-  **overrides** it to `new HashSet<>(Arrays.asList(JanusGraphStepStrategy.class, JanusGraphLocalQueryOptimizerStrategy.class))`.
-  `AbstractJanusGraphMixedIndexAggStrategy.applyPost()` = `singleton(JanusGraphLocalQueryOptimizerStrategy)`;
-  both `JanusGraphMixedIndexCountStrategy` and `JanusGraphMixedIndexAggStrategy` add
-  `applyPrior() = singleton(JanusGraphStepStrategy)`. `JanusGraphHasStepStrategy.applyPrior()` =
-  `singleton(JanusGraphLocalQueryOptimizerStrategy)`. `JanusGraphMultiQueryStrategy.applyPrior()` =
-  `new HashSet<>(Arrays.asList(JanusGraphLocalQueryOptimizerStrategy, JanusGraphHasStepStrategy, JanusGraphStepStrategy))`
-  — **re-verified by lesson 24 against the transcribed file at `:47`.**
-  `JanusGraphUnusedMultiQueryRemovalStrategy.applyPrior()` = `new HashSet<>(Arrays.asList(JanusGraphMultiQueryStrategy))`
-  — **re-verified at `:41`.**
-  **`AdjacentVertexFilterOptimizerStrategy` and `JanusGraphIoRegistrationStrategy` declare neither** — the
-  first is nevertheless ordered because `JanusGraphLocalQueryOptimizerStrategy` names it; the second has no
-  edge in either direction.
-- **Consequence, and the single most useful fact in Part V: the `JanusGraphStepStrategy` ↔
-  `JanusGraphLocalQueryOptimizerStrategy` order is transitive-only**, via
-  `JanusGraphStepStrategy` → `JanusGraphMixedIndexCountStrategy`/`JanusGraphMixedIndexAggStrategy` →
-  `JanusGraphLocalQueryOptimizerStrategy`. No traversal was found where the order is observable; filed as a
-  missing declaration (candidate 61), not a defect.
-- **`JanusGraphLocalQueryOptimizerStrategy` is five passes in a fixed order** (`:92-96`):
-  `applyJanusGraphVertexSteps` → `applyJanusGraphPropertiesSteps` → `applyJanusGraphLabelSteps` →
-  `applyJanusGraphDropSteps` → `inspectLocalTraversals`. Guards: `!traversal.getGraph().isPresent()`
-  (`:64-65`) and `janusGraph == null` (`:68-70`); **no `onGraphComputer` guard**, because this is the one
-  strategy OLAP installs. Config comes from `TransactionConfiguration` when
-  `JanusGraphTraversalUtil.getJanusGraphTx(traversal)` is present (`:78-84`) and from
-  `GraphDatabaseConfiguration` otherwise (`:85-90`) — so **a per-transaction mode override only affects
-  traversals started from the transaction**.
-- **Pass 1 vs pass 5, the whole point of the strategy.** Pass 1 (`:99-117`): every `VertexStep` becomes a
-  `JanusGraphVertexStep`; `foldInHasContainer` **only** if `isEdgeReturnStep` (`:105`); the comment at
-  `:106` is *"We cannot fold in orders or ranges since they are not local"*; the only fold is a **high**
-  limit from a following `RangeGlobalStep`, and the range step is **not removed** (`:110-114`). Pass 5
-  (`:163-197`), for a `LocalStep` whose child starts with a `VertexStep` or `PropertiesStep`:
-  `setBatchSize(txVertexCacheSize)` (`:170`, `:185`), `foldInHasContainer`,
-  **`foldInOrder(..., isVertexOrder=false)`** (`:175`, `:191`) and **`foldInRange`** (`:177`, `:193`),
-  then `unfoldLocalTraversal` (`:225-235`) which replaces the entire `LocalStep` with the single step in
-  the **outer** traversal when the child collapsed to one step. **Pass 1 never calls `setBatchSize`** —
-  answered by lesson 24, see above.
-- **Pass 2 (`:118-161`) matches three unrelated TinkerPop classes in one predicate** (`:119`):
-  `PropertiesStep` → `JanusGraphPropertiesStep`, `PropertyMapStep` → `JanusGraphPropertyMapStep`,
-  `ElementMapStep` → `JanusGraphElementMapStep`; idempotence guard
-  `if (originalStep instanceof MultiQueriable) return;` (`:120-122`); `setBatchSize(txVertexCacheSize)`
-  at `:158` — **and, per lesson 24, that value is also overwritten by `JanusGraphMultiQueryStrategy`
-  under the default `query.batch.limited=true`.** Passes 3 and 4 (`:199-223`) fold nothing and exist only
-  to give the multi-query layer a `MultiQueriable`.
-- **`HasStepFolder` is an interface with 8 abstract and 14 `static` methods** (blob-SHA verified, 27,466
-  bytes = `0232fc9b`, 532 lines). `foldInIds` `:145-178`, `foldInHasContainer` `:181-214`,
-  `localFoldInHasContainer` `:225-245`, `validFoldInOrBranch` `:247-268`, `branchPassesElements` `:270-281`,
-  `validFoldInHasContainer` `:327-343`, `isExistsStep` `:351-363`, `foldInHasFilter` `:367-378`,
-  `foldInOrder` `:380-434`, `splitAndP` `:437-445`, `foldInRange` `:484-502`,
-  `foldableHasContainerNoLimit` `:507-531`, `validJanusGraphOrder` `:102-143`.
-- **`or()` folding, exactly.** The `OrStep` arm (`:185`) is guarded by
-  `janusgraphStep instanceof JanusGraphStep`, so **a vertex-centric step never folds an `or()`**.
-  `validFoldInOrBranch` is **all-or-nothing across the whole `or()`** — one unrecognised step `return`s and
-  abandons every branch — and requires at least one `has()` or exists step. `branchPassesElements` rejects
-  a branch whose `RangeGlobalStep` has `getLowRange() > 0 || getHighRange() == 0`, because **a branch is
-  evaluated per element**. `localFoldInHasContainer` converts a `has(key)` exists step and **every key of
-  an `order()`** into `HasContainer(key, P.neq(null))`. `addLocalHasContainersOfNoBranch` (`:195-197`)
-  records an `or()` that no element can pass as a parent id with an **empty** branch set.
-  `JanusGraphStepStrategyTest.java:342-380` is the specification table.
-- **`foldInOrder` collects consecutive `OrderGlobalStep`s and iterates them BACKWARDS**, in-source reason:
-  *"TinkerPop sorts by each order() in turn, keeping the order of ties … so the elements come in the order
-  of the last one."* The gate at `:423-425` means **a vertex-centric query folds at most one order key; a
-  graph-centric one folds any number.** `validJanusGraphOrder` (`:102-143`) rejects a `ValueTraversal`
-  with a non-null `getBypassTraversal()`, `Order.shuffle`, a key with no `PropertyKey`, a
-  non-`Comparable` `dataType()`, and a **vertex** order on a non-`Cardinality.SINGLE` key unless
-  `graph.getIndexSerializer().allMixedIndexBackendSupportsOrderingListProperty()` — so that mixed-index
-  feature flag changes query **compilation**, not just execution (lesson 26).
-- **`foldInRange` (`:484-502`) is asymmetric.** `low` is folded **only** when
-  `janusgraphStep instanceof JanusGraphStep`; otherwise it is hard `0`. The `RangeGlobalStep` is removed
-  only when the folder is a `JanusGraphStep` **or** `range.getLowRange() == 0`.
-- **`JanusGraphStepStrategy` checks the ids twice.** If `ArrayUtils.isEmpty(getIds())`: create
-  `JanusGraphStep`, `foldInIds`, `foldInHasContainer`, then **re-check** before `foldInOrder` and
-  `foldInRange` — in-source: *"if there are any ids folded … we shouldn't fold in order and range steps so
-  that they can be handled by TinkerPop."* The `else` arm creates **no** `JanusGraphStep`. It also
-  early-returns on `TraversalHelper.onGraphComputer(traversal)`.
-- **`buildGlobalGraphCentricQuery()` memoizes, and `JanusGraphMixedIndexAggStep`'s constructor calls it at
-  strategy time.** `if (globalQuery != null) return globalQuery;`, and when `hasLocalContainers.isEmpty()`
-  it inserts `hasLocalContainers.put(null, {[]})` as a side effect (lesson 24 confirms both verbatim at
-  `JanusGraphStep:130-138`). `AbstractJanusGraphMixedIndexAggStrategy.buildMixedIndexAggStep` constructs
-  `new JanusGraphMixedIndexAggStep<>(...)` — whose constructor calls that method — and **discards the new
-  step** when `getMixedIndexAggQuery() == null`, leaving the original `JanusGraphStep` with a query
-  compiled under `NO_OP`. `getAggregation` returns non-null only for a trailing `CountGlobalStep` or a
-  single-key `PropertiesStep` followed by `Max`/`Min`/`Mean`/`SumGlobalStep`, both requiring
-  `originalGraphStep.isStartStep()`.
-- **Nothing in the repository asserts profile-tree shape.** `search_code` for
-  `AND_QUERY OR_QUERY TP3ProfileWrapper assert metrics` → 0 results; `"backend-query" profile test
-  assertion` → 0 results. Suggestive, not proof, but enough that **candidate 60 must be filed before any
-  new-span patch**.
-- **The test surface for this layer.** `janusgraph-test/.../optimize/` holds ten files:
-  `AdjacentVertexFilterOptimizerStrategyTest` (5,194 bytes), `AdjacentVertexHasIdOptimizerStrategyTest`
-  (4,146), `AdjacentVertexHasUniquePropertyOptimizerStrategyTest` (5,476),
-  `AdjacentVertexIsOptimizerStrategyTest` (2,729), `JanusGraphIoRegistrationStrategyTest` (1,482),
-  `JanusGraphLocalQueryOptimizerStrategyTest` (9,045), `JanusGraphMultiQueryStepTest` (4,705),
-  `JanusGraphMultiQueryStrategyTest` (11,886), `JanusGraphStepStrategyTest` (46,982) and the abstract
-  `OptimizerStrategyTest` (6,085). **They all run on the in-memory backend.** `makeSampleGraph()` builds
-  composite indexes `byId`, `byUniqueId` (unique), `byWeight`, `byIdWeight`, edge indexes
-  `byWeightDesc`/`byWeightAsc` on `knows`, a `names` LIST key with a `namesByWeight` property index, then
-  `numV = 100` vertices and `superV = 10` super-vertices each with 100 `knows` edges — **no mixed index**,
-  which is exactly the condition that makes the aggregation push-down decline.
-  `JanusGraphStepStrategyTest` (blob-SHA verified, 46,982 bytes = `abd23a81`, 546 lines) is the
-  specification: `doTest` (`:111-122`), `doMultiQueryTest` (`:124-142`), the `or()` rows at `:342-380`,
-  and three non-parameterized tests at `:144-170` pinning `splitAndP`'s `AndP` expansion.
 
 ## Paused Subjects
 
