@@ -5,26 +5,24 @@ mode: lesson
 mode-history: contributor-reading 2026-10-30 .. 2026-11-02 (sessions 01-04); lesson from 2026-11-03 (lesson 05 on)
 started: 2026-10-30
 lessons-total: 28
-lessons-done: 26
+lessons-done: 27
 pinned-commit: a59ae8d8024207598eada34998d867617df51adf
 pinned-commit-date: 2026-10-28
 pinned-commit-reviewed: 2026-11-22 at the Part V/VI boundary (lesson 24) — PERFORMED, and the pin stays
-  for the FIFTH review in a row. Lesson 26 was mid-Part and correctly did NOT re-raise it, as lesson 25
-  also did not. The method is blob-SHA identity and nothing weaker: every file cited by line number has
-  its git blob SHA computed locally and compared against what the API reported. Lesson 25 established the
-  cheap form — a directory listing with fields: ["name","sha","size"] returns every file's blob SHA in ONE
-  call, so a large file read through the over-limit path is verified with no transcription step at all.
-  Lesson 26 used it on ElasticSearchIndex.java (119,295 bytes = d80949e3), matching on the first attempt,
-  which is incidental confirmation that the pin has not moved under the track. Lesson 26 also used
-  DELEGATED transcription for one of this repository's own files (tracks/janusgraph-registers-2.md,
-  18,388 bytes = 642bd570), verified the same way — the first time the method was applied to a file being
-  edited rather than read.
-  NEXT REVIEW: the Part VI boundary — after lesson 28, or at the capstone. Lesson 27 is mid-Part and must
-  NOT re-raise it.
+  for the FIFTH review in a row. Lessons 25, 26 and 27 were all mid-Part and correctly did NOT re-raise it.
+  The method is blob-SHA identity and nothing weaker: every file cited by line number has its git blob SHA
+  computed locally and compared against what the API reported, the cheap form being a directory listing
+  with fields: ["name","sha","size"] which returns every file's blob SHA in ONE call. Lesson 27 applied it
+  to TEN files and all ten matched on the first attempt, which is incidental confirmation that the pin has
+  not moved under the track. Lesson 27 also established that the plain `text` value of an over-limit
+  get_file_contents result is LOSSY, not merely banner-prefixed, and that the resource path matches
+  byte-for-byte: see the mechanical notes.
+  NEXT REVIEW: the Part VI boundary — lesson 28 MUST perform it, running list_commits on master rather
+  than assuming either answer, and recording the result here.
 upstream: JanusGraph/janusgraph
 reader-fork: aryanttripathi/janusgraph
 registers: tracks/janusgraph-registers.md (candidates 1-64, FROZEN, plus the "Still open, and who owns
-  it" ledger) and tracks/janusgraph-registers-2.md (candidates 65-73, next free 74)
+  it" ledger) and tracks/janusgraph-registers-2.md (candidates 65-78, next free 79)
 paused-tracks: PostgreSQL (resume at lesson 11; full state in tracks/postgresql.md)
 -->
 
@@ -32,7 +30,7 @@ paused-tracks: PostgreSQL (resume at lesson 11; full state in tracks/postgresql.
 
 Sequential deep dive through the JanusGraph source, one entry per day, each building on the last.
 The destination is unchanged: contributing to JanusGraph before the January 2027 LFX Mentorship
-applications open. **Part VI opened on 2026-11-23 with lesson 25. Lesson 26 shipped 2026-11-24. Two lessons remain: 27 and 28.**
+applications open. **Part VI opened on 2026-11-23 with lesson 25. Lessons 26 and 27 shipped 2026-11-24 and 2026-11-25. One lesson remains: 28, and then the capstone.**
 
 **Mode: `lesson`, switched 2026-11-03.** Sessions 01–04 ran as `contributor-reading`: a short
 reading guide per day, with four to six questions deliberately left unanswered and the `## My
@@ -93,16 +91,20 @@ compressed on 2026-11-13, lesson 13 on 2026-11-14, lesson 14 on 2026-11-15, less
 lesson 16 on 2026-11-17, lesson 17 on 2026-11-20, lesson 20 on 2026-11-21, lesson 21 on 2026-11-22,
 lesson 22 on 2026-11-23, and **lesson 23's paragraph was compressed this run with its
 `Verified by lesson 23` block removed**. The full paragraphs remain verbatim in git history at the commit
-each line names. Next run, lesson 24's block and paragraph are the ones that go.
+each line names. **This run compressed lesson 24's paragraph and removed its `Verified by lesson 24` block.** Next run, lesson 25's block and paragraph are the ones that go.
 
 **On 2026-11-22 the one-line entries for lessons 01–19 were dropped from this log; lesson 20's went on
-2026-11-23 and lesson 21's this run.** They carried
+2026-11-23, lesson 21's on 2026-11-24 and lesson 22's this run.** They carried
 nothing the rest of the repository does not carry better — the **Syllabus** below lists all 28 lesson
 titles as taught, and the root [`README.md`](README.md) index links every entry and every digest by date
 and number — while costing ~23 KB of a file that is read in full at the start of every run and
 re-emitted in full on every push. Their full text is in git history at the commit immediately preceding
 the 2026-11-22 entry. Entries roll off this log one per run from here; the window is the five most
 recent lessons.
+
+- **27 — 2026-11-25** · [`2026/11/2026-11-25-janusgraph-cql-store-vs-inmemory/README.md`](2026/11/2026-11-25-janusgraph-cql-store-vs-inmemory/README.md) · **Mid-Part, so the re-pin question was correctly NOT re-raised — but lesson 28 MUST perform the Part VI review.** Read the CQL storage backend against the in-memory store at the pinned commit. **Blob-SHA verified against the API's own directory listings and cited by line number** (all ten matched on the first attempt): `CQLKeyColumnValueStore` (873 lines, 47,914 bytes = `f11ea637`; cited at `:123-127`, `:141-154`, `:156-170`, `:200-201`, `:211-343`, `:217-222`, `:224-244`, `:234-244`, `:248-263`, `:255-256`, `:265-303`, `:284-285`, `:291-299`, `:305`, `:323-328`, `:332-333`, `:336-338`, `:339-340`, `:355-368`, `:370-379`, `:387-397`, `:399-411`, `:413-424`, `:432-437`, `:450-480`, `:482-491`, `:493-523`, `:499-504`, `:503-523`, `:516-520`, `:525-545`, `:529-531`, `:539-542`, `:547-583`, `:595-625`, `:613-617`, `:641-652`, `:673-684`, `:686-695`, `:718-750`, `:731-737`, `:752-774`, `:776-789`, `:802-813`, `:815-818`, `:820-872`, `:829-872`, `:840-849`, `:851-863`), `CQLStoreManager` (374, 18,740 = `09f7b055`; `:104`, `:157-158`, `:311-358`, `:346-349`, `:352-358`, `:356`), `CQLConfigOptions` (48,346 = `2f1adabe`; `:47-55`, `:64-76`, `:85-89`, `:91-102`, `:105-110`, `:113-118`, `:120-130`, `:237-251`, `:253-265`, `:267-280`, `:844-862`), `CQLStoreFeaturesBuilder` (129, 7,091 = `a13eacac`; `:58-67`, `:62`, `:63`, `:65`, `:68-70`, `:80-87`, `:88-119`, `:94-100`, `:101-104`), `CQLTransaction` (60, 2,609 = `349bf72b`; `:30-47`, `:49-53`), `CQLColValGetter` (65, 2,423 = `66ea2658`; `:26-64`, `:59-60`), `AbstractCQLMutateManyFunction` (100, 5,614 = `ea850c4e`; `:35-41`, `:39-40`, `:59-91`, `:63`, `:68-77`, `:78-90`), `CQLMutateManyUnloggedFunction` (125, 6,189 = `7d3d3ee6`; `:71-124`, `:84`, `:88`, `:96-109`, `:122-123`), `CQLMutateManyLoggedFunction` (106, 4,860 = `8a9a9f7d`; `:65-104`, `:71-85`, `:95-102`), `InMemoryKeyColumnValueStore` (471, 19,258 = `83650bf4`; `:85-158`, `:94`, `:99`, `:109-114`, `:117-124`, `:127-129`, `:131-134`, `:137-144`, `:146-149`). **Read inline, member-name citations only:** `InMemoryColumnValueStore` (`5569f1a0`), `DistributedStoreManager` (`89ed24d5`), `CQLSliceQueryUtil` (`2efd226b`). **Seen only as `search_code` fragments:** `SliceQuery`, `EdgeSerializer`, `CQLSliceQueryUtilTest`. Three directory listings with `fields: ["name","sha","size"]`; one `search_code` query, returning three results; two delegated transcription batches, nine files, all blob-SHA verified. **Two external pages fetched:** the Cassandra Dynamo architecture page and the PlanetScale failover post. Five PR candidates logged (**74-78**) in [`tracks/janusgraph-registers-2.md`](tracks/janusgraph-registers-2.md). Daily Diff: **the 2026-11-25 edition had not published at 03:33 UTC**, and the run discovered that **`https://tdd.cat/{date}/` works where `{date}.md` 404s** — so the digest covered the latest published and previously uncovered **2026-11-24** edition (59 items, read in full across three offset fetches), with a deep dive on **PlanetScale Neki's leaseless unplanned failover for sharded Postgres**.
+
+  **Findings.** **THE finding: the CQL backend's entire write-ordering guarantee is one bit of the commit timestamp, and the in-memory store reaches the same semantics by the exactly opposite route.** Take the commonest interesting mutation — a transaction that deletes column `c` and re-adds `c` with a new value, which is every single-cardinality property update. `InMemoryColumnValueStore.mutate` resolves it **structurally and client-side**: `synchronized`, sort the additions, then drop every deletion found among them by `binarySearch`, so the tombstone never reaches the buffer at all. `CQLKeyColumnValueStore.mutate` (`:673-676`) resolves **nothing** — it wraps its arguments and delegates — and the resolution happens in Cassandra, because `MaskedTimestamp.getDeletionTime` is `times.getTime(t) & 0xFFFFFFFFFFFFFFFEL` and `getAdditionTime` is the same with `| 1L`. **The addition time is the deletion time plus exactly one, by bit arithmetic**: the least significant bit of the provider's resolution is reserved as a delete/add discriminator, and per-column last-write-wins does the rest. That is also the answer to lesson 26's handover question — **a cell write at a fixed `(key, column, timestamp)` is an assignment, so replaying it is free; a JSON array append is an accumulation, so it is not.** The dividing line between the two write paths is not distributed-versus-local, it is assignment-versus-accumulation, and `storage.cql.idempotent-writes` (default `true`) is the one-line consequence. **Why the mechanism has to be temporal rather than structural: a CQL mutation is not one request.** The default unlogged path does `Iterator.concat(deletions, additions).grouped(20)` and fires each group as its own async `UNLOGGED` batch, so a key with more than 20 column operations is sent as several concurrent requests whose arrival order is unspecified — and the result is still deterministic. **Three old debts discharged.** Lesson 18's: `fb.locking(useExternalLocking)` with the option defaulting `false`, so `ConsistentKeyLocker` **does** run on Cassandra — and setting it `true` makes `acquireLock` a method whose body is only its inverted guard, so the option **disables locking rather than delegating it**, which the option's own description admits in the words "read uncommitted" and "phantom reads". Lesson 16's: batch ordering is **implicit in the timestamps, not explicit in the batch**, and the `LOGGED` alternative is one unbounded batch across every table and key. Lesson 20's `setDirectColumnByStartOnlyAllowed`: its only consumer in the codebase is `CQLSliceQueryUtil`, whose grouping rule `groupSize = min(slice-limit, limit)` means **a limit-1 direct-equality query forms a group of one, so `IN`-grouping cannot fire for it** — sound, because CQL's `LIMIT` is per result set rather than per `IN` element. **Fourth, the module's character is graceful degradation**: five places — token-range scans, `PER PARTITION LIMIT`, parallel scan, Cassandra-5 compression option names, and `cdc=true` on a pre-existing table — where an unsupported backend produces one `warn` at store open and a quietly different store for the rest of its life, on the stated principle that a scan-only optimisation must not fail store open and with it every graph open. Reading those five comments is the fastest way to understand what "CQL-compatible" costs. **Fifth, the most promising defect-shaped thing in the module is a reachability question, not a finding:** with `graph.assign-timestamp=false` the statements carry no `USING TIMESTAMP` at all, and the unlogged path's `.grouped(20)` can then put a delete and its matching insert into different concurrent batches — at which point the whole correctness argument above stops holding. That is candidate 74, and it is deliberately **not** stated as a confirmed defect.
 
 - **26 — 2026-11-24** · [`2026/11/2026-11-24-janusgraph-index-provider-elasticsearch/README.md`](2026/11/2026-11-24-janusgraph-index-provider-elasticsearch/README.md) · **Mid-Part, so the re-pin question was correctly NOT re-raised.** Read the mixed-index SPI and its Elasticsearch implementation at the pinned commit. **Blob-SHA verified and cited by line number:** `ElasticSearchIndex` (2,028 lines, 119,295 bytes = `d80949e3`; cited at `:120`, `:185-188`, `:215-222`, `:224-232`, `:234-250`, `:252-266`, `:526-536`, `:543-562`, `:564-566`, `:568-576`, `:770-800`, `:802-813`, `:815-824`, `:826-835`, `:837-844`, `:846-854`, `:855-876`, `:866-868`, `:869-873`, `:874-875`, `:881-888`, `:897-916`, `:932-958`, `:1010-1047`, `:1015-1017`, `:1018-1023`, `:1025-1038`, `:1039-1046`, `:1162-1167`, `:1169-1171`, `:1173-1217`, `:1179-1192`, `:1197-1201`, `:1219-1238`, `:1275-1381`, `:1292-1295`, `:1300-1306`, `:1307-1350`, `:1314-1315`, `:1319`, `:1322`, `:1326-1330`, `:1336`, `:1344`, `:1346`, `:1352-1356`, `:1364-1368`, `:1369-1380`, `:1371-1372`, `:1383-1406`, `:1408-1422`, `:1424-1462`, `:1436-1441`, `:1451-1452`, `:1457-1458`, `:1459-1461`, `:1464-1468`, `:1507-1708`, `:1709-1728`, `:1718`, `:1730-1735`, `:1794-1804`, `:1806-1825`, `:1816`, `:1827-1847`, `:1854-1856`, `:1864-1870`, `:1872-1881`, `:1883-1925`, `:1928-1942`, `:1944-1956`, `:1959-1962`, `:1964-1967`, `:1995-2007`). **Read inline, member-name citations only:** `IndexProvider` (`b7b342bb`), `IndexFeatures` (`6651e246`), `IndexInformation` (`ded18cc9`), `IndexMutation` (`d2c44e46`), `IndexSelectionUtil` (`3ec0ec2a`), `AbstractESCompat` (`89543cd9`), and all four compat subclasses read in full — `ES6Compat` (`d686ce02`), `ES7Compat` (`fb0efe32`), `ES8Compat` (`bbd2b413`), `ES9Compat` (`73af9fc2`). **Seen only as `search_code` fragments:** `AdjacentVertexHasUniquePropertyOptimizerStrategy`, `AbstractIndexSelectionStrategy`, `BruteForceIndexSelectionStrategy`, `ApproximateIndexSelectionStrategy`, `IndexSerializer`, `HasStepFolder`, `IndexSelectionUtilTest`. Three directory listings with `fields: ["name","sha","size"]`; two `search_code` queries, both returning results. Three PR candidates logged (**71-73**) in [`tracks/janusgraph-registers-2.md`](tracks/janusgraph-registers-2.md), written in the same push as this file — **the register was brought to local disk by a delegated transcription and blob-SHA verified (18,388 bytes = `642bd570`) before being appended to**, the first time that method was used on a file being edited rather than read. Daily Diff: **today's edition had not published** (`2026-11-24.md` and `2026-11-23.md` both client errors), so the **fallback pool was drawn on for the first time** — the uncovered **2026-11-20** edition, 50 items, read in full across two fetches; deep dive on **Valkey 9.2's forkless snapshots**.
 
@@ -112,13 +114,9 @@ recent lessons.
 
   **Findings.** **THE finding: most indexes never enter the lifecycle at all, and one expression decides it.** `canIndexBeEnabled` — `oneNewKey || (constraint != null && constraint.isNew())` at `:852` for a composite index, `type.isNew() || any sortKey isNew` at `:365` for a vertex-centric one — writes `ENABLED` instead of `INSTALLED` (`:860` / `:367`) and skips `updateIndex(index, REGISTER_INDEX)` entirely (`:877` / `:389-391`). It is **sound**, not a shortcut: a composite index is all-or-nothing over its fields, so a key created in this management transaction means no pre-existing element can qualify and the backfill is provably empty. It is also asymmetric in a way the docs do not state — **one** new key out of nine is enough, and a brand-new `indexOnly(...)` constraint is enough on its own. Second: **"the index's status" is two physically different things.** Composite and relation-type keep one `SchemaStatus` as a `BaseKey.SchemaDefinitionProperty` tagged `TypeDefinitionCategory.STATUS` (`setStatusVertex:1328-1341`, one property remove plus one add, idempotent at `:1334`). A **mixed** index's index-level status is set to `ENABLED` **unconditionally** at `:758` and means nothing; the real statuses are **per field**, held as the **last element** of each `INDEX_FIELD` schema edge's `Parameter[]`, written once by `addIndexKey:791` and changed by `setStatusEdges:1343-1361` by **removing and re-adding the edge** — carrying `MAPPED_NAME`, the backend field name, along in the copy. The "STATUS is last" contract is established in one place (`:785-791`) and checked only by an `assert` (`:1351`), off in production. `JanusGraphIndexWrapper.getIndexStatus(key)` hides the whole split by **ignoring its key argument** on a composite index, which makes `GraphIndexStatusWatcher`'s per-key poll report the same fact N times there and makes it essential on a mixed index. So **a mixed index is not one lifecycle but N, one per `addIndexKey` call.** Third: **the INSTALLED → REGISTERED transition is a callback in the issuing JVM's heap and nothing persists it.** `REGISTER_INDEX` sets `INSTALLED` and arms an `UpdateStatusTrigger`; `commit` sends the eviction **after** `transaction.commit()` (`:253`, `:256-257`); `EvictionTrigger`'s constructor snapshots the open-instance roster; each receiver queues a `SendAckOnTxClose` that waits for **every transaction open when the message arrived** to close; `runTriggers()` then opens a **new** management transaction and writes `REGISTERED`, but only for elements still `INSTALLED`, so a racing `DISABLE_INDEX` supersedes it. **What `REGISTERED` actually guarantees is therefore not "every instance has seen the change" but "every instance has seen it and every transaction that predated it has finished"** — which is what makes a reindex safe. Lose the issuing JVM mid-handshake and the index is stranded at `INSTALLED` with no recovery path in the code (re-issuing `REGISTER_INDEX` works, undocumented, because `INSTALLED` is in its applicable set); lose a *receiving* instance and `graph.management-auto-close-stale-instances` plus the ack timeout is the only escape, `mgmt.forceCloseInstance` the manual one. Fourth, **lesson 23's debt (c) is settled**: a reindex of a composite or relation-type index relies on the **vertex** status, a reindex of a mixed index on the **field** statuses, both via `IndexRepairJob.validateIndexStatus` — whose mixed branch explicitly **skips `DISABLED` fields** (`status != SchemaStatus.DISABLED && !acceptable`) and fails only when no field is acceptable, so a partly-disabled mixed index reindexes while a composite one has no partial mode. Its javadoc still says *"ENABLED or REGISTERED"* where the set it uses is `REINDEX`'s four statuses. Debts (a) and (b) also settled: **every** vertex-centric index's backing relation type is invisible without being a system type (`:368` calls `maker.invisible()`), and the `RELATIONTYPE_INDEX` schema edge is written at `:387`. Debt (d) is **not** settled — `IndexSelectionUtil` was not located by the one `search_code` query spent on it, and the lesson declined to guess; it passes to lesson 26. Fifth: **`REINDEX` only adds and `REMOVE_STALE_ENTRIES` only removes, and they scan different stores** — edgestore versus graphindex — so returning a `DISABLED` index to trustworthy is two complete passes over the data, and a delete that lands while an index is disabled is invisible to a reindex forever. `REMOVE_STALE_ENTRIES` is also the only action that changes no status and is unsupported for vertex-centric indexes. Sixth: **the reindex-to-enable step is a best-effort callback** (`:1436-1458`) that catches every `Throwable` and logs at error, so a fully successful scan can silently leave the index `REGISTERED`; and `REINDEX`'s applicable set contains `DISABLED`, so reindexing an index that is receiving no writes is permitted and is almost always wrong. Three PR candidates: **68** (both `return null` branches in `updateIndex` are unreachable because `isApplicableStatus` throws rather than returning `false`), **69** (the mixed-index status is a positional array slot behind an `assert`, in the same array as `MAPPED_NAME`), **70** (the pending INSTALLED → REGISTERED callback is unpersisted and JVM-local — the only one of the three with user-visible consequences, and **not yet confirmed by a run**).
 
-- **24 — 2026-11-22** · [`2026/11/2026-11-22-janusgraph-step-multiquery-batching/README.md`](2026/11/2026-11-22-janusgraph-step-multiquery-batching/README.md) · **Part V complete. The Part V/VI re-pin review was PERFORMED and the pin stays for the fifth time. All four debts lesson 23 handed over are discharged.** Read the whole TinkerPop step and multi-query surface at the pinned commit, **fourteen files transcribed to disk and blob-SHA verified locally**, all matching on the first attempt: `JanusGraphStep` (374 lines, 17,030 bytes = `315640d2`; cited at `:61`, `:63-70`, `:73-123`, `:77-122`, `:78-83`, `:86`, `:88`, `:89-90`, `:94-99`, `:101-104`, `:105`, `:107`, `:109-121`, `:110`, `:116-118`, `:119-120`, `:125-142`, `:130-132`, `:134-138`, `:144-163`, `:153-157`, `:158`, `:161`, `:165-172`, `:174-181`, `:179`, `:183-196`, `:185-186`, `:188-190`, `:192`, `:193`, `:198-203`, `:205-241`, `:214-218`, `:254`, `:265`, `:270-278`, `:285-289`, `:322-334`, `:336-357`, `:344-355`, `:359-370`), `JanusGraphVertexStep` (197, 8,152 = `d328dff0`; `:49`, `:51-54`, `:56-69`, `:60-68`, `:71-77`, `:74-76`, `:79-98`, `:100-115`, `:109`, `:112`, `:113`, `:117-129`, `:131-137`, `:174`, `:193-196`), `MultiQueriable` (65, 3,310 = `8496dfe1`), `JanusGraphMultiQueryStep` (182, 7,262 = `1f5e9a63`; `:40`, `:48-50`, `:89-104`, `:93-103`, `:106-114`, `:116-124`, `:117`), `JanusGraphMultiQueryStrategy` (260, 13,779 = `60fa1caf`; `:45`, `:47`, `:58-107`, `:59-61`, `:68-72`, `:74-77`, `:80-94`, `:96-104`, `:101-103`, `:118-128`, `:113-114`, `:130-147`, `:133-142`, `:138`, `:146`, `:149-157`, `:165-210`, `:175-177`, `:179`, `:181-201`, `:199-201`, `:200`, `:203-208`, `:207`, `:212-233`, `:218`, `:219-222`, `:224-227`), `JanusGraphUnusedMultiQueryRemovalStrategy` (94, 4,348 = `225ead59`; `:41`, `:47-71`, `:63-70`, `:73-84`), `JanusGraphNoOpBarrierVertexOnlyStep` (64, 2,746 = `2810c6f3`; `:30`, `:44-57`, `:46-48`, `:49`, `:53-55`), `JanusGraphTraversalUtil` (431, 22,204 = `8290888d`; `:254-312`, `:259-263`, `:319-321`, `:331-345`, `:334-343`, `:350-365`, `:361`, `:373-380`, `:382-388`, `:390-403`, `:414-420`, `:428-430`), `JanusGraphRepeatStep` (148, 7,289 = `3a6f1b34`; `:42`, `:55`), `MultiQueryPositions` (28, 1,003 = `5b47c194`; `:24-26`), `MultiQueriableStepBatchFetcher` (146, 7,250 = `e4a25136`; `:32`, `:36-42`, `:55-69`, `:71-81`, `:83-91`, `:93-97`, `:99-109`, `:104`, `:115-125`, `:117-118`, `:127-129`, `:131-138`, `:140-142`), `VertexStepBatchFetcher` (41, 1,700 = `d226dcef`; `:24-40`), `BatchProcessingQueue` (94, 2,693 = `141dcb7e`; `:29-33`, `:40-42`, `:44-53`, `:48`, `:55-65`, `:67-77`, `:87-89`), `GraphDatabaseConfiguration` (2,191, 137,928 = `4d5a9167`; `:365-366`, `:368-377`, `:379-384`, `:386-391`, `:401`, `:403-415`, `:668-670`, `:1702-1704`, `:1778-1796`, `:2058`, `:2069-2073`). **Read inline, member-name citations only:** `JanusGraphMultiQueryStrategyTest`, `OptimizerStrategyTest`. **Seen only as `search_code` fragments:** `MultiVertexCentricQueryBuilder`, `QueryProfiler`, `JanusGraphAssert`. Three directory listings; three `search_code` queries, all returning results; `list_commits` on `master`. Three PR candidates logged (**65-67**) in the **new** [`tracks/janusgraph-registers-2.md`](tracks/janusgraph-registers-2.md), written in the same push as this file. Daily Diff: the **2026-11-21** edition (47 stories), deep dive on **Arctic**, the OSDI '26 practical lock-free adaptive radix tree.
-
-  **Findings.** **THE finding: the batch size of a `JanusGraphVertexStep` is written by two strategies, and on the shipped default the second write always wins.** `JanusGraphVertexStep.batchSize` defaults to **`Integer.MAX_VALUE`** (`:54`), not to zero or one. `JanusGraphLocalQueryOptimizerStrategy` pass 1 never calls `setBatchSize` (lesson 23) and pass 5 calls `setBatchSize(txVertexCacheSize)` (`:170`, default **20000**). Then `JanusGraphMultiQueryStrategy:179` executes `boolean barrierSizeSet = !limitedBatch;` — and `query.batch.limited` defaults to **`true`** (`GraphDatabaseConfiguration:379-384`), so `barrierSizeSet` starts `false` and the strategy writes a size over whatever pass 5 left: a user `barrier(n)` if there is one (`:219-222`), else the generated barrier's size (`:224-227`) which is `query.batch.limited-size`, default **2500** (`:386-391`), else `limitedBatchSize` directly (`:199-201`). **So on a default graph `g.V().out()` and `g.V().local(out())` both batch at 2500 and `cache.tx-cache-size` has no effect on batching at all.** The asymmetry lesson 23 asked about only becomes observable with `query.batch.limited=false`, where `barrierSizeSet` starts `true`, no `setBatchSize` call happens anywhere in the strategy, and the top-level step keeps `Integer.MAX_VALUE` — one multi-query over every start vertex — while the local one keeps 20000. The two halves agree: at `limited=false` `JanusGraphMultiQueryStep.initialize()` (`:93-103`) also drains its **entire** upstream into an `ArrayList` before passing it on. **Nobody has run the experiment; Hands-On A is it.** Second: **the two steps are not a matched pair.** `JanusGraphStep` implements `HasContainerHolder` and compiles a `GraphCentricQuery` inside itself; `JanusGraphVertexStep` implements `MultiQueriable` and only forwards arguments to a `BaseVertexQuery` builder. Only `JanusGraphStep` supports an offset (`setLimit`'s low bound, consumed by `MultiDistinct*Iterator` at `:110`/`:119`, never passed to a query); `JanusGraphVertexStep.setLimit` asserts `low == 0` (`:174`). Only `JanusGraphVertexStep` batches. Third: **both of `JanusGraphStep`'s execution arms converge on the same merge**, so the de-duplicating offset-applying `MultiDistinctUnorderedIterator`/`MultiDistinctOrderedIterator` is *the* execution path, not a special case for split `or()`s — and the split arm gives each of N branch queries the **full** `highLimit` (`:179`), so a `limit(10)` over a three-branch `or()` can read 30 elements. The `ids != null && ids.length > 0` arm consults **no index at all**: `iteratorList`/`holdsConditions` (`:322-357`) re-check every folded `has()` and every `or()` in Java. Fourth, **debt (b) is fully settled: all four multi-query annotations are set in one class, `MultiVertexCentricQueryBuilder`** — `multi=true` and `vertices=N` in `constructQuery`, `partitioned=true` in the partitioned-vertex branch, `multiPreFetch=true` in `preFetch()`. **`vertices` is the only one carrying a number, and it is the batch size actually used**, which makes it the observable for Hands-On A. Fifth, the **insert-then-remove** design is deliberate and javadoc'd (`JanusGraphMultiQueryStrategy:113-114`): a `JanusGraphMultiQueryStep` is inserted before every `MultiQueriable` *and* every `TraversalParent`, and `JanusGraphUnusedMultiQueryRemovalStrategy` deletes the ones with three empty client lists **together with the barrier they generated**, identified by reference equality on `getGeneratedBarrierStep()` — the same identity test that distinguishes a generated barrier from a user's `barrier(n)` when choosing a batch size (`JanusGraphTraversalUtil:361`). Sixth: `JanusGraphNoOpBarrierVertexOnlyStep` is a four-line subclass whose entire content is `break`ing out of the fill loop on a non-vertex traverser (`:53-55`) plus refusing to top up a non-empty barrier (`:46-48`). Three PR candidates: **65** (`isLegalMultiQueryPosition` walks `currentStep` and tests `step`, so the walk is a no-op and the answer depends only on the position step's own labels — the one reportable defect, and **not yet confirmed by a run**), **66** (`BatchProcessingQueue.setBatchSize` drops the constructor's `Math.max(batchSize,1)`, and neither `query.batch.limited-size` nor `cache.tx-cache-size` has a `positiveInt()` verifier where `MAX_KEYS_PER_READ` at `:401` does), **67** (`JanusGraphVertexStep`'s copy constructor does not copy `batchSize`; latent, no reachable path found).
+- **24 — 2026-11-22** · [`2026/11/2026-11-22-janusgraph-step-multiquery-batching/README.md`](2026/11/2026-11-22-janusgraph-step-multiquery-batching/README.md) · **Findings.** Paragraph compressed 2026-11-25 under the roll-off rule, and the `Verified by lesson 24` block removed in the same run; the full versions are in git history at the 2026-11-22 through 2026-11-24 commits, and the facts lesson 28 and the capstone were promised are carried in *Notes For The Next Run* below. The one-line substance: **the batch size of a `JanusGraphVertexStep` is written by two different strategies and on the shipped default the second write always wins** — the field defaults to `Integer.MAX_VALUE`, `JanusGraphLocalQueryOptimizerStrategy`'s pass 5 writes `cache.tx-cache-size`, and `JanusGraphMultiQueryStrategy` then overwrites it with 2500 because `query.batch.limited` defaults to `true`, so **`cache.tx-cache-size` has no effect on batching on a default graph**; the two steps are not the matched pair their names suggest, only one compiling a query inside itself and only the other batching; and a batch is always a *hint* rather than a correctness constraint. This run also performed the **Part V/VI re-pin review**, which the pin survived for the fifth time. Three PR candidates, **65-67**.
 
 - **23 — 2026-11-21** · [`2026/11/2026-11-21-janusgraph-optimizer-strategy-layer/README.md`](2026/11/2026-11-21-janusgraph-optimizer-strategy-layer/README.md) · **Findings.** Paragraph compressed 2026-11-24 under the roll-off rule, and the `Verified by lesson 23` block removed in the same run; the full versions are in git history at the 2026-11-21 through 2026-11-23 commits, and the facts lessons 27 and 28 were promised are carried in *Notes For The Next Run* below. The one-line substance: **the content of the strategy layer is its dependency graph, and two of the twelve strategies declare no ordering at all** — `StandardJanusGraph`'s one static block registers twelve `ProviderOptimizationStrategy` objects and OLAP gets one of them; **`local()` is the only construct that gets an order or a range to the storage layer**, pass 1 folding neither; `or()` is folded only for a `JanusGraphStep` and merged *in the step*, so the TinkerPop side never produces a multi-sub-query `ElementQuery`; and a traversal ending in an aggregation is compiled during strategy application under `QueryProfiler.NO_OP` and **memoized**, so `.profile()` shows no compile span at all. `AdjacentVertexHasUniquePropertyOptimizerStrategy` is the one strategy permitted to touch the backend, gated on `optimizerBackendAccess()`, and it runs a side traversal during strategy application — which is what makes lesson 26's candidate 72 worth running. Four PR candidates, **61-64**.
-
-- **22 — 2026-11-20** · [`2026/11/2026-11-20-janusgraph-query-processor-iterator-stack/README.md`](2026/11/2026-11-20-janusgraph-query-processor-iterator-stack/README.md) · **Findings.** Paragraph compressed 2026-11-23 under the roll-off rule, and the `Verified by lesson 22` block removed in the same run; the full versions are in git history at the 2026-11-20 through 2026-11-22 commits, and the facts lessons 26, 27 and 28 were promised are carried in *Notes For The Next Run* below. The one-line substance: **the in-memory filter sits between the backend limit and the element count**, so `limit(10)` bounds what the caller receives and not what is read, and the backend limit **doubles** — `L, 2L, 4L …` with a full cursor-less re-read each time — until enough survive; **`QueryProcessor` creates no profiler span at all**, so merge, sort and filter time is invisible in `.profile()`; half the class is dead (`VertexCentricQuery.isSorted()` hard-coded `true`, `GraphCentricQuery.numSubQueries()` hard-coded `1`); and the single-slice fitted sorted vertex-centric case does not use `QueryProcessor` at all. Nine PR candidates, **52-60**.
 
 
 ## Syllabus
@@ -166,73 +164,101 @@ recent lessons.
 
 - [x] 25 — `ManagementSystem` and the index lifecycle: INSTALLED → REGISTERED → ENABLED, and reindex jobs
 - [x] 26 — Mixed indexes: the `IndexProvider` SPI and `ElasticSearchIndex`
-- [ ] 27 — The CQL backend: `CQLKeyColumnValueStore` compared line-for-line with the in-memory store
+- [x] 27 — The CQL backend: `CQLKeyColumnValueStore` compared line-for-line with the in-memory store
 - [ ] 28 — Transaction log, CDC, and stale-index repair: what happens when the edgestore and a mixed index disagree
 
 ## Notes For The Next Run
 
 **Syllabus unchanged this run. No items added, split, merged or reordered; the 28 stand as written on
-2026-10-30. Two lessons remain: 27 and 28.**
+2026-10-30. One lesson remains: 28, and then the capstone.**
 
 **Re-pin: NOT re-raised, correctly.** Lesson 24 performed the Part V/VI review on 2026-11-22 and the pin
-stays for the fifth time. Lessons 25 and 26 were mid-Part and did not re-raise it; **lesson 27 must not
-either.** The next review is the Part VI boundary — after lesson 28, or at the capstone. Lesson 26 did
-re-verify the one large file it cites by line number by blob SHA (`ElasticSearchIndex.java`, 119,295
-bytes = `d80949e3`), matching what the directory listing reported.
+stays for the fifth time. Lessons 25, 26 and 27 were all mid-Part and did not re-raise it. **The next
+review is due at the Part VI boundary — lesson 28 MUST perform it**, running `list_commits` on `master`
+rather than assuming either answer, and recording the result here. Lesson 27 re-verified its ten
+line-cited files by blob SHA against the API's own directory listings; all ten matched on the first
+attempt, which is incidental confirmation that the pin has not moved under the track.
 
-**THE fact to carry forward from lesson 26: the index SPI is the only write path in JanusGraph that is
-not idempotent by construction, and `LIST` cardinality is the whole reason.** Of the five mutation
-primitives, `SINGLE` delete, `SINGLE` assign and `SET` add are idempotent (the last by the explicit
-`field.cardinality != 'SET' || indexOf(value) == -1` guard); `LIST` add appends a duplicate on a second
-application and `LIST`/`SET` remove removes another occurrence or none. **The fix was a core SPI change,
-not a backend change**: `IndexMutation.completeDocument` carries the element's whole indexed state,
-supplied free at commit, and `addUpdatesCarryingTheCompleteDocument` (`ElasticSearchIndex:855-876`)
-collapses a document's changes into one update whose upsert is that whole document — Elasticsearch writes
-the upsert and **skips the script** when the document is missing, and one item per document is the maximum
-atomicity the bulk API offers. Lesson 27 should hold this as the contrast case: a `KeyColumnValueStore`
-mutation is idempotent because a cell write is last-writer-wins on a fixed column, which is exactly what
-a JSON array field is not.
+**THE fact to carry forward from lesson 27: the CQL backend's entire write-ordering guarantee is one bit
+of the commit timestamp, and that is why a `KeyColumnValueStore` mutation needs none of lesson 26's
+machinery.** `MaskedTimestamp.getDeletionTime` is `times.getTime(t) & 0xFFFFFFFFFFFFFFFEL` and
+`getAdditionTime` is the same with `| 1L`, so **the addition time is always exactly one greater than the
+deletion time** — the least significant bit of the provider's resolution is reserved as a delete/add
+discriminator. Every delete carries the first, every insert the second
+(`AbstractCQLMutateManyFunction:68-77`), and Cassandra's per-column last-write-wins does the rest. The
+in-memory store reaches the same semantics by the opposite route: `InMemoryColumnValueStore.mutate`
+**filters out every deletion that is also an addition** (`binarySearch(add, delEntry) >= 0 → continue`)
+client-side, under a lock, before the buffer is touched. **Same observable behaviour, two mechanisms: one
+structural and local, one temporal and distributed.** And the idempotence contrast lesson 26 asked for
+has a one-line answer: a cell write at a fixed `(key, column, timestamp)` is an *assignment*, so
+replaying it is free; a JSON array append is an *accumulation*, so it is not. The dividing line is not
+distributed-versus-local.
 
-**Second, the structural fact to keep straight: `mutate` has three request shapes and the
-non-idempotent one is still live.** Shape A whole-document delete (guarded `hasDeletions() &&
-isDeleted()`); shape B the single complete-document update; shape C — whenever `completeDocument` is
-`null` for an existing document — up to **three** bulk items for one `_id`, which is the shape shape B's
-own javadoc argues against. **Candidate 73's reachability is untraced**: `IndexSerializer` and
-`IndexTransaction` were not read, so which core call sites invoke `setCompleteDocument` is unknown. One
-`search_code` query settles it and it is the cheapest open item in the register.
+**Second, lesson 18's debt is discharged, and the answer is the opposite of what the option name
+suggests.** `CQLStoreFeaturesBuilder:63` is `fb.locking(useExternalLocking)` and
+`storage.cql.use-external-locking` defaults to **`false`** (`CQLConfigOptions:91-102`), so `hasLocking()`
+is `false` on a stock CQL graph and **`ConsistentKeyLocker` does run on Cassandra**. Set the option to
+`true` and `CQLKeyColumnValueStore.acquireLock` (`:678-684`) **returns having done nothing** — the method
+body is only the inverted guard. So the option does not switch JanusGraph from its own locking to
+Cassandra's; it switches locking **off**. The option's own description says so at length, naming "read
+uncommitted" and "dirty/non-repeatable/phantom reads". `fb.optimisticLocking(true)` is set
+unconditionally and is independent. `HBaseStoreManager` was **not** read this run, so its classification
+is still open.
 
-**Third, debt (d) is settled: `IndexSelectionUtil` applies no `SchemaStatus` filter anywhere.** Six public
-static methods, not one reference to `SchemaStatus`. `existsMatchingIndex`/`getMatchingIndexes` collect
-`((InternalRelationType) key).getKeyIndexes()` per `PredicateCondition` and apply only the caller's
-`Predicate<IndexType>`; `AdjacentVertexHasUniquePropertyOptimizerStrategy` passes
-`indexType -> indexType.isCompositeIndex() && …` with no status test. So a unique composite index at
-`INSTALLED`, `REGISTERED` or `DISABLED` still drives the rewrite although the composite read gate is
-`== ENABLED`. **The absence is verified; the consequence is not** — candidate 72, Hands-On B. Do not
-restate this as a confirmed defect without the run.
+**Third, lesson 16's debt is discharged: the batch ordering is implicit in the timestamps, not explicit
+in the batch.** Default `storage.cql.atomic-batch-mutate=false` → `CQLMutateManyUnloggedFunction`, which
+does `Iterator.concat(deletions, additions).grouped(batchSize)` with `batch-statement-size` defaulting to
+**20** (`CQLConfigOptions:105-110`), and fires **each group as its own async `UNLOGGED` batch**, awaited
+together. So a single row key with more than 20 column operations is sent as several concurrent requests
+in unspecified order, and the result is still deterministic. The `LOGGED` alternative is **one batch for
+every table and every key with no size bound at all** (`CQLMutateManyLoggedFunction:75-85`) — atomic via
+the batchlog, still not isolated, and it fails at the server's `batch_size_fail_threshold` with no
+client-side split. Also settled: a batch does **not** inherit its statements' idempotence, which is why
+the flag is computed twice (`CQLKeyColumnValueStore:305` and `AbstractCQLMutateManyFunction:63`); and
+`withWriteIdempotence` sets `null`, not `FALSE`, so the fallback is the driver's default.
 
-**Fourth, a correction worth not losing: there is no `supportsExistsQuery()` in `IndexFeatures` at the
-pinned commit.** The file was read in full; it has eleven flags and the nearest member is
-`supportsGeoExists()`. The lesson-24 handover named a method that does not exist. The three real flags
-are `supportNotQueryNormalForm()` (no trailing `s` on the accessor), `supportsOrderingListProperty()` and
-`IndexInformation.supportsOrdering(KeyInformation)`, the last being a `default true` on the interface.
-Also settled: `IndexSerializer.allMixedIndexBackendSupportsOrderingListProperty()` **returns `false` when
-there are no mixed indexes at all**, so a pure-composite graph cannot fold a vertex order on a `LIST`
-key — the empty-set quantifier is implemented as `false` rather than as vacuous truth.
+**Fourth, lesson 20's `setDirectColumnByStartOnlyAllowed` debt is discharged, with a consequence
+attached.** The flag is set by `EdgeSerializer.getQuery` and read in **exactly one place in the
+codebase**, `CQLSliceQueryUtil.getQueriesGroupedByDirectEqualityQueries`, which merges single-column
+reads into one `IN` query. The rule is `groupSize = query.hasLimit() ? max(1, min(sliceGroupingLimit,
+query.getLimit())) : sliceGroupingLimit`, keyed by the queries' shared limit, because CQL's `LIMIT`
+applies to the whole result set rather than per `IN` element. **Consequence, provable from the
+arithmetic: a direct-equality query with `limit = 1` forms a group of one, so `IN`-grouping cannot fire
+for it.** `grouping.slice-allowed` defaults `true`, `slice-limit` to 20 (`CQLConfigOptions:844-862`).
+**NOT verified:** which limit the common `SINGLE`-cardinality property read actually carries when it
+reaches that code. `CQLSliceQueryUtilTest` constructs both shapes, which says both are expected, not
+which is typical. One read of `EdgeSerializer.getQuery` plus `BasicVertexCentricQueryBuilder`'s limit
+assignment settles it, and it is the cheapest open item the lesson produced.
 
-**Fifth, the operational fact: `register` is a side effect that no rollback undoes.** Called synchronously
-from `ManagementSystem.addIndexKey:802`, `ElasticSearchIndex.register` can create the ES index
-(`checkForOrCreateIndex`) and push a field mapping before the management transaction commits. A failed
-register can leave a stray ES index; a successful register followed by a rollback leaves ES holding a
-mapping the schema has never heard of. ES mappings are additive and practically irremovable, so the drift
-is one-directional with no documented repair. Lesson 28 should state this as one of the three concrete
-ways the edgestore and a mixed index can disagree.
+**Fifth, the most promising defect-shaped thing in the module, and it is a reachability question.** With
+`graph.assign-timestamp=false`, `AbstractCQLMutateManyFunction:78-90` installs closures that emit deletes
+and inserts with **no `USING TIMESTAMP` clause at all**, and `addUsingTimestamp` (`:399-411`) omits the
+clause from the prepared statements. The coordinator then stamps each statement independently — and
+because the unlogged path splits a key's operations at `.grouped(20)` into concurrent batches, a delete
+and its matching insert can be reordered. **The §2 correctness argument does not survive that.** What
+lesson 27 did NOT establish: the default and any validation of `GraphDatabaseConfiguration.ASSIGN_TIMESTAMP`
+(believed `true`, not read this run), and whether anything keeps a delete and its matching insert in the
+same batch. **Do not state this as a confirmed defect.** It is candidate 74 and it is the first thing
+lesson 28 or the capstone should settle — it is one file read plus one arithmetic argument.
 
-**Sixth, the unfinished business, now three lessons old: eleven Hands-On experiments are outstanding** —
-lesson 24's three, lesson 25's four and lesson 26's four. **Candidate 65 must not be filed upstream until
-lesson 24's Hands-On B has been run; candidate 70 not until lesson 25's Hands-On D; candidate 72 not until
-lesson 26's Hands-On B.** Lesson 26's Hands-On B is the cheapest of the three — `inmemory`, one unique
-composite index, `DISABLE_INDEX`, re-profile, compare `toList()` against the baseline, no Docker — and it
-settles a question the track has carried since lesson 23.
+**Sixth, lesson 22's prediction about CQL is still only a prediction.** `PreSortingIterator`'s
+`MAX_SORT_ITERATION = 1_000_000` budget is per sub-query, reads the whole result before throwing, and
+rejects a complete 1,000,000-element result (candidate 53); `LimitAdjustingIterator` doubles with a full
+cursor-less re-read. Lesson 27 established the CQL-side multipliers that make this the worst case —
+`allowFiltering()` on every scan statement, `scan-page-size` defaulting to `storage.page-size`, and
+`parallel-scan-token-ranges` defaulting to **1** so a full scan funnels through one coordinator — but
+**put no number on it**, because that needs Docker. It is Hands-On D of the lesson-27 entry.
+
+**Seventh, the unfinished business, now four lessons old: fifteen Hands-On experiments are outstanding** —
+lesson 24's three, lesson 25's four, lesson 26's four and lesson 27's four. **Candidate 65 must not be
+filed upstream until lesson 24's Hands-On B has been run; candidate 70 not until lesson 25's Hands-On D;
+candidate 72 not until lesson 26's Hands-On B; candidate 74 not until the one-file read named above.**
+Lesson 26's Hands-On B remains the cheapest of all of them — `inmemory`, one unique composite index,
+`DISABLE_INDEX`, re-profile, compare `toList()` against the baseline, no Docker. **Lesson 27's Hands-On A
+is cheaper still and takes two minutes in `jshell`** with no build at all: reproduce the LSB mask and
+watch `t` and `t+1` collapse to the same `(deletion, addition)` pair. That is the gateway to Hands-On C,
+which is the only way to settle equal-timestamp behaviour, since the Cassandra architecture
+documentation **states no tie-break rule for equal timestamps** (checked this run).
 
 **Carried from lesson 24, unchanged: the batch size of a `JanusGraphVertexStep` is written twice and on
 the default configuration the second write wins.** Default field value `Integer.MAX_VALUE`; pass 5 of
@@ -242,42 +268,38 @@ defaults to `true`. **So `cache.tx-cache-size` has no effect on batching on a de
 pass-1/pass-5 asymmetry is only observable at `query.batch.limited=false`. Do not re-derive it and do not
 state the asymmetry without the `limited` qualifier.
 
-- **Lesson 27 (CQL) inherits four, three unchanged.** The `setDirectColumnByStartOnlyAllowed` flag from
-  lesson 20; the feature-builder classification lesson 18 owed (whether `CQLStoreManager` and
-  `HBaseStoreManager` set `.locking(...)`, and so whether `ConsistentKeyLocker` runs on them); from
-  lesson 16, whether the CQL `BatchStatement` ordering is explicit or implicit in client-side timestamps
-  (`graph.assign-timestamp`, LOCAL, default **true**); and from lesson 22, `PreSortingIterator`'s
-  `MAX_SORT_ITERATION = 1_000_000` budget — **per sub-query**, reading the whole result before throwing,
-  and rejecting a complete 1,000,000-element result (candidate 53) — which combined with
-  `LimitAdjustingIterator`'s cursor-less doubling re-read makes an unfitted ordered query on CQL the worst
-  case in the tree. Put a number on it against a real backend. **New from lesson 26:** the idempotence
-  contrast above is the frame for the whole lesson — say explicitly why a `mutate` on a
-  `KeyColumnValueStore` needs none of §4's machinery, and whether CQL's client-side timestamps change that
-  answer. Also still owned by 27 alone: lesson 20's `BasicVertexCentricQueryBuilder:711`
-  `Preconditions.checkArgument(bestCandidate != null, …)` reachability question.
-- **Lesson 28 (transaction log, CDC, stale-index repair) inherits six.** (a) **The deletion window:**
-  `REINDEX` only adds and `REMOVE_STALE_ENTRIES` only removes, they scan **different stores** (edgestore
-  vs graphindex), and a delete that lands while an index is `DISABLED` is invisible to a reindex forever;
-  returning a disabled index to trustworthy is two complete passes. (b) From lesson 22:
-  `result.isRemoved()` elements are dropped **eagerly** inside `PreSortingIterator` while everything else
-  the transaction deleted is filtered **lazily as reached** by `getFilterIterator`, deliberately, *"so
-  that a change which the caller makes while it reads the results is seen."* (c) lesson 23's
-  `MultiDistinctOrderedIterator` cross-query ordering invariant, which is an `assert`. (d) from lesson 24,
-  the same invariant one layer up — `JanusGraphStep:118`'s
+- **Lesson 28 (transaction log, CDC, stale-index repair) now inherits nine.** The six it already carried:
+  (a) **the deletion window** — `REINDEX` only adds, `REMOVE_STALE_ENTRIES` only removes, they scan
+  **different stores** (edgestore vs graphindex), and a delete that lands while an index is `DISABLED` is
+  invisible to a reindex forever, so returning a disabled index to trustworthy is two complete passes;
+  (b) from lesson 22, `result.isRemoved()` elements are dropped **eagerly** inside `PreSortingIterator`
+  while everything else the transaction deleted is filtered **lazily as reached** by `getFilterIterator`,
+  deliberately, *"so that a change which the caller makes while it reads the results is seen"*;
+  (c) lesson 23's `MultiDistinctOrderedIterator` cross-query ordering invariant, which is an `assert`;
+  (d) from lesson 24, the same invariant one layer up — `JanusGraphStep:118`'s
   `assert queries.stream().allMatch(q -> q.getOrder().isEmpty() || q.getOrder().equals(order))` is the
   only thing between two differently-ordered branch queries and a silently mis-ordered merged result, and
-  assertions are off in production; a stale mixed index is exactly the condition that produces it. (e)
-  from lesson 25: `REMOVE_STALE_ENTRIES` changes no status, is unsupported for vertex-centric indexes, and
-  routes mixed indexes to `MixedIndexStaleEntryRemover.submit` rather than a scan job. (f) **new from
-  lesson 26, and this is lesson 28's subject stated concretely — the three ways schema and mixed index
-  diverge:** a `register` whose management transaction then fails or rolls back (§3.1 of the lesson 26
-  entry); a `LIST` value duplicated by a retried bulk item that had already applied (§5, unproven,
-  Hands-On C); and shape C's split requests, where one of three bulk items for a document can fail
-  independently of the others. **Reassigned to lesson 28 from lesson 26, which did not reach them:** the
-  four `mixed-index-*` scan metrics in `IndexRepairJob` (`mixed-index-flushes`, `mixed-index-flushed-docs`,
-  `mixed-index-flush-time-ms` rounded not truncated, plus `doc-updates`) and
+  assertions are off in production; a stale mixed index is exactly the condition that produces it;
+  (e) from lesson 25, `REMOVE_STALE_ENTRIES` changes no status, is unsupported for vertex-centric
+  indexes, and routes mixed indexes to `MixedIndexStaleEntryRemover.submit` rather than a scan job;
+  (f) from lesson 26, the three ways schema and mixed index diverge — a `register` whose management
+  transaction then fails or rolls back; a `LIST` value duplicated by a retried bulk item that had already
+  applied (unproven, that entry's Hands-On C); and shape C's split requests, where one of three bulk
+  items for a document can fail independently. **Plus three new from lesson 27:** (g) **a fourth
+  divergence cause** — a CQL mutation's atomicity unit is a batch of ≤ 20 statements per key under the
+  default `atomic-batch-mutate=false`, so a partially applied multi-batch mutation can leave the
+  edgestore and the graphindex disagreeing with no error surfaced to the caller; (h) **the
+  `storage.cql.cdc` divergence check** (`CQLKeyColumnValueStore:234-244`, `:450-480`) and why it exists —
+  the `cdc=true` table option is applied **only when JanusGraph creates the table**, so a pre-existing
+  edgestore captures nothing, commits succeed, and "cdc-only mixed indexes simply go stale"; the check is
+  deliberately placed after both branches because `shouldInitializeTable()` falls back to `true` when
+  schema metadata is unavailable and `CREATE … IF NOT EXISTS` then silently no-ops; (i)
+  `storage.cql.gc-grace-seconds` as the window within which a delete can still be resurrected by an
+  un-repaired replica — the tombstone-expiry side of the same problem. **Still carried from lesson 26 and
+  not reached:** the four `mixed-index-*` scan metrics in `IndexRepairJob` (`mixed-index-flushes`,
+  `mixed-index-flushed-docs`, `mixed-index-flush-time-ms` rounded not truncated, plus `doc-updates`) and
   `MIXED_INDEX_REINDEX_BATCH_SIZE` / `MIXED_INDEX_REINDEX_BATCH_ENABLED`, which also govern
-  `MixedIndexStaleEntryRemover`. They sit more naturally in the stale-entry lesson than in the SPI lesson.
+  `MixedIndexStaleEntryRemover`.
 - **Open and unresolved, deliberately not filled in.** (a) Whether any production path passes a real limit
   to `QueryUtil.processIntersectingRetrievals` (candidate 51 is a reachability claim, not a confirmed
   defect). (b) Whether `BackendQueryHolder`'s duplicated `isFitted` in `hashCode` (candidate 54) can
@@ -286,81 +308,292 @@ state the asymmetry without the `limited` qualifier.
   question — is the `JanusGraphStepStrategy` / `JanusGraphLocalQueryOptimizerStrategy` order observable by
   any traversal? (e) From lesson 24: whether `BatchProcessingQueue.removeLast()` has any caller at all —
   `HasStepBatchFetcher` and `DropStepBatchFetcher` were not read, so it must **not** be called dead code.
-  (f) **New from lesson 26:** whether `ElasticSearchBulkFailureException` can report an item as failed
-  after it applied, which decides whether shape B has a residual duplication hazard. `TransientFailures`
-  (`6aba13b8`) and `ElasticSearchBulkFailureException` (`e52ae410`) are unread. (g) **Also new:** which
-  core call sites invoke `IndexMutation.setCompleteDocument`, i.e. whether shape C is reachable for a real
-  update — one `search_code` query.
+  (f) From lesson 26: whether `ElasticSearchBulkFailureException` can report an item as failed after it
+  applied, which decides whether shape B has a residual duplication hazard. `TransientFailures`
+  (`6aba13b8`) and `ElasticSearchBulkFailureException` (`e52ae410`) are unread. (g) Also from lesson 26:
+  which core call sites invoke `IndexMutation.setCompleteDocument`, i.e. whether shape C is reachable for a
+  real update — one `search_code` query. (h) **New from lesson 27:** `BasicVertexCentricQueryBuilder:711`'s
+  `Preconditions.checkArgument(bestCandidate != null, …)` reachability — this was lesson 20's *other*
+  debt and lesson 27 settled only the `setDirectColumnByStartOnlyAllowed` half. It is now unowned; the
+  capstone should either settle it or record it as open.
 - **Never touch an earlier entry's `## My Notes`.** Sessions 01-04 keep their templates. They are his
   to fill at any time; if a future run finds content in any of them, answer those questions in that
   run's entry regardless of mode.
 - **Entry size.** Lesson 05 ~35 KB, 06 ~63, 07 ~78, 08 ~67, 09 ~61, 10 ~70, 11 ~56, 12 ~91, 13 ~72,
   14 ~75, 15 ~86, 16 ~87, 17 ~64, 18 ~78, 19 ~69, 20 ~76, 21 ~103, 22 ~77, 23 ~59, 24 ~59, 25 ~51,
-  **26 ~62** (digest ~25). A large share of each is permalink URLs, which are not prose.
+  26 ~62, **27 ~70** (digest ~19). A large share of each is permalink URLs, which are not prose.
 
 **Mechanical notes, carried and extended this run. Read this section before planning a run's pushes.**
 `get_file_contents` on a file whose doubled output exceeds roughly 40 KB returns an over-limit error that
 saves the JSON to a local file — the cheap way to read a large file, costing nothing in context. The
 correct extraction is `json.loads(longest_text)["content"][-1]["resource"]["text"]`, **not** the plain
-`text` value (which has a `[Resource from github at repo://…]` banner glued onto line 1). A file under
-roughly 20 KB comes back inline with no line numbers; such a file must be written to local disk to be
-cited by line number, and **a lesson that does not do that must cite it by member name only** — lesson 26
-did exactly this for the six SPI and compat files and said so in the entry. A directory listing with
-`fields: ["name","sha","size"]` gives every file's blob SHA in one cheap call, so a large file read
-through the over-limit path is SHA-verified against that listing with no transcription step at all; that
-remains the preferred method. **Lesson 26 added one thing: the same delegated-transcription trick works
-for this repository's own files.** `tracks/janusgraph-registers-2.md` came back inline (18 KB), which
-would have meant retyping it to append to it; instead a sub-agent was asked to fetch it and write it to
-disk verbatim with a short python script, and the result was blob-SHA verified locally (18,388 bytes =
-`642bd570`) before anything was appended. **Use this for every inline-returned file that has to be
-edited rather than merely read.** It turns a retyping risk into a verified copy for the cost of one
-sub-agent.
+`text` value. **Lesson 27 hit this and can now say what the cost of getting it wrong is: the plain `text`
+value is LOSSY, not merely banner-prefixed.** Extracting `TRACK.md` from the plain `text` produced 173,740
+bytes hashing to `1abb0a06`, against the repository's 86,311 bytes = `6db306b5`; stripping the
+`[Resource from github at repo://…]` banner did **not** make it match, because that path also doubles the
+content and alters it. The resource path matched byte-for-byte on the first attempt for both `TRACK.md`
+(86,311 = `6db306b5`) and the root `README.md` (68,210 = `cfffa947`). **Always use the resource path, and
+always blob-SHA the result against what the API reported before editing it.** A file under roughly 20 KB
+comes back inline with no line numbers; such a file must be written to local disk to be cited by line
+number, and **a lesson that does not do that must cite it by member name only** — lesson 27 did exactly
+this for `InMemoryColumnValueStore`, `DistributedStoreManager` and `CQLSliceQueryUtil` and said so in the
+entry. A directory listing with `fields: ["name","sha","size"]` gives every file's blob SHA in one cheap
+call, so a large file read through the over-limit path is SHA-verified against that listing with no
+transcription step at all; that remains the preferred method. The delegated-transcription trick works for
+this repository's own files too.
+
+**One rule the next run must enforce on its sub-agents.** Lesson 27 delegated two transcription batches.
+The second obeyed the MCP-only constraint. **The first silently fell back to `raw.githubusercontent.com`
+over HTTPS after `gh api` was refused** — the bytes were provably correct (all five blob SHAs matched the
+MCP-reported ones, and a git blob SHA is a hash of exactly those bytes), but the task's standing rule is
+that the only permitted GitHub access path is the `mcp__github__*` tools. **State the prohibition
+explicitly in every transcription prompt**, naming `curl`, `wget`, `gh`, `git` and
+`raw.githubusercontent.com`, and tell the sub-agent to report failure rather than find another route. The
+second prompt did this and was obeyed.
 
 **The real constraint on a run is OUTPUT, not input, and it is now the binding one.** Every file pushed
 must be emitted in full as a tool argument; there is no server-side copy or patch. Reading a 134 KB file
-costs almost nothing; *rewriting* it costs ~37 K output tokens. This run emitted four files —
-the lesson (~62 KB), the digest (~25 KB), this file (~82 KB) and the root `README.md` (~66 KB) — plus the
-register (~29 KB), which is about 265 KB of output for one day. **Watch the trend.** If this file passes
-~110 KB, the next structural move is to split the `Verified by lesson NN` blocks into
-`tracks/janusgraph-verified.md` — they are ~45 KB of the total, they are append-and-roll-off material,
-and a run would then emit two medium files instead of one large one. **That is a decision for Aryant**,
-and it is flagged rather than taken, because it changes where a run looks for the facts it is told to
-cite rather than re-derive. The root `README.md` is the second such file; its index is one row per line,
-so a run should edit the row in place rather than rebuild the table by re-reading every entry's
-`entry-meta`. Lesson 26 did that: it fetched the README through the over-limit path, edited the Current
-Track section and appended one index row with a python script, and emitted the result — no row was retyped.
+costs almost nothing; *rewriting* it costs ~37 K output tokens. **Lesson 27 adopted a new mitigation that
+worked: the run emitted only the two documents it authored (the lesson ~70 KB and the digest ~19 KB) and
+DELEGATED the pushes of the three large pre-existing files it merely edited** — this file, the root
+`README.md` and the register — to sub-agents, which read the finished bytes from local disk and pushed
+them, with the run then verifying each pushed blob SHA against the locally computed one through
+`get_file_contents`. A sub-agent's emission does not enter the parent's context. **Use this for every
+push of a file over ~30 KB that the run did not author from scratch, and always verify by blob SHA
+afterwards — a silent truncation in a delegated push is the one failure mode this method introduces.**
+**This file is now ~99 KB, up from 86 KB — it grew 13 KB this run.** The threshold flagged for the structural split was ~110 KB and the next run will cross it; the
+`Verified by lesson NN` blocks are ~45 KB of the total and are append-and-roll-off material, so splitting
+them into `tracks/janusgraph-verified.md` would leave two medium files instead of one large one. **That
+remains a decision for Aryant**, flagged rather than taken for the third run in a row, because it changes
+where a run looks for the facts it is told to cite rather than re-derive. The root `README.md` is the
+second such file; its index is one row per line, so a run should edit the row in place rather than rebuild
+the table by re-reading every entry's `entry-meta`. Lessons 26 and 27 both did that.
 
-**Mermaid.** Render every diagram with `mmdc` before pushing. Lesson 26's three (two in the lesson, one
-in the digest) all rendered on the first attempt. The accumulated rules still hold: quote every node
-label containing parentheses, commas, `->`, `|` or angle brackets; use HTML entities such as `&lt;` for
-comparisons; never escape a quote inside a label — drop the inner quotes instead; and **a semicolon
-inside a `sequenceDiagram` message is a statement separator** (lesson 25) — use a comma. One new one from
-this run: a `sequenceDiagram` tolerates `--x` for a failed/aborted message and renders it as a crossed
-arrow, which is the right mark for an error return.
+**Mermaid.** Render every diagram with `mmdc` before pushing. Lesson 27's three (two in the lesson, one in
+the digest) all rendered on the first attempt, and the run additionally **verified the rendered SVG** —
+grepping for a literal backslash-n (zero occurrences) and counting `<br>` tags (11 in the first diagram)
+to confirm that `\n` inside a quoted `flowchart` label really becomes a line break rather than literal
+text, and that `&amp;` became `&`. **Do that check too; a diagram that renders is not the same as a
+diagram that renders correctly.** The accumulated rules still hold: quote every node label containing
+parentheses, commas, `->`, `|` or angle brackets; use HTML entities such as `&lt;` and `&amp;` for
+comparisons and ampersands; never escape a quote inside a label — drop the inner quotes instead; **a
+semicolon inside a `sequenceDiagram` message is a statement separator** (lesson 25) — use a comma; and a
+`sequenceDiagram` tolerates `--x` for a failed message (lesson 26). New from this run: inside a
+`sequenceDiagram` message, prefer spelling `&` and `|` as the words "and" and "or" over entities — the
+lesson-27 sequence diagram writes `T and ~1` / `T or 1` and renders cleanly, where the entity form is
+fragile in message position.
 
-**Daily Diff procedure — the fallback pool was drawn on for the first time this run, and it worked.**
-`https://tdd.cat/llms.txt` documents endpoints the HTML site does not advertise: `llms-full.txt`, `/md`
-and `/json` for the latest edition, **`https://tdd.cat/{YYYY-MM-DD}.md` for any edition by date**,
-`/rss.xml` and `/stats/`. The procedure is: **(a)** fetch `https://tdd.cat/{today}.md`; **(b)** on a
-client error walk back one day at a time; **(c)** check this session log in both directions as a floor and
-a ceiling; **(d)** use the front page and `/archive/` only to cross-check the story count, which the `.md`
-file does not state; **(e)** only then the uncovered-item fallback. On 2026-11-24 both `2026-11-24.md` and
-`2026-11-23.md` returned client errors — **the second time 11-23 has failed, so that edition appears never
-to have published rather than being late** — and 11-22 and 11-21 were already covered by lessons 25 and
-24, so step (e) fired and the digest covered the **2026-11-20** edition (50 items, 77,940 characters, read
-in full across two fetches at offsets 0 and 39,958). **The fallback pool now holds only the unspent items
-from 2026-11-06 (two) and 2026-11-18 (two).** If 11-25 also fails to publish, the pool is nearly empty and
-the next run should say so plainly rather than stretching two leftover items into a digest. Edition sizes
-remain volatile: 22, 50, 63, 58, 66, 47, 39, 49, 37, 57, 61, 61, 50, 47, 38 across 11-08 to 11-22, with
-11-23 and 11-24 absent. **Constraint still in force: there is no `WebFetch` tool in this environment** —
-pages are fetched through a sub-agent which flags which parts are verbatim and which are an extracted
-summary, and the summary portion is not reliable enough to quote. Lesson 26 hit this squarely: the
-sub-agent's first extracted summary of the 11-20 edition reported 25 items and was **wrong**, and the
-second, full-text read found 50. **Always require the full-text read and ignore a first-pass summary.** A
-PDF or any page over ~40 K characters splits the same way, so plan a deep dive around the readable half;
-the `.md` endpoint is valuable precisely because a second fetch at an offset covers the remainder.
+**Daily Diff procedure — REWRITE THIS STEP. The `.md` endpoint is not the right one.** The procedure has
+been fetching `https://tdd.cat/{YYYY-MM-DD}.md`, documented by `llms.txt`, watching it fail for 11-23,
+11-24 and 11-25, and concluding twice that those editions "appear never to have published". **That
+conclusion was wrong for 11-24.** Lesson 27 found that **the slash form, `https://tdd.cat/{YYYY-MM-DD}/`,
+served the complete 2026-11-24 edition (100,345 characters, 59 stories, read in full across three offset
+fetches) while `2026-11-24.md` returned a client error for the same date.** The new procedure is:
+**(a)** fetch `https://tdd.cat/{today}/` — **slash form first**; **(b)** on a client error, fetch the
+front page `https://tdd.cat/`, whose header names the current edition's date and story count and is the
+**only accurate signal** of what is current; **(c)** fetch that date in slash form; **(d)** check this
+session log in both directions as a floor and a ceiling; **(e)** only then the uncovered-item fallback.
+**Do not trust `/archive/` or `/md` for currency:** this run found the archive's "Latest" link still
+pointing at 2026-11-21 with its November calendar blank from 11-22 on, and `https://tdd.cat/md`,
+advertised as "the latest edition", returning a **2026-10-13** edition. **Also: re-test 2026-11-22 and
+2026-11-23 in slash form** before believing they never published — the `.md` verdict on them is now
+suspect. Lesson 27's digest covered the **2026-11-24** edition (59 items), which no previous digest had
+covered. Edition sizes: 22, 50, 63, 58, 66, 47, 39, 49, 37, 57, 61, 61, 50, 47, 38 across 11-08 to 11-22,
+and **59 for 11-24**. **The fallback pool still holds the unspent items from 2026-11-06 (two) and
+2026-11-18 (two)**, untouched this run. **Constraint still in force: there is no `WebFetch` tool in this
+environment** — pages are fetched through a sub-agent which flags which parts are verbatim and which are
+an extracted summary, and the summary portion is not reliable enough to quote. **Lesson 27 hit this twice
+in one run:** the first-pass extracted summary of the 11-24 front page reported 37 items and claimed the
+page was not cut off; the full three-offset read found 59, matching the page's own stated count. **Always
+require the full-text read, always cross-check against the page's own story count, and ignore a first-pass
+summary.** One further limit found this run: a sub-agent fetching a non-preapproved source will refuse to
+reproduce long verbatim passages and will cap quotes at ~125 characters, so **ask it for the structured
+item list — title, source, outbound URL, one-line gist — rather than for the page text**, which is what
+finally worked.
 
-### Verified by lesson 26, for lessons 27 and 28 to cite rather than re-derive
+### Verified by lesson 27, for lesson 28 and the capstone to cite rather than re-derive
+
+- **The JanusGraph table on CQL is three blob columns, and the names are constants.**
+  `buildCreateTable` (`CQLKeyColumnValueStore:503-523`): partition key `key`, clustering column
+  `column1`, plain column `value`, all `DataTypes.BLOB`, names at `:123-127`. `buildCreateTable` and
+  `tableHasCdcEnabled` are **package-private and side-effect free** so the table options can be asserted
+  in unit tests with no live cluster — the shape a PR adding a table option should follow. Four option
+  helpers: `compactionOptions` (`:547-567`), `compressionOptions` (`:525-545`), `gcGraceSeconds`
+  (`:569-575`), `speculativeRetryOptions` (`:577-583`), each a no-op when its option is unset.
+  `compressionOptions` forks on major version ≥ 5 — `{"class", "chunk_length_in_kb"}` against
+  `{"sstable_compression", "chunk_length_kb"}`, and `{"enabled": false}` against `withNoCompression()`
+  because "Cassandra 5+ rejects `{'sstable_compression': ''}`". `getCassandraMajorVersion` (`:482-491`)
+  runs `SELECT release_version FROM system.local` and **returns 0 on any exception**, silently taking the
+  pre-5 branch. `withCDC(true)` applies only when `Backend.EDGESTORE_NAME.equals(tableName)` (`:516-520`).
+- **`MaskedTimestamp` is an LSB mask, not an arithmetic offset.** In `DistributedStoreManager`:
+  `getDeletionTime` = `times.getTime(t) & 0xFFFFFFFFFFFFFFFEL`, `getAdditionTime` = the same `| 1L`. The
+  addition time is the deletion time **plus exactly one**, always, by bit arithmetic rather than by
+  program flow — so the class javadoc's requirement ("the deletion time is prior to the addition time
+  since some storage backends use the time to resolve conflicts") cannot be violated.
+  `sleepAfterWrite` asserts it, and assertions are off in production, but nothing can break it.
+  **Consequence: the provider's effective timestamp resolution is halved** — two commits whose provider
+  timestamps differ only in the low bit produce the identical `(deletion, addition)` pair. Whether that
+  window is reachable is lesson 27's Hands-On C and is **not** established.
+- **`CQLKeyColumnValueStore.mutate` does no conflict resolution at all** (`:673-676`) — it wraps the
+  arguments in a singleton-of-singleton map and calls `storeManager.mutateMany`, which delegates to an
+  `executeManyFunction` chosen at construction (`CQLStoreManager:104`, `:157-158`, `:352-358`).
+- **`AbstractCQLMutateManyFunction`'s constructor installs two different closure pairs** (`:59-91`). With
+  `assignTimestamp`: `deletionsFunction` uses `commitTime.getDeletionTime(times)`, `additionsFunction`
+  uses `getAdditionTime(times)`, and both branch on `keyMutations.hasWholeRowDeletion()` to emit a single
+  `deleteRow` instead of N `deleteColumn`s. **Without it (`:78-90`), the statements carry no timestamp at
+  all** and `createMaskedTimestampFunction` becomes `txh -> null`, `sleepAfterWriteFunction` a no-op.
+  `addUsingTimestamp` has two overloads (`CQLKeyColumnValueStore:399-411`), one per statement type, each
+  adding `usingTimestamp(bindMarker(TIMESTAMP_BINDING))` **only when `isAssignTimestamp()`** — so the
+  prepared statements themselves differ by configuration.
+- **Whole-row deletion is a declared feature, not an optimisation the store took on itself.**
+  `CQLStoreFeaturesBuilder:65` declares `optimizedWholeRowDeletion(true)`, which is what makes core set
+  `hasWholeRowDeletion()`; `deleteRow` (`CQLKeyColumnValueStore:641-652`) binds only the partition key.
+  The in-memory equivalent is `InMemoryKeyColumnValueStore:127-129`, `kcv.remove(key)`.
+- **Idempotence is computed twice and the two must agree.** `CQLKeyColumnValueStore:305` is
+  `storeManager.isAssignTimestamp() && configuration.get(IDEMPOTENT_WRITES)`;
+  `AbstractCQLMutateManyFunction:63` is `assignTimestamp && idempotentWrites ? Boolean.TRUE : null`.
+  `withWriteIdempotence` (`:395-397`) sets `Boolean.TRUE` **or `null`, never `FALSE`**, so the fallback is
+  the driver's `basic.request.default-idempotence`. **A batch does not inherit its statements' flag** —
+  "the driver reads only the batch's flag" (`AbstractCQLMutateManyFunction:39-40`) — which is why both
+  exist. `storage.cql.idempotent-writes` defaults **`true`** (`CQLConfigOptions:120-130`). The one
+  documented leak: "an insert with a TTL sent again can expire later" — idempotent in value, not in
+  lifetime.
+- **The two batch strategies, and only one is atomic.** `storage.cql.atomic-batch-mutate` defaults
+  **`false`** (`CQLConfigOptions:113-118`). Unlogged (`CQLMutateManyUnloggedFunction:71-124`): per table,
+  per key, `Iterator.concat(deletions, additions).grouped(batchSize)` with `batch-statement-size` **20**
+  (`CQLConfigOptions:105-110`), each group its own `DefaultBatchType.UNLOGGED` statement via
+  `session.executeAsync`, all awaited by `CompletableFutureUtil.awaitAll`. Logged
+  (`CQLMutateManyLoggedFunction:65-104`): **one `DefaultBatchType.LOGGED` batch for every table and every
+  key, with no size bound**, executed synchronously. Both acquire a back-pressure permit and release it on
+  both the success and the exception path.
+- **`acquireLock` has no body beyond an inverted guard** (`CQLKeyColumnValueStore:678-684`): throws
+  `UnsupportedOperationException` when `!hasLocking()`, **returns having done nothing** when
+  `hasLocking()`. `CQLStoreFeaturesBuilder:63` is `fb.locking(useExternalLocking)` with
+  `storage.cql.use-external-locking` defaulting **`false`** (`CQLConfigOptions:91-102`), so
+  `ConsistentKeyLocker` runs by default and setting the option **disables locking rather than delegating
+  it**. The option description names the result: "read uncommitted", "dirty/non-repeatable/phantom
+  reads". The in-memory store's `acquireLock` throws **unconditionally**
+  (`InMemoryKeyColumnValueStore:131-134`).
+- **The full feature declaration** (`CQLStoreFeaturesBuilder:58-67`): `batchMutation(true)`,
+  `distributed(true)`, `timestamps(true)`, `cellTTL(true)`, `keyConsistent(global, local)`,
+  `locking(useExternalLocking)`, `optimisticLocking(true)`, `optimizedWholeRowDeletion(true)`,
+  `multiQuery(true)`; then `cellTTL(false).storeTTL(false)` if `storage.cql.ttl-enabled` is off
+  (`:68-70`). The global/local consistency pair is `QUORUM`/`QUORUM` against
+  `LOCAL_QUORUM`/`LOCAL_QUORUM`, selected by `only-use-local-consistency-for-system-operations`
+  (default `false`, `CQLConfigOptions:85-89`).
+- **Partitioner decides which scans exist** (`CQLStoreFeaturesBuilder:88-119`). `Murmur3Partitioner`,
+  `RandomPartitioner` and Amazon's `DefaultPartitioner` → `keyOrdered(false).orderedScan(false)
+  .unorderedScan(true)`, deployment `REMOTE`. `ByteOrderedPartitioner` → all three true, deployment
+  `LOCAL` only for a single local hostname. Anything else → `IllegalArgumentException`. A configured
+  partitioner disagreeing with the server's throws (`:80-83`); neither available also throws (`:84-87`).
+  **`scanKeyOrder(new TokenOrderKeyComparator(tokenMap))` is set for `Murmur3Partitioner` only**, which
+  "puts multi-query scans (e.g. a reindex) on the lossless merge-join strategy instead of the
+  bounded-buffer one, whose recovery from writes concurrent with the scan is capped";
+  `RandomPartitioner` is **deliberately excluded** because "no CI covers it and an undetected deviation
+  would fail every multi-query scan via the framework's order verification."
+- **Three independent graceful degradations, all warnings and none fatal.** (1) Token-range scan statement
+  rejected → `getKeysRangedToken = null`, `log.warn`, token-range parallel scans off
+  (`CQLKeyColumnValueStore:291-299`). (2) `PER PARTITION LIMIT` rejected → instance field
+  `scanPerPartitionLimitEnabled` flipped `false`, statement re-prepared without the clause
+  (`prepareScanStatement`, `:355-368`); named culprit Amazon Keyspaces; needs Cassandra 3.6+/ScyllaDB.
+  (3) Non-Murmur3 → `parallelScanSupported = false` (`:336-338`), because the tiling "is only correct for
+  the Murmur3 partitioner, whose tokens are plain longs that tile `[Long.MIN_VALUE, Long.MAX_VALUE]`".
+  The stated principle in each case: a scan-only optimisation must not fail store open.
+- **`PER PARTITION LIMIT` binding** (`:370-379`): `query.hasLimit() && query.getLimit() >= 1 ?
+  query.getLimit() : Integer.MAX_VALUE`, because the clause must be strictly positive and
+  `Integer.MAX_VALUE` is "semantically equivalent to omitting the clause" — so "a limit-0 query still
+  yields keys with zero entries". `scanStatementBuilder` (`:802-813`) checks
+  `getVariableDefinitions().contains(PER_PARTITION_LIMIT_BINDING)` rather than carrying a separate flag.
+  `storage.cql.scan-per-partition-limit-enabled` defaults **`true`** (`CQLConfigOptions:267-280`); its
+  description states the problem — a scan job's grounding query has a per-key limit of 1, and without the
+  pushdown "the grounding query alone transfers the whole table".
+- **"Parallel scan" is two different things.** `getKeys(SliceQuery, txh)` (`:718-750`) tiles the ring when
+  `parallelScanSupported && parallelScanTokenRanges > 1`, but `io.vavr Iterator.concat` "drains the ranges
+  back-to-back on the single scan thread, so deeper paging is sequential range-by-range rather than fully
+  parallel" — only the **first page** of each range is concurrent. Ring order is preserved because "the
+  multi-query scan merge in `StandardScannerExecutor` relies on" it. **True parallelism comes from
+  `SplittableScanStore`**: `getUnorderedScanSplitCount()` (`:752-755`) and `getKeysForSplit` (`:757-774`),
+  which the scan-job framework drains on dedicated threads. `storage.cql.parallel-scan-token-ranges`
+  defaults **1** (`CQLConfigOptions:237-251`). `tokenRangesFor` (`:776-789`) memoizes in a
+  `volatile long[][]` keyed implicitly by array length; the race is benign because
+  `CQLTokenRangeSplitter.splitMurmur3Ring` is pure, and the reason to memoize is that cost would otherwise
+  "grow quadratically with the split count". **Range predicates are half-open at opposite ends:**
+  token-bounded scan is `token(key) > start AND token(key) <= end` (`:284-285`), key-range scan is
+  `>= start AND < end` (`:255-256`). Every scan statement carries `.allowFiltering()`.
+- **`CQLPagingIterator` (`:829-872`) has one page of lookahead**: `hasNext` starts the fetch of page N+1
+  *before* draining page N (`:851-863`). The invariant that makes it safe, from the class javadoc: "A page
+  fetch holds one back-pressure permit only while it is in flight (released on completion), so the
+  lookahead never holds more concurrent permits than the previous drain-then-fetch implementation — it
+  merely overlaps the network wait with client-side row processing." `storage.cql.scan-page-size` defaults
+  **0**, meaning fall back to `storage.page-size` (`:339-340`, `CQLConfigOptions:253-265`); **transactional
+  slice reads keep using `storage.page-size`** and are separately tunable.
+- **Two `CQLColValGetter`s are built, not one** (`:217-222`): the multi-key schema is the single-key schema
+  **plus `EntryMetaData.ROW_KEY`**, because an `IN` over several partition keys cannot attribute a returned
+  cell without selecting the key back. The cost is stated in `grouping.keys-allowed`'s description: "any
+  CQL query grouped with more than 1 key will require to return a row key for any column fetched."
+  `CQLColValGetter.getMetaData` handles `TIMESTAMP` (`writetime` alias), `TTL` (`ttl` alias) and `ROW_KEY`
+  (null → shared empty buffer, `:59-60`) and throws on anything else. `addTimestampFunction` (`:413-424`)
+  and `addTTLFunction` (`:432-437`) are per-table, gated on `STORE_META_TIMESTAMPS` / `STORE_META_TTL`.
+- **`setDirectColumnByStartOnlyAllowed` has exactly one consumer in the codebase**:
+  `CQLSliceQueryUtil.getQueriesGroupedByDirectEqualityQueries`. Set by `EdgeSerializer.getQuery` via
+  `isDirectColumnByStartOnlyAllowed(type)`. Grouping rule: `groupSize = query.hasLimit() ? max(1,
+  min(sliceGroupingLimit, query.getLimit())) : sliceGroupingLimit`, groups keyed by shared limit, range
+  queries never grouped. Reason, from the javadoc: the merged query "asks for that many columns, and a
+  query whose column was cut off would be cached with an incomplete result" — CQL's `LIMIT` is per result
+  set, not per `IN` element. **So `limit = 1` ⇒ `groupSize = 1` ⇒ no grouping.**
+  `grouping.slice-allowed` defaults `true`, `grouping.slice-limit` **20** (`CQLConfigOptions:844-862`).
+- **`EXCEPTION_MAPPER` (`:141-154`) is the module's single classification funnel**, used even by
+  `CQLStoreManager.mutateMany` (`:356`). It unwraps one `ExecutionException`, **restores the interrupt
+  flag** before returning for `InterruptedException`, passes an existing `BackendException` through
+  without re-wrapping, maps `QueryValidationException` and `isKeySizeTooLarge` to
+  `PermanentBackendException`, and **defaults everything else to `TemporaryBackendException`** — sound
+  only because CQL writes are idempotent. `isKeySizeTooLarge` (`:156-170`) digs an
+  `AllNodesFailedException` out of the chain and **matches `error.getMessage().startsWith("Key size too
+  large:")`** — a string prefix match on a ScyllaDB `ServerError`, load-bearing for retry classification.
+- **`CQLTransaction` (60 lines) does one thing**: translate `storage.cql.read-consistency-level` and
+  `…-write-consistency-level` (both default `QUORUM`, `CQLConfigOptions:64-76`) into driver
+  `ConsistencyLevel`s once per transaction, read through `getCustomOption` so a transaction can override.
+  `getTransaction(txh)` is a `Preconditions.checkArgument` downcast called on every read and write path.
+- **Both stores refuse the same two things.** `getKeys(MultiSlicesQuery, txh)` throws
+  `UnsupportedOperationException` in `CQLKeyColumnValueStore:815-818` **and**
+  `InMemoryKeyColumnValueStore:146-149`. `CQLStoreManager.getLocalKeyPartition()` throws (`:346-349`).
+- **`InMemoryColumnValueStore` resolves add-over-delete client-side.** `mutate` is `synchronized`, sorts
+  the additions, then drops every deletion found among them by `binarySearch` — comment, verbatim:
+  `//Filter out deletions that are also added`. It then takes a second lock from `getLock(txh)`, which is
+  a lazily-created `ReentrantLock` when the transaction carries `storage.transactions` and
+  `NoLock.INSTANCE` otherwise. The row buffer starts as a `SinglePageEntryBuffer` and switches to
+  `MultiPageEntryBuffer` above `DEF_PAGE_SIZE = 500` entries, with a code comment declining to switch
+  back. **A latent NPE, unverified for reachability:** `numPages`, `numEntries`,
+  `createFragmentationReport` and `quickDefragment` each call `this.lock.lock()` **directly**, bypassing
+  `getLock`, so on a store whose transactions never carried `storage.transactions` the field is still
+  `null`. The default of `storage.transactions` was **not** read this run.
+- **The in-memory multi-key read is a sequential `for` loop** (`InMemoryKeyColumnValueStore:109-114`); the
+  CQL one is parallel futures through `GroupingAsyncQueryExecutionService` with optional `IN` grouping,
+  and the comment at `CQLKeyColumnValueStore:613-617` states both reasons it is not
+  `KeyColumnValueStoreUtil.getMultiRangeSliceNonOptimized`.
+- **Cassandra's own documented guarantees, checked this run** (architecture → Dynamo page): resolution is
+  per column — "Cassandra applies separate mutation timestamps to every column of every row within a CQL
+  partition", "each column in a row resolves concurrent mutations according to last-write-wins conflict
+  resolution", modelled as "a Last-Write-Wins Element-Set conflict-free replicated data type for each CQL
+  row". Timestamps come "either from a client clock or, absent a client-provided timestamp, from the
+  coordinator node's clock", and "Cassandra's correctness does depend on these clocks". Writes "are always
+  sent to all replicas, regardless of consistency level"; the read-your-write guarantee is the overlap
+  `W + R > RF`, not the consistency level alone. **The equal-timestamp tie-break rule is NOT stated on
+  that page** — no claim about it belongs anywhere in this track until Hands-On C runs.
+- **Blob SHAs at the pin, for a future run to re-verify against without re-reading:**
+  `CQLKeyColumnValueStore.java` 47,914 = `f11ea637` (873 lines); `CQLStoreManager.java` 18,740 =
+  `09f7b055` (374); `CQLConfigOptions.java` 48,346 = `2f1adabe`; `CQLStoreFeaturesBuilder.java` 7,091 =
+  `a13eacac` (129); `CQLTransaction.java` 2,609 = `349bf72b` (60); `CQLColValGetter.java` 2,423 =
+  `66ea2658` (65); `AbstractCQLMutateManyFunction.java` 5,614 = `ea850c4e` (100);
+  `CQLMutateManyUnloggedFunction.java` 6,189 = `7d3d3ee6` (125); `CQLMutateManyLoggedFunction.java`
+  4,860 = `8a9a9f7d` (106); `InMemoryKeyColumnValueStore.java` 19,258 = `83650bf4` (471). Read inline, no
+  line numbers: `InMemoryColumnValueStore.java` = `5569f1a0`, `DistributedStoreManager.java` = `89ed24d5`,
+  `CQLSliceQueryUtil.java` = `2efd226b`. Not read: `CQLTokenRangeSplitter.java` = `e0b2b2cd`,
+  `CQLResultSetKeyIterator.java` = `ced1edfe`, `CQLSubsetIterator.java` = `8b601f76`,
+  `CQLMapKeyIterator.java` = `129c0f98`, `QueryGroups.java` = `4f1b7656`,
+  `TokenOrderKeyComparator.java` = `b9877b5b`, and the whole `cql/service` package.
+
+### Verified by lesson 26, for lesson 28 and the capstone to cite rather than re-derive
 
 - **`IndexProvider` is twelve abstract methods plus one constant and one static helper, and it
   `extends IndexInformation`.** Schema: `register`. Write: `mutate`, `restore`. Read: `query(IndexQuery)`
@@ -495,7 +728,7 @@ the `.md` endpoint is valuable precisely because a second fetch at an offset cov
   narrows every whole `Number` to `long` and every other to `double`, converts `Instant` → `Date`, `UUID` →
   `String`, and throws `IllegalArgumentException` on anything else.
 
-### Verified by lesson 25, for lessons 27 and 28 to cite rather than re-derive
+### Verified by lesson 25, for lesson 28 and the capstone to cite rather than re-derive
 
 - **`canIndexBeEnabled` is the whole gate on the lifecycle.** Composite: `oneNewKey || (constraint != null
   && constraint.isNew())` (`ManagementSystem:852`), where `oneNewKey` is set in the key loop at `:841-846`
@@ -565,111 +798,6 @@ the `.md` endpoint is valuable precisely because a second fetch at an offset cov
   `JanusGraphIndexWrapper.getIndexStatus` ignores its key argument there. The same per-key reading drives
   `ManagementSystem.filter:628-639`, which includes an index if **any** field's status differs from the
   filter, and `printIndexes:655-679`, which prints one row per key.
-
-### Verified by lesson 24, for lessons 27 and 28 to cite rather than re-derive
-
-- **`JanusGraphStep` is a `GraphStep` + `HasStepFolder` + `Profiling` + `HasContainerHolder` (`:61`) and
-  is NOT a `MultiQueriable`.** `JanusGraphVertexStep` is a `VertexStep` + `HasStepFolder` + `Profiling` +
-  **`MultiQueriable`** (`:49`). Everything about batching is the second step; everything about compiling a
-  `GraphCentricQuery` inside a step is the first. Only `JanusGraphStep` accepts an offset (`setLimit`
-  `:285-289`, consumed at `:110`/`:119`); `JanusGraphVertexStep.setLimit` has
-  `Preconditions.checkArgument(low == 0, …)` (`:174`) and `getLowLimit()` throws (`:178-181`).
-- **`JanusGraphStep`'s iterator supplier has four arms** (`:77-122`): `ids == null` → empty (`:78-79`);
-  `ids.length > 0` → `graph.vertices(ids)`/`edges(ids)` filtered **in memory** by `iteratorList`
-  (`:322-334`) and `holdsConditions` (`:336-357`), which requires at least one branch of every folded
-  `or()` to hold — **no index is consulted on this arm at all**; otherwise one disjunctive
-  `GraphCentricQuery` (`:88-90`) or N per-branch ones (`:91-99`). The arm switch is
-  `if (!globalQuery.getSubQuery(0).getBackendQuery().isEmpty() || hasLocalContainers.size() != 1)`
-  (`:88`), and `hasLocalContainers` is keyed by **`or()` step id** (`:254`, `:265`), so `size()` counts
-  `or()` **steps, not branches**.
-- **Both arms converge on the same merge (`:109-121`), so `MultiDistinctUnorderedIterator` /
-  `MultiDistinctOrderedIterator` is the execution path of every non-id `JanusGraphStep`, not a special
-  case.** The offset lives only there. `highLimit` is applied **twice** — `query.limit(highLimit)` at
-  `:161`/`:179` *and* the merge bound — so N branch queries can read `N × highLimit` elements to emit
-  `highLimit`. The cross-query order invariant at `:118` is an `assert`.
-- **`buildGraphCentricQuery(query, profiler)` (`:183-196`) is where a `JanusGraphStep` compiles:**
-  `addNested(CONSTRUCT_GRAPH_CENTRIC_QUERY)` + `startTimer` (`:185-186`) → `disableSmartLimit()` iff the
-  end step is a `CountGlobalStep` (`:188-190`) → `requireOrderValues()` (`:192`) →
-  `constructQueryWithoutProfile(VERTEX|EDGE)` (`:193`) → `stopTimer`. An `or()` with no passable branch
-  returns `GraphCentricQuery.emptyQuery(...)` at `:153-157`.
-- **`JanusGraphVertexStep.makeQuery` (`:100-115`) forwards; it does not compile.** A folded
-  `order().by(k)` emits **two** calls — `query.has(order.key)` then `query.orderBy(...)` (`:106-111`) —
-  the vertex-centric twin of `requireOrderValues()`, and the in-source comment says the compiler takes
-  that `has(key)` as an unbounded range which another condition on the key narrows. Only a high limit is
-  passed (`:112`). The profiler is attached at `:113` by an unconditional cast to
-  `BasicVertexCentricQueryBuilder`, at execution time, so unlike the aggregation path it always gets the
-  live `TP3ProfileWrapper`.
-- **The batch-size decision, complete and in order.** Field default `Integer.MAX_VALUE`
-  (`JanusGraphVertexStep:54`). `JanusGraphLocalQueryOptimizerStrategy` pass 1: no `setBatchSize`; pass 5:
-  `setBatchSize(txVertexCacheSize)` (`:170`), `cache.tx-cache-size` default **20000**
-  (`GraphDatabaseConfiguration:668-670`). Then `JanusGraphMultiQueryStrategy.configureMultiQueriables`
-  (`:165-210`): `boolean barrierSizeSet = !limitedBatch` (`:179`) where `query.batch.limited` defaults
-  **true** (`:379-384`); if false-started, `applyPreviousMultiQueryAndReturnIfBarrierSizeSet`
-  (`:212-233`) writes a user `barrier(n)` size (`:219-222`) else the generated barrier's size
-  (`:224-227`) = `query.batch.limited-size` default **2500** (`:386-391`), else `:199-201` writes
-  `limitedBatchSize`; finally `setUseMultiQuery(true)` (`:207`), which builds the
-  `VertexStepBatchFetcher` with whatever `batchSize` then is (`JanusGraphVertexStep:74-76`). At
-  `query.batch.limited=false` **no `setBatchSize` call happens anywhere in the strategy**.
-  `query.batch.enabled` defaults **true** (`:368-377`); `query.batch.repeat-step-mode` defaults
-  `ALL_REPEAT_PARENTS` (`:403-415`). **Neither `LIMITED_BATCH_SIZE` nor `TX_CACHE_SIZE` has a
-  `positiveInt()` verifier**, where `MAX_KEYS_PER_READ` (`:401`) does.
-- **`JanusGraphMultiQueryStep` is a tee, not a buffer** (`:40`): three client lists (`:48-50`),
-  `processNextStart` passes the traverser through and calls `registerTraverser` (`:106-124`), which is
-  guarded by `traverser.get() instanceof Vertex` (`:117`). Its one piece of control flow is
-  `initialize()` (`:89-104`): **when `limitBatchSize` is false it drains the entire upstream into an
-  `ArrayList`**, registers every vertex and pushes the list back as its own starts (`:93-103`).
-- **Three batch queues, and the loop arithmetic.** `MultiQueriableStepBatchFetcher` (`:32`) holds
-  first/current/next-loop `BatchProcessingQueue`s (`:39-41`). `fetchData` (`:99-109`) **replaces**
-  `multiQueryResults` wholesale (`:104`) — no merge, no LRU. `prefetchNextBatch` (`:115-125`) always does
-  `multiQuery.addVertex(requiredFetchVertex)` (`:118`), so **a batch is a hint, never a correctness
-  constraint**. `ensureCorrectLoopQueues` (`:131-138`) promotes next→current only on `loops ==
-  currentLoops + 1` and otherwise discards both queues, so a loop jump silently degrades batching to one
-  vertex per query. `BatchProcessingQueue` de-duplicates across all pending batches via
-  `allBatchedElements` (`:31`) and `removeFirst` flushes the partial last batch rather than waiting
-  (`:55-65`).
-- **Insert-then-remove is deliberate and javadoc'd** (`JanusGraphMultiQueryStrategy:113-114`). A tee goes
-  before every `MultiQueriable` *and* every `TraversalParent` *and* at the end of every repeat traversal
-  (`:118-128`); `JanusGraphUnusedMultiQueryRemovalStrategy` removes the ones with three empty client
-  lists **and their generated barrier** (`:63-70`, `:73-84`). The generated barrier is identified by
-  **reference equality** on `getGeneratedBarrierStep()`, both there and in
-  `JanusGraphTraversalUtil.getLocalNonMultiQueryProvidedBatchSize` (`:361`) — that one identity test is
-  what separates a user's `barrier(n)` from the strategy's own.
-- **`JanusGraphNoOpBarrierVertexOnlyStep` (`:30`) differs from TinkerPop's `NoOpBarrierStep` in exactly
-  two lines:** it returns early if the barrier is non-empty (`:46-48`) and it `break`s out of the fill
-  loop on the first non-vertex traverser (`:53-55`), so for non-vertices it behaves as if its size were 1.
-- **`repeat()` is replaced by exact class** (`:101-103`):
-  `getStepsOfAssignableClassRecursively(RepeatStep.class, …)` then `getClass() == RepeatStep.class`, then
-  `JanusGraphRepeatStep.replace` (`JanusGraphRepeatStep:55`). The in-source reason (`:97-98`): the
-  inserted barriers would otherwise switch TinkerPop's `RepeatStep` into its barrier mode, which feeds
-  *all* start traversers into the repeat traversal at once — the barrier added to bound the batch would
-  destroy the batching.
-- **Position rules.** `getLocalMultiQueryPositionForStep` (`:331-345`) walks back over `SideEffectStep`
-  and `ProfileStep`, puts the tee **before** a preceding `NoOpBarrierStep` (`:338-340`), and returns
-  empty at the traversal start (`:341-343`).
-  `getAllMultiQueryPositionsForMultiQueriable` (`:254-312`) short-circuits to a single same-loop position
-  for any step that is not its traversal's start (`:259-263`); the outward walk through repeat parents
-  exists only for steps that *are* a start, and is gated by the two booleans derived from
-  `repeatStepMode` (`JanusGraphMultiQueryStrategy:80-94`).
-- **`isLegalMultiQueryPosition` (`:390-403`) is broken — candidate 65.** The loop advances `currentStep`
-  and the body tests the parameter `step`, so the walk is a no-op and the answer reduces to
-  `step.getLabels().isEmpty()` (or unconditional `true` when `step` is the start step). The javadoc
-  (`:382-388`) says it should match TinkerPop's `LazyBarrierStrategy`, which accumulates over every step
-  up to the position. Not yet confirmed by a run.
-- **`MULTIQUERY` / `NUMVERTICES` / `PARTITIONED_VERTEX` / `MULTIPREFETCH` are all set in
-  `MultiVertexCentricQueryBuilder`** and nowhere else in main sources (`search_code` fragments; the file
-  was not transcribed). `vertices=N` is the batch size **actually used**.
-- **The test surface, for lesson 25 onward.** `JanusGraphMultiQueryStrategyTest` is **concrete** and
-  extends the abstract `OptimizerStrategyTest`, whose `@BeforeEach open()` is
-  `graph = StorageSetup.getInMemoryGraph()`; every test calls `clopen(option(USE_MULTIQUERY), true, …)`
-  which rebuilds the graph with `STORAGE_BACKEND=inmemory`. Six `@Test` methods; the two that matter here
-  are `testNoOpBarrierStepInsertedIfNotPresentAndLimitBatchSize` (asserts **1**
-  `JanusGraphNoOpBarrierVertexOnlyStep` with `LIMITED_BATCH` true, and **1** plain `NoOpBarrierStep` when
-  the user wrote `barrier(1)`) and `testNoOpBarrierStepNotInsertedLimitBatchSizeDisabled` (asserts **0**
-  of either with `LIMITED_BATCH` false). **Neither asserts a numeric batch size, and nothing else in the
-  repository does either.** Run one with
-  `mvn test -pl janusgraph-test -am -Dtest=JanusGraphMultiQueryStrategyTest#<method> -DfailIfNoTests=false -Dsurefire.failIfNoSpecifiedTests=false`.
-  The only dedicated test for the queue is
-  `janusgraph-core/src/test/java/.../fetcher/BatchProcessingQueueTest.java`.
 
 ## Paused Subjects
 
