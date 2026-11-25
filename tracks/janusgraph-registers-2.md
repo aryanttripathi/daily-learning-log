@@ -6,7 +6,7 @@ pinned-commit: a59ae8d8024207598eada34998d867617df51adf
 volume: 2 (candidates 65 on)
 volume-1: tracks/janusgraph-registers.md (candidates 1-64, and the "Still open, and who owns it" ledger)
 split-from: tracks/janusgraph-registers.md on 2026-11-22 (lesson 24)
-last-updated: 2026-11-24 (lesson 26; candidates 71-73 appended, next free number 74)
+last-updated: 2026-11-25 (lesson 27; candidates 74-78 appended, next free number 79)
 -->
 
 # JanusGraph track — PR candidates, volume 2
@@ -19,7 +19,7 @@ registers out of `TRACK.md` at lesson 16, arriving one level down. Volume 1 is *
 for any candidate numbered 64 or below. New candidates are appended here.
 
 **Numbering is continuous across volumes.** Volume 1 ends at 64; this file starts at 65. Next free
-number: **74**.
+number: **79**.
 
 **How a run uses this file.** `TRACK.md` is the source of truth for what comes next. The registers are
 the source of truth for what is still owed and to whom. A run reads this file when it is about to add a
@@ -450,3 +450,94 @@ on a document whose mutation carries no complete document, asserted for no dupli
   takes under an hour and that nobody has run. Eleven Hands-On exercises across lessons 24, 25 and 26 are
   outstanding. If the January 2027 LFX Mentorship application is the goal, running three of them is worth
   more than reading three more lessons.
+
+---
+
+## Candidate 74 — with `graph.assign-timestamp=false`, the CQL unlogged path can reorder a delete and its matching insert
+
+- **Status:** REACHABILITY UNVERIFIED. Do **not** file upstream until the gate below is settled.
+- **Found by:** lesson 27 (2026-11-25), `janusgraph-cql`.
+- **Pinned commit:** `a59ae8d8024207598eada34998d867617df51adf`.
+- **The mechanism.** With timestamps assigned (the default), `AbstractCQLMutateManyFunction:68-77` stamps
+  every delete with `MaskedTimestamp.getDeletionTime` and every insert with `getAdditionTime`, which are
+  `t & ~1` and `t | 1`, so the insert always wins a per-column last-write-wins contest against the delete
+  of the same column in the same mutation. **With `assignTimestamp` false, `:78-90` installs closures that
+  emit the statements with no timestamp at all**, and `CQLKeyColumnValueStore.addUsingTimestamp`
+  (`:399-411`) omits `USING TIMESTAMP` from the prepared statements entirely, so the coordinator stamps
+  each statement independently at the moment it is processed.
+- **Why that is not obviously safe.** `CQLMutateManyUnloggedFunction:122-123` is
+  `Iterator.concat(deletions, additions).grouped(this.batchSize)` with `batch-statement-size` defaulting
+  to 20, and `:84` fires **each group as its own `session.executeAsync` call**. A key with more than 20
+  column operations therefore has its deletes and inserts spread across several concurrent requests whose
+  arrival order at the coordinator is unspecified. A delete of column `c` landing *after* the insert of
+  `c` would shadow the insert with a tombstone of a later timestamp, and the write would be lost.
+- **The gate — one file read and one argument.** (a) The default and any validation of
+  `GraphDatabaseConfiguration.ASSIGN_TIMESTAMP` (believed `true`; **not read** at the pin). (b) Whether
+  anything guarantees that a delete and its matching insert land in the same group. The grouping is a flat
+  `.grouped(20)` over a concatenation, so on the face of it nothing does — but a mutation whose deletions
+  and additions *overlap* on the same column may not be a shape core actually emits once lesson 15's
+  containers have been consolidated, and that is the part that has to be checked rather than assumed.
+- **If it holds**, the fix is small and local: either keep a key's operations in one batch when the option
+  is off, or refuse the combination of `assign-timestamp=false` with the unlogged path, or document it.
+  The honest first step is a test, not a patch.
+
+## Candidate 75 — `CQLMutateManyLoggedFunction` builds one unbounded `LOGGED` batch
+
+- **Status:** real, low severity, trivially demonstrable; a documentation-or-guard PR rather than a bug fix.
+- **Where:** `CQLMutateManyLoggedFunction:75-85`.
+- `mutateMany` accumulates **every** statement for **every** table and **every** key into a single
+  `BatchStatementBuilder` with no size bound and no split, then executes it synchronously. The unlogged
+  path bounds its batches at `storage.cql.batch-statement-size` (default 20); the logged path has no
+  equivalent. A large commit under `storage.cql.atomic-batch-mutate=true` therefore fails at the server's
+  `batch_size_fail_threshold`, and the only signal is the resulting exception, classified by
+  `EXCEPTION_MAPPER`'s default arm as **temporary** — so core retries a batch that can never succeed.
+- Smallest useful change: apply `batch-statement-size` to the logged path too, or, if an unsplittable batch
+  is the point of the option, say so in the option description and classify the server's rejection as
+  permanent.
+
+## Candidate 76 — `isKeySizeTooLarge` classifies retries by a server-error message prefix
+
+- **Status:** real, intentional, commented, and still fragile. Low severity; worth raising only as part of
+  a larger CQL error-handling change.
+- **Where:** `CQLKeyColumnValueStore:156-170`.
+- The predicate digs an `AllNodesFailedException` out of the cause chain and matches
+  `error.getMessage().startsWith("Key size too large:")` to decide that a `ServerError` is **permanent**
+  rather than temporary. The comment explains why it exists — ScyllaDB returns a `ServerError` where
+  Cassandra would return an `InvalidQueryException` — and the classification is correct and useful.
+- The hazard is purely one of coupling: the day that message string changes upstream, an infinitely
+  retried permanent failure reappears with no test catching it. There is no version guard and no test
+  asserting the prefix against a live ScyllaDB.
+- Smallest useful change: a unit test that pins the expected message prefix, so a future upstream change
+  breaks a test rather than production retry behaviour.
+
+## Candidate 77 — `getCassandraMajorVersion` returns 0 on any failure and silently selects legacy option names
+
+- **Status:** real, narrow, and arguably deliberate. Low severity.
+- **Where:** `CQLKeyColumnValueStore:482-491`, consumed by `compressionOptions` (`:525-545`).
+- `SELECT release_version FROM system.local` inside a `try { … } catch (final Exception e) { return 0; }`.
+  Version 0 takes the pre-Cassandra-5 branch, which uses `sstable_compression` / `chunk_length_kb` and
+  `withNoCompression()`. On a managed CQL service that restricts `system.local`, or where the column is
+  absent, the table is created with the legacy option names and **nothing is logged at all** — not even at
+  debug.
+- Smallest useful change: a `log.warn` naming the fallback, so the failure is visible in the one place it
+  matters (table creation, which happens once and is then invisible).
+
+## Candidate 78 — `InMemoryColumnValueStore`'s instrumentation methods can NPE when `storage.transactions` is off
+
+- **Status:** REACHABILITY UNVERIFIED. `janusgraph-inmemory`, not CQL; found incidentally while reading
+  the comparison store.
+- **Where:** `InMemoryColumnValueStore` (read inline at the pin, blob `5569f1a0`, so cited by member name
+  only): `numPages`, `numEntries`, `createFragmentationReport` and `quickDefragment`.
+- `getLock(StoreTransaction)` creates the `private volatile ReentrantLock lock` lazily, and **only** in the
+  branch taken when the transaction carries `GraphDatabaseConfiguration.STORAGE_TRANSACTIONAL`; otherwise
+  it returns `NoLock.INSTANCE` and leaves the field `null`. But the four methods above call
+  `this.lock.lock()` **directly**, bypassing `getLock` entirely. On a store whose mutations and reads all
+  ran with `storage.transactions` off, the field is still `null` and those four throw
+  `NullPointerException`.
+- **The gate:** the default of `storage.transactions` (**not read** at the pin; believed `true`, which
+  would make this configuration-specific rather than live), and whether the fragmentation-report entry
+  points — `InMemoryKeyColumnValueStoreFragmentationReport` and the `InMemoryStoreManager` surface — are
+  reachable in that configuration.
+- If it holds, the fix is a one-line change in each of the four methods: take the lock through
+  `getLock(txh)` like every other method in the class, which they already receive a `StoreTransaction` for
+  and currently ignore. That the parameter is accepted and unused is itself the tell.
