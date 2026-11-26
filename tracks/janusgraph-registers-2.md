@@ -6,7 +6,7 @@ pinned-commit: a59ae8d8024207598eada34998d867617df51adf
 volume: 2 (candidates 65 on)
 volume-1: tracks/janusgraph-registers.md (candidates 1-64, and the "Still open, and who owns it" ledger)
 split-from: tracks/janusgraph-registers.md on 2026-11-22 (lesson 24)
-last-updated: 2026-11-25 (lesson 27; candidates 74-78 appended, next free number 79)
+last-updated: 2026-11-26 (lesson 28; candidates 79-83 appended, plus dated updates to 74 and 78; next free number 84)
 -->
 
 # JanusGraph track — PR candidates, volume 2
@@ -19,7 +19,7 @@ registers out of `TRACK.md` at lesson 16, arriving one level down. Volume 1 is *
 for any candidate numbered 64 or below. New candidates are appended here.
 
 **Numbering is continuous across volumes.** Volume 1 ends at 64; this file starts at 65. Next free
-number: **79**.
+number: **84**.
 
 **How a run uses this file.** `TRACK.md` is the source of truth for what comes next. The registers are
 the source of truth for what is still owed and to whom. A run reads this file when it is about to add a
@@ -541,3 +541,140 @@ on a document whose mutation carries no complete document, asserted for no dupli
 - If it holds, the fix is a one-line change in each of the four methods: take the lock through
   `getLock(txh)` like every other method in the class, which they already receive a `StoreTransaction` for
   and currently ignore. That the parameter is accepted and unused is itself the tell.
+
+## Updates to earlier candidates, 2026-11-26 (lesson 28)
+
+- **Candidate 74 — narrowed, not closed.** `GraphDatabaseConfiguration:769-774` reads
+  `ASSIGN_TIMESTAMP`, `ConfigOption.Type.LOCAL`, `Boolean.class`, default **`true`**, no verifier. So the
+  shipped behaviour is safe: mutations carry `USING TIMESTAMP` and lesson 27's delete/add LSB argument
+  holds. The option's own description is that argument in prose — *"one timestamp to all insertions and
+  another slightly earlier timestamp to all deletions in the same batch"*. **But the type is `LOCAL`, not
+  `GLOBAL`**, so it is per-instance with no cluster-wide agreement: two instances writing the same
+  Cassandra table can disagree about whether timestamps are assigned at all, which reaches the original
+  hazard through configuration drift rather than through an explicit `false`. Still **not** a confirmed
+  defect; whether anything detects the disagreement is unread.
+- **Candidate 78 — gate settled, priority dropped.** `STORAGE_TRANSACTIONAL` (`storage.transactions`) is
+  `MASKABLE` with default **`true`** (`GraphDatabaseConfiguration:765-767`), so the four
+  `InMemoryColumnValueStore` methods that bypass `getLock(txh)` hold a non-null lock on a default graph.
+  The NPE is configuration-specific, not live.
+
+## Candidate 79 — a thrown `commitIndexes()` writes `SECONDARY_SUCCESS` to the write-ahead log, so the transaction is never repaired
+
+- **Status:** REACHABILITY UNVERIFIED, and the most consequential of this run's five if it holds.
+  `BackendTransaction.commitIndexes` was **not read**.
+- **Where:** `StandardJanusGraph` (1,490 lines, 80,408 bytes, blob `f650acb2`): `:1316-1318`, `:1322`,
+  `:1348-1357`, `:1368-1376`; `TransactionLogHeader:124`; `StandardTransactionLogProcessor:536-538`,
+  `:189-203`.
+- `status` is initialised to `LogTxStatus.SECONDARY_SUCCESS` at `:1316` and `indexFailures` to
+  `Collections.emptyMap()` at `:1317`. The `finally` at `:1349-1357` writes whatever `status` holds. If
+  `mutator.commitIndexes()` at `:1322` **throws** rather than returning a non-empty failure map, `status`
+  is never reassigned, so the `finally` writes `serializeSecondary(serializer, SECONDARY_SUCCESS,
+  emptyMap(), true)`. Its `assert userLogSuccess && indexFailures.isEmpty()` at
+  `TransactionLogHeader:124` is satisfied, so even with assertions on nothing fires.
+- The exception then reaches `catch (Throwable e)` at `:1368`, which logs, calls `mutator.rollback()` —
+  **after `commitStorage()` already succeeded at `:1308`** — and rethrows. Nothing corrects the log entry.
+- Downstream, `TxEntry.update`'s `SECONDARY_SUCCESS` case assigns unconditionally
+  (`StandardTransactionLogProcessor:536-538`) and the eviction listener counts it in `successTxCounter`
+  (`:201`). **Net effect: storage committed, indexes did not, the write-ahead log records success, and
+  recovery reports a success.** A transaction with a user log compounds it: `userlogSuccess` is still
+  `true` from `:1318` because `:1330` was never reached, so the replay is skipped too.
+- **The gate:** whether `commitIndexes` can throw at all. The comment at `:1321` says *"all exceptions are
+  collected and logged but nothing is aborted"*, which reads as a designed-not-to-throw contract — so the
+  reachable paths are probably an error raised *outside* any per-index loop (enumerating the index
+  transactions, an executor rejection, an `Error`). One file read settles it.
+- Smallest useful change if it holds: initialise `status = SECONDARY_FAILURE` and set it to
+  `SECONDARY_SUCCESS` only on the success path, mirroring how `userlogSuccess` is already handled
+  pessimistically at `:1332`/`:1342`. The asymmetry between the two variables in the same method is the
+  tell.
+
+## Candidate 80 — the `maxTxLength` precondition in `StandardTransactionLogProcessor` cannot fail
+
+- **Status:** READ AND PROVEN BY ORDERING, not yet reproduced (lesson 28's Hands-On B is four lines of
+  `jshell` and takes a minute).
+- **Where:** `StandardTransactionLogProcessor` (585 lines, 27,719 bytes, blob `300d11dd`) `:137-140`.
+- ```java
+  Duration maxTxLength = graph.getConfiguration().getMaxCommitTime();
+  if (maxTxLength.compareTo(MIN_TX_LENGTH)<0) maxTxLength= MIN_TX_LENGTH;
+  Preconditions.checkArgument(maxTxLength != null && !maxTxLength.isZero(),
+          "Max transaction time cannot be 0");
+  ```
+- The floor runs **before** the check, and `MIN_TX_LENGTH` is `Duration.ofSeconds(5)` (`:93`). A `null`
+  from `getMaxCommitTime()` throws `NullPointerException` at the `compareTo` on the previous line, so the
+  `!= null` half never fires; a zero is replaced by five seconds, so the `!isZero()` half never fires
+  either. **Both halves are unreachable as written**, and the error message *"Max transaction time cannot
+  be 0"* can never be seen.
+- Harmless in effect — the floor already produces the safe value — but it is a guard that reads as
+  protection and provides none, and a reader auditing the recovery path's input validation would be
+  misled. The fix is to swap the two statements, after which the message becomes reachable for a zero and
+  the NPE becomes an `IllegalArgumentException` with a useful string.
+- Smallest useful change: move `:139-140` above `:138`. One PR, no behaviour change on any valid
+  configuration.
+
+## Candidate 81 — `MixedIndexStaleEntryRemover` bounds the element cache carefully and leaves `removedIds` unbounded
+
+- **Status:** READ, consequence not measured (needs lesson 28's Hands-On D, which needs Elasticsearch).
+- **Where:** `MixedIndexStaleEntryRemover` (241 lines, 13,523 bytes, blob `d44cd26b`): `:138`,
+  `:134-137`, `:157-159`, `:160-167`, `:172-174`.
+- The class takes explicit, documented trouble to bound one allocation and not the other. `checkTx` is a
+  separate read-only transaction recycled every `batchSize` existence checks, with the reason stated at
+  `:160-162` — *"to keep the memory footprint of a run bounded regardless of the index size"*. But
+  `removedIds` at `:138` is `new HashSet<>()` holding **every stale element id for the whole run**,
+  allocated whenever the index has more than one queryable field, added to at `:172-174` and never
+  cleared or bounded.
+- On the index this job exists for — one that went stale during a long outage, so millions of documents
+  reference deleted elements — that set is the run's peak heap, and it is the only allocation in the
+  method with no limit. The justification for why it is *needed* is sound and documented at `:134-137`
+  (a document indexed under several fields appears in several exists-query streams); the justification for
+  why it is safe to grow without limit is absent.
+- The comparison that makes it a candidate rather than a nitpick: `StaleIndexEntryRemoveJob`, the
+  composite sibling, needs no such set at all (each index entry is visited once by the scan), so the
+  unbounded structure is specific to the enumerate-per-field strategy and was introduced with it.
+- Smallest useful change: cap it and fall back to re-checking, or dedupe per field pair rather than
+  globally — but the honest first step is a `log.warn` at a threshold, because the right bound depends on
+  the number on the other side of Hands-On D.
+
+## Candidate 82 — a transaction whose `PRECOMMIT` entry was not read is counted as repaired
+
+- **Status:** READ; likely a **consequence** of the already-filed
+  [#5051](https://github.com/JanusGraph/janusgraph/issues/5051) rather than an independent defect. Filed
+  here as a statistics/observability defect, which #5051 does not cover.
+- **Where:** `StandardTransactionLogProcessor` `:299-318`, `:330-333`, `:526-529`, `:254-256`.
+- `entry.entry` is set **only** by the `PRECOMMIT` case of `TxEntry.update` (`:526-529`) — the only entry
+  carrying the modification list. `fixSecondaryFailure` returns early when it is `null` (`:330-333`), and
+  `repair` then sets `repaired = true` at `:308-309` because nothing threw. The result is
+  `failureTxCounter` incremented and `failureTxRepairExceptionCounter` **not** incremented, so
+  `getStatistics()`'s `{success, failure, failureRepairException}` triple reports *"failed, and repaired
+  cleanly"* for a transaction where no repair was attempted.
+- The ordering comment at `:313-314` shows deliberate care that the third number never exceeds the
+  second, which makes the gap in what the second-minus-third difference *means* more conspicuous, not
+  less.
+- **Why it is reachable by design, not by accident:** #5051 reports that `PRIMARY_SUCCESS` and
+  `COMPLETE_SUCCESS` entries bypass `TTLKCVSManager` and get no TTL, while
+  `TRANSACTION_LOG_DEFAULT_TTL` is seven days (`GraphDatabaseConfiguration:1320`). If that holds, the
+  content-bearing `PRECOMMIT` entry is the one that expires and the status entries are the ones that
+  survive — which is exactly the input this path mishandles.
+- Smallest useful change: a third counter, or increment `failureTxRepairExceptionCounter` on the early
+  return with a distinct log level, so "we could not repair this because the content was gone" is
+  distinguishable from "we repaired it". Worth filing **as a comment on #5051** rather than separately.
+
+## Candidate 83 — the read half of a repair gets a hard-coded one second; the write half gets `storage.write-time`
+
+- **Status:** READ, consequence not measured.
+- **Where:** `StandardTransactionLogProcessor` `:99`, `:374-405`, `:146`, `:409-441`.
+- `private final Duration readTime = Duration.ofSeconds(1);` at `:99` — a `final` field with no
+  configuration behind it — bounds `BackendOperation.execute` for pass 1 of `restoreExternalIndexes`
+  (`:405`). Pass 1 opens a transaction, deserialises **every** logged relation through
+  `ModificationDeserializer.parseRelation`, and resolves each relation type's index list: schema reads
+  that can miss the cache. Pass 2 gets `persistenceTime` = `storage.write-time`, default **100 s**
+  (`:146`, used at `:437`).
+- `storage.read-time` (default 10 s) is **not** what bounds pass 1; the hard-coded second is. So the read
+  half of a repair has a budget two orders of magnitude smaller than its write half, under exactly the
+  conditions recovery runs in — a backend that has just been failing — and a pass-1 timeout aborts the
+  repair before a single document is restored (counted by candidate 82's path as a repair exception, at
+  least).
+- Not obviously wrong: a one-second budget on a *read* is a reasonable way to avoid piling retries onto a
+  struggling cluster. But it is unconfigurable, undocumented, and inconsistent with every other budget in
+  the class, all of which come from options.
+- Smallest useful change: use `storage.read-time` for pass 1, or add
+  `tx.recovery.repair-read-time` alongside the two `tx.recovery.repair-*` options that already exist
+  (`GraphDatabaseConfiguration:293-303`). The precedent for adding one is two lessons old.
