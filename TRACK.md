@@ -1,680 +1,1089 @@
 <!--
 track-state
-subject: JanusGraph
+subject: PostgreSQL
 mode: lesson
-mode-history: contributor-reading 2026-10-30 .. 2026-11-02 (sessions 01-04); lesson from 2026-11-03 (lesson 05 on)
-started: 2026-10-30
-lessons-total: 28
-lessons-done: 28
-pinned-commit: a59ae8d8024207598eada34998d867617df51adf
-pinned-commit-date: 2026-10-28
-pinned-commit-reviewed: 2026-11-26 at the Part VI boundary (lesson 28) — PERFORMED, and the pin stays
-  for the SIXTH review in a row. `list_commits` on `master` returned the same three newest commits as at
-  lessons 13, 18, 22 and 24: `a59ae8d8`, `9a30ff14` (both 2026-10-28) and `5e3e7bc7` *JanusGraph release
-  1.2.0* (2026-10-24). The repository has not moved in 29 days, so every line number in Parts I-VI is
-  mutually comparable and the capstone may cite any of them without re-verifying the pin.
-  The method is blob-SHA identity and nothing weaker: every file cited by line number has its git blob SHA
-  computed locally and compared against what the API reported, the cheap form being a directory listing
-  with fields: ["name","sha","size"] which returns every file's blob SHA in ONE call. Lesson 27 applied it
-  to TEN files and all ten matched on the first attempt, which is incidental confirmation that the pin has
-  not moved under the track. Lesson 27 also established that the plain `text` value of an over-limit
-  get_file_contents result is LOSSY, not merely banner-prefixed, and that the resource path matches
-  byte-for-byte: see the mechanical notes.
-  NEXT REVIEW: none is due. Part VI is closed and the capstone adds no new reading of its own; if it does
-  read new files, it re-pins only on the same rule — run list_commits on master, record the answer here.
-upstream: JanusGraph/janusgraph
-reader-fork: aryanttripathi/janusgraph
-registers: tracks/janusgraph-registers.md (candidates 1-64, FROZEN, plus the "Still open, and who owns
-  it" ledger) and tracks/janusgraph-registers-2.md (candidates 65-83, next free 84)
-paused-tracks: PostgreSQL (resume at lesson 11; full state in tracks/postgresql.md)
+started: 2026-10-19
+paused: 2026-10-30 (after lesson 10, to make JanusGraph the active track)
+resumed: 2026-11-27 (JanusGraph track completed; capstone 2026-11-27)
+lessons-total: 35
+lessons-done: 10
+resume-at: 11
+paused-tracks: none
+previous-track: JanusGraph, 28 lessons 2026-10-30 .. 2026-11-26, capstone 2026-11-27; PR-candidate
+  registers live on at tracks/janusgraph-registers.md (1-64, FROZEN) and
+  tracks/janusgraph-registers-2.md (65-83, next free 84) and are NOT part of this track
 -->
 
-# Current Track: JanusGraph Codebase
+# Current Track: PostgreSQL Internals
 
-Sequential deep dive through the JanusGraph source, one entry per day, each building on the last.
-The destination is unchanged: contributing to JanusGraph before the January 2027 LFX Mentorship
-applications open. **All 28 lessons have shipped. Lesson 28 closed Part VI on 2026-11-26; the syllabus is
-complete and the next run writes the CAPSTONE.**
+Sequential deep dive. One lesson per day, each building on the last.
 
-**Mode: `lesson`, switched 2026-11-03.** Sessions 01–04 ran as `contributor-reading`: a short
-reading guide per day, with four to six questions deliberately left unanswered and the `## My
-Notes` half written by Aryant. All four shipped with that half as the untouched template — 24
-questions posed, none answered, no evidence a file was opened. Session 04's entry stated the
-problem plainly, named the two honest options, and recorded a decision rule here for session 05 to
-execute rather than ask a fifth time. **Session 05 executed it.** From lesson 05 on, entries answer
-their own questions and carry `Where This Breaks Down`, `Further Study`, `Next Steps` and
-`Takeaways` — same syllabus, same pinned commit, same depth bar. The carried questions are tracked
-under each entry's `Next Steps` and settled as the syllabus reaches them. Flipping back is one line
-of the front-matter above; nothing else in this file depends on the mode. **The mode question is
-closed. Do not reopen it unprompted.**
+**STATUS: resumed 2026-11-27 — lesson 10 shipped 2026-10-29, and the next run takes lesson 11.**
+The syllabus was written on 2026-10-19, the day the SQLite track's capstone shipped. The track was
+paused on 2026-10-30 at Aryant's request so that JanusGraph could be the active subject; that track
+ran 28 lessons and closed with its capstone on 2026-11-27, and **this file was restored from commit
+`b15be247946f61b279b6fc0491fd9db5b8228b0b` (blob `334867d68ca1a206a738886ba23de59d1d8d38be`,
+83,498 bytes) by that run, byte-for-byte verified before editing.** `tracks/postgresql.md` was
+deleted in the same commit, as its own "How to resume" instructions required. Nothing in the
+syllabus or the NOTE BLOCK below changed while the track was paused.
 
-**Why bottom-up.** JanusGraph is a translation layer: a property graph mapped onto a
-BigTable-style key → sorted-columns store, and Gremlin traversals turned into slice queries over
-those rows. The syllabus follows that layering upward: storage contract → graph ⇄ bytes → write
-path → read path → Gremlin integration → schema, indexes and production backends. Classes that
-are reference material rather than reading material (`GraphDatabaseConfiguration`, most of
-`StandardJanusGraphTx`) are visited only for the slices a lesson needs.
+The order follows PostgreSQL's actual source layout rather than a textbook outline. It was built
+from two pieces of primary evidence read on 2026-10-19: the chapter list of
+[Part VII Internals](https://www.postgresql.org/docs/current/internals.html) in the official
+documentation, and the set of in-tree design documents in `postgres/postgres@45fc51fc`, which is
+where the project writes down how each module actually works:
 
-**Pinned source.** All line numbers and permalinks use commit `a59ae8d8` (2026-10-28) on
-`JanusGraph/janusgraph` `master`. Re-pin only at a Part boundary, and record the new commit here.
-**Reviewed 2026-11-22 at the Part V/VI boundary (lesson 24): PERFORMED, and the pin stays for the fifth
-time. Lessons 25 and 26 were mid-Part and correctly did not re-raise it; lesson 27 must not either.** `list_commits` on `master` returns the same three newest commits as at lessons 13, 18 and 22 —
-`a59ae8d8`, `9a30ff14` (both 2026-10-28) and `5e3e7bc7` *JanusGraph release 1.2.0* (2026-10-24) — so the
-repository has not moved in 25 days and Part VI's line numbers will stay comparable with lessons 02–24.
-**The verification method is now blob-SHA identity and nothing weaker.** Lesson 22 introduced it, lesson
-23 used it on four files, and lesson 24 used it on **fourteen**, including a 137,928-byte
-`GraphDatabaseConfiguration.java`. A matching blob SHA makes a local copy byte-identical to the blob at
-the pinned commit *regardless of who transcribed it*, which is what lets a run delegate the
-transcription of a large file to a sub-agent and still cite it by line number. Lesson 23's weaker
-"delegated read, member-name citations only" grade is now reserved for files that were **not**
-transcribed at all.
+```
+src/backend/access/{brin,gin,gist,hash,nbtree,spgist,rmgrdesc}/README
+src/backend/access/heap/README.HOT        src/backend/access/heap/README.tuplock
+src/backend/access/transam/README         src/backend/access/transam/README.parallel
+src/backend/executor/README               src/backend/optimizer/README
+src/backend/replication/README            src/backend/storage/aio/README.md
+src/backend/storage/buffer/README         src/backend/storage/freespace/README
+src/backend/storage/lmgr/README           src/backend/storage/lmgr/README-SSI
+src/backend/storage/lmgr/README.barrier   src/backend/storage/page/README
+src/backend/storage/smgr/README           src/backend/utils/mmgr/README
+src/backend/utils/{fmgr,mb,misc,resowner}/README
+```
 
-**Reader setup (assumed from lesson 02 on).** Fork at `aryanttripathi/janusgraph`, cloned locally
-with `upstream` pointing at `JanusGraph/janusgraph`; Java 17 or 21, Maven 3.6.3+;
-`mvn clean install -pl janusgraph-inmemory -am -DskipTests` built once; project open in IntelliJ.
-From lesson 05, `janusgraph-berkeleyje` is also needed:
-`mvn clean install -pl janusgraph-berkeleyje -am -DskipTests`.
+Those files are the backbone of this track; the documentation and `doxygen.postgresql.org` are the
+supplement. The layering runs: on-disk format → shared-memory buffers and locks → MVCC →
+isolation → WAL and recovery → access methods → planner and executor.
 
-**The registers are now two files, split again on 2026-11-22.**
-[`tracks/janusgraph-registers.md`](tracks/janusgraph-registers.md) holds candidates **1–64** and the
-*"Still open, and who owns it"* ledger and is **frozen** — do not rewrite it.
-[`tracks/janusgraph-registers-2.md`](tracks/janusgraph-registers-2.md) holds candidates **65 on** (next
-free **71**). Numbering is continuous across the two volumes. The reason for the second split is the same
-as the first, one level down: volume 1 had reached **134 KB**, and every file this log writes has to be
-re-emitted whole to be pushed, so appending three candidates to it costs a full 134 KB re-emission. A run
-that logs candidates must write the register in the same run as this file, per the rule the 2026-11-19
-desync produced. Lesson 24 did it in one push; **lesson 25 did it as two consecutive pushes**, because
-this file plus the register exceeds what one tool call can emit — the invariant that matters is that
-both land before the run ends, and both did.
+**Why PostgreSQL after SQLite.** The four tradeoffs the capstone identified — catalog placement,
+writer concurrency, cost-model resolution, and the verification oracle — are each resolved the
+*opposite* way here: a catalog of real tables, many concurrent writers with per-tuple visibility,
+a floating-point cost model, and no `integrity_check` at all. Every lesson in this track should be
+readable as the other answer to a question SQLite already answered.
 
-## Session Log
+## Notes For The Next Run — READ THIS FIRST, the track has just resumed
 
-Newest first. **Session-log roll-off:** the full `**Findings.**` paragraph is kept for the three most
-recent lessons only — the same window as the `Verified by lesson NN` blocks below. Lessons 09-12 were
-compressed on 2026-11-13, lesson 13 on 2026-11-14, lesson 14 on 2026-11-15, lesson 15 on 2026-11-16,
-lesson 16 on 2026-11-17, lesson 17 on 2026-11-20, lesson 20 on 2026-11-21, lesson 21 on 2026-11-22,
-lesson 22 on 2026-11-23, lesson 23 on 2026-11-24 and lesson 24 on 2026-11-25. The full paragraphs remain
-verbatim in git history at the commit each line names. **This run compressed lesson 25's paragraph and
-removed its `Verified by lesson 25` block.** The capstone is the last run; it should roll off nothing, so
-that lessons 26, 27 and 28 keep their full paragraphs and `Verified by` blocks as the record of Part VI.
+**The next item is lesson 11 — the heavyweight lock manager: `LOCKTAG`, lock partitions, and the
+deadlock detector.** It is the first unchecked item and nothing was skipped: lessons 01-10 shipped
+between 2026-10-19 and 2026-10-29 and are indexed in the root [`README.md`](README.md).
 
-**On 2026-11-22 the one-line entries for lessons 01–19 were dropped from this log; lesson 20's went on
-2026-11-23, lesson 21's on 2026-11-24, lesson 22's on 2026-11-25 and lesson 23's this run.** They carried
-nothing the rest of the repository does not carry better — the **Syllabus** below lists all 28 lesson
-titles as taught, and the root [`README.md`](README.md) index links every entry and every digest by date
-and number — while costing ~23 KB of a file that is read in full at the start of every run and
-re-emitted in full on every push. Their full text is in git history at the commit immediately preceding
-the 2026-11-22 entry. Entries roll off this log one per run from here; the window is the five most
-recent lessons.
+**Before writing lesson 11, re-read the handover notes for lessons 09 and 10** in the NOTE BLOCK
+below. They are the whole reason this file was preserved rather than summarised, and they say what
+lesson 11 must pick up. Two of their instructions are operational and easy to miss:
 
-- **28 — 2026-11-26** · [`2026/11/2026-11-26-janusgraph-tx-log-stale-index-repair/README.md`](2026/11/2026-11-26-janusgraph-tx-log-stale-index-repair/README.md) · **Part VI boundary, so the re-pin review WAS performed: `list_commits` on `master` returned `a59ae8d8` as the newest commit, unchanged since 2026-10-28, and the pin stays for the sixth time.** Read the write-ahead transaction log, the recovery processor and both stale-entry removers at the pinned commit. **Blob-SHA verified against the API's own directory listings and cited by line number** (all nine matched on the first attempt): `StandardTransactionLogProcessor` (585 lines, 27,719 bytes = `300d11dd`; cited at `:92-93`, `:99`, `:120-124`, `:135-136`, `:137-140`, `:146`, `:149-151`, `:155-157`, `:158-162`, `:165`, `:166-168`, `:176-179`, `:187-188`, `:189-203`, `:190-191`, `:200-202`, `:201`, `:230-233`, `:240-247`, `:245`, `:254-256`, `:293-297`, `:299-318`, `:308-309`, `:313-314`, `:328-367`, `:330-333`, `:335-346`, `:340`, `:343`, `:345`, `:353-366`, `:371-442`, `:373`, `:374-405`, `:381-387`, `:390-399`, `:405`, `:409-441`, `:428-429`, `:437`, `:460-471`, `:481-489`, `:489`, `:504`, `:526-529`, `:536-538`), `TransactionLogHeader` (282, 12,329 = `5bc78140`; `:58`, `:60`, `:76-84`, `:80`, `:86-93`, `:101`, `:107-111`, `:113-126`, `:118`, `:124`, `:128-130`, `:132-143`, `:146-161`, `:149`, `:150`, `:151`, `:153`, `:154`, `:157-158`, `:172`, `:227-236`, `:258`), `StandardJanusGraph` (1,490, 80,408 = `f650acb2`; `:1232`, `:1244`, `:1292`, `:1295`, `:1299-1300`, `:1302-1304`, `:1304`, `:1307-1313`, `:1316-1318`, `:1321`, `:1322`, `:1330`, `:1332`, `:1334`, `:1335`, `:1338-1339`, `:1342`, `:1348-1357`, `:1353`, `:1368-1376`), `MixedIndexStaleEntryRemover` (241, 13,523 = `d44cd26b`; `:80-83`, `:90-91`, `:94-108`, `:109`, `:134-137`, `:138`, `:144-146`, `:155`, `:157-159`, `:160-167`, `:172-174`, `:176`, `:177-187`, `:189`, `:205-228`, `:215-220`, `:225-226`, `:230-240`), `StaleIndexEntryRemoveJob` (233, 9,898 = `5e29ea40`; `:53-59`, `:72-78`, `:80-85`, `:136-141`, `:160-162`, `:173-181`, `:183-200`, `:211-214`, `:216-227`), `GraphDatabaseConfiguration` (2,192, 137,928 = `4d5a9167`; `:259-261`, `:263-283`, `:278-280`, `:293-303`, `:300-303`, `:765-767`, `:769-774`, `:796-799`, `:1316`, `:1320`, `:1330-1332`, `:1342-1344`, `:1350-1352`, `:1844`), `LogTxStatus` (32, 1,069 = `3f5ba38c`; `:22`, `:24-30`), `LogTxMeta` (90, 2,584 = `5ba2f284`; `:66-68`, `:70-73`), `StandardLogProcessorFramework` (290, 11,929 = `45d5072f`; read at `:175-250` ONLY — `:178-182`, `:185-196`, `:229-245` cited, the rest unread). Four directory listings with `fields: ["name","sha","size"]`; one `search_code` query (two results); one `search_issues` query returning **six open issues**, all linked in the entry; one delegated transcription batch of six files, all blob-SHA verified. Five PR candidates logged (**79-83**) plus dated updates to **74** and **78** in [`tracks/janusgraph-registers-2.md`](tracks/janusgraph-registers-2.md). Daily Diff: **the 2026-11-26 edition had not published at 03:35 UTC**, and `https://tdd.cat/2026-11-25/` **also** errored although the slash form worked for 11-24 last run — so the digest was built from the **front page**, which named 2026-11-25 / 53 stories as current, with 22 of the 53 items recovered; deep dive on **incident.io's Postgres row-comparison rewrite** (33.8% of node CPU to 0.3%), sidebar on **DuckDB property-based testing**.
+- **Use the `pg11_*` prefix for every throwaway table this run creates.** Lessons 08 and 10 both
+  failed to use the `pgNN_` convention; the note records the collision names to avoid.
+- **The lessons 09 and 10 notes set up the buffer-manager/LWLock boundary** that lesson 11's
+  heavyweight lock manager sits on top of. Lesson 11 should not re-explain pins, content locks or
+  the LWLock implementation.
 
-  **Findings.** **THE finding: the recovery system's whole correctness argument is one borrowed guarantee, and on default CQL it does not hold.** `PRIMARY_SUCCESS` is not written by the log; it is handed to `mutator.getTxLogPersistor()` (`StandardJanusGraph:1302-1304`) so that it commits inside the storage mutation, and the in-source comment states the intent — *"committed atomically with all transactional changes so that we can recover secondary failures"*. But the transaction log is a **different store** (`system_txlog`), its row key is `hashPrefixKey(SHORT, transactionId)` (`TransactionLogHeader:60`) and therefore a **different partition**, and lesson 27 established that a default CQL mutation is `.grouped(20)` fired as several independent async `UNLOGGED` batches. So the entry and the edgestore rows are separate writes that succeed and fail independently. **The two failure directions are not symmetric.** Entry lands, storage does not → recovery runs a repair which re-derives from storage and writes documents matching current truth: **harmless**. Storage lands, entry does not → the last entry is `PRECOMMIT`, the eviction listener counts it in `successTxCounter` (`:200-202`), and a later index failure in that same transaction is **never repaired** — a permanent silent divergence that the write-ahead log reports as a success. **Second, the organising principle of every repair path: the edgestore is the truth and a mixed index is a cache of it, so the log supplies element ids and never document content.** Pass 2 of `restoreExternalIndexes` (`:409-441`) does `retrieve(tx)` and then `reindexElement` if present or `removeElement` if gone — a **re-derivation, not a replay** — which is simultaneously what makes repair idempotent, convergent, concurrency-safe, and correct when the log entry itself is wrong. `MIXED_INDEX_FILTER` (`:489`) is why composite indexes have no write-ahead path at all: graphindex entries ride on the same `commitStorage`. **Third, where re-derivation runs out: the user log.** A `USER_LOG` event is a delivery, not an assignment, so recovery **re-sends** it with a new transaction id and a `SOURCE_TRANSACTION` meta (`:356-357`) — and because `userlogSuccess` is recorded `true` for a message merely *queued* (`StandardJanusGraph:1335`, with `log.send-delay` defaulting to 1000 ms so `isDone()` is normally false), the duplicate is the normal case. **A `ChangeProcessor` must be idempotent and nothing in the API says so.** That is lesson 27's assignment-versus-accumulation line arriving at the application boundary. **Fourth, three defaults that narrow the contract to almost nothing:** `tx.log-tx` defaults to **`false`**, so on a stock graph none of this runs; the gate at `:1232` is `hasLogTransactions() && !hasEnabledBatchLoading()`, so **batch loading silently disables the write-ahead log** — the one mode most likely to leave indexes behind; and `TRANSACTION_LOG_DEFAULT_TTL` is **seven days** (`GraphDatabaseConfiguration:1320`), with already-filed [#5051](https://github.com/JanusGraph/janusgraph/issues/5051) reporting that the status entries bypass the TTL while the content-bearing `PRECOMMIT` entry does not — which makes candidate 82's path reachable by design. **Fifth, the best idea in the file: the expiry clock is the log's READ PROGRESS, not the wall clock** (`:166-168`, a Caffeine ticker over `txLog.getReadProgress()` forced monotonic by `accumulateAndGet(…, Math::max)`), so a slow or lagging reader delays decisions instead of making wrong ones; `nanosUntilExpiry` (`:240-247`) adds exactly one nanosecond because read progress is exclusive and log timestamps are microseconds, and `LONGEST_RECOVERY_WAIT = Duration.ofNanos(Long.MAX_VALUE >>> 1)` (~146 years) is a half-range bound precisely so `ahead + wait + 1` cannot overflow. `expireAfterUpdate` returns `currentDuration`, so **a later entry never extends the deadline**. **Sixth, the arithmetic that makes the shipped defaults unsafe past one index backend:** `warnIfMaxCommitTimeIsTooShort` (`:1853-1879`) requires `max-commit-time` to **exceed** `storage.write-time × (1 + indexBackends)`; at the defaults 300 s and 100 s that is 200 s for one backend (fine) and **300 s for two, which 300 s does not exceed** — so the warning fires at stock settings with two index backends, and the javadoc's own words for the consequence are that recovery can *"restore the index documents of a transaction which is still committing, underneath the index writes that commit has yet to make"*. **Seventh, two stale-entry removers that share three method bodies and no code:** `StaleIndexEntryRemoveJob` is a real `ScanJob` over graphindex with a provable 128-byte slice bound and a hard-coded `EXISTENCE_CHECKS_PER_TX = 10_000`, while `MixedIndexStaleEntryRemover` is a bare daemon `Thread` dressed as a scan job that enumerates by **one exists-query per indexed field** and recycles its check transaction every `batchSize` — so a stale document whose only values sit in non-queryable fields is **permanently invisible**, signalled by one `log.warn` naming the field rather than the gap. **Eighth, candidate 74 is narrowed and 78's gate settled:** `ASSIGN_TIMESTAMP` is default **`true`** with no verifier, so lesson 27's timestamp argument holds out of the box — but it is `ConfigOption.Type.LOCAL`, so two instances writing one Cassandra table can disagree about it through configuration drift, which is a cheaper route to the same hazard than an explicit `false`; and `storage.transactions` defaults `true`, making candidate 78's NPE configuration-specific rather than live. Five new candidates: **79** (a thrown `commitIndexes()` writes `SECONDARY_SUCCESS`, so the transaction is never repaired — reachability turns on one unread file and it is the most consequential of the five), **80** (the `maxTxLength` precondition at `:139-140` cannot fail, because the floor runs first), **81** (`removedIds` is unbounded while the element cache is carefully bounded), **82** (a transaction whose `PRECOMMIT` was never read is counted as repaired, and `getStatistics()` says so), **83** (pass 1 of a repair gets a hard-coded one second, pass 2 gets `storage.write-time`).
+**Source provenance.** The PostgreSQL track's environment and source-provenance recipes are in the
+NOTE BLOCK. Re-establish the source commit the way those recipes do, and record it here — a 29-day
+gap has passed since lesson 10, so **do not assume the commit lessons 01-10 used is still current**;
+the JanusGraph track's practice of pinning a commit in the front matter and re-verifying it by blob
+SHA at each Part boundary is worth carrying over to this track, and is the single most useful
+procedural thing the JanusGraph track produced.
 
-- **27 — 2026-11-25** · [`2026/11/2026-11-25-janusgraph-cql-store-vs-inmemory/README.md`](2026/11/2026-11-25-janusgraph-cql-store-vs-inmemory/README.md) · **Mid-Part, so the re-pin question was correctly NOT re-raised — but lesson 28 MUST perform the Part VI review.** Read the CQL storage backend against the in-memory store at the pinned commit. **Blob-SHA verified against the API's own directory listings and cited by line number** (all ten matched on the first attempt): `CQLKeyColumnValueStore` (873 lines, 47,914 bytes = `f11ea637`; cited at `:123-127`, `:141-154`, `:156-170`, `:200-201`, `:211-343`, `:217-222`, `:224-244`, `:234-244`, `:248-263`, `:255-256`, `:265-303`, `:284-285`, `:291-299`, `:305`, `:323-328`, `:332-333`, `:336-338`, `:339-340`, `:355-368`, `:370-379`, `:387-397`, `:399-411`, `:413-424`, `:432-437`, `:450-480`, `:482-491`, `:493-523`, `:499-504`, `:503-523`, `:516-520`, `:525-545`, `:529-531`, `:539-542`, `:547-583`, `:595-625`, `:613-617`, `:641-652`, `:673-684`, `:686-695`, `:718-750`, `:731-737`, `:752-774`, `:776-789`, `:802-813`, `:815-818`, `:820-872`, `:829-872`, `:840-849`, `:851-863`), `CQLStoreManager` (374, 18,740 = `09f7b055`; `:104`, `:157-158`, `:311-358`, `:346-349`, `:352-358`, `:356`), `CQLConfigOptions` (48,346 = `2f1adabe`; `:47-55`, `:64-76`, `:85-89`, `:91-102`, `:105-110`, `:113-118`, `:120-130`, `:237-251`, `:253-265`, `:267-280`, `:844-862`), `CQLStoreFeaturesBuilder` (129, 7,091 = `a13eacac`; `:58-67`, `:62`, `:63`, `:65`, `:68-70`, `:80-87`, `:88-119`, `:94-100`, `:101-104`), `CQLTransaction` (60, 2,609 = `349bf72b`; `:30-47`, `:49-53`), `CQLColValGetter` (65, 2,423 = `66ea2658`; `:26-64`, `:59-60`), `AbstractCQLMutateManyFunction` (100, 5,614 = `ea850c4e`; `:35-41`, `:39-40`, `:59-91`, `:63`, `:68-77`, `:78-90`), `CQLMutateManyUnloggedFunction` (125, 6,189 = `7d3d3ee6`; `:71-124`, `:84`, `:88`, `:96-109`, `:122-123`), `CQLMutateManyLoggedFunction` (106, 4,860 = `8a9a9f7d`; `:65-104`, `:71-85`, `:95-102`), `InMemoryKeyColumnValueStore` (471, 19,258 = `83650bf4`; `:85-158`, `:94`, `:99`, `:109-114`, `:117-124`, `:127-129`, `:131-134`, `:137-144`, `:146-149`). **Read inline, member-name citations only:** `InMemoryColumnValueStore` (`5569f1a0`), `DistributedStoreManager` (`89ed24d5`), `CQLSliceQueryUtil` (`2efd226b`). **Seen only as `search_code` fragments:** `SliceQuery`, `EdgeSerializer`, `CQLSliceQueryUtilTest`. Three directory listings with `fields: ["name","sha","size"]`; one `search_code` query, returning three results; two delegated transcription batches, nine files, all blob-SHA verified. **Two external pages fetched:** the Cassandra Dynamo architecture page and the PlanetScale failover post. Five PR candidates logged (**74-78**) in [`tracks/janusgraph-registers-2.md`](tracks/janusgraph-registers-2.md). Daily Diff: **the 2026-11-25 edition had not published at 03:33 UTC**, and the run discovered that **`https://tdd.cat/{date}/` works where `{date}.md` 404s** — so the digest covered the latest published and previously uncovered **2026-11-24** edition (59 items, read in full across three offset fetches), with a deep dive on **PlanetScale Neki's leaseless unplanned failover for sharded Postgres**.
+**Entry size, carried from the JanusGraph track.** Lessons there ran 51-103 KB with the digest at
+roughly 17 KB. The real constraint on a run is **output**, not input: every file pushed must be
+emitted in full as a tool argument, so large pre-existing files (this one, the root `README.md`)
+should be edited **in place on local disk with small scripted replacements** and their pushes
+delegated, with every pushed blob SHA verified against the locally computed one. The root
+`README.md` index is one row per line — **edit the row, do not rebuild the table.**
 
-  **Findings.** **THE finding: the CQL backend's entire write-ordering guarantee is one bit of the commit timestamp, and the in-memory store reaches the same semantics by the exactly opposite route.** Take the commonest interesting mutation — a transaction that deletes column `c` and re-adds `c` with a new value, which is every single-cardinality property update. `InMemoryColumnValueStore.mutate` resolves it **structurally and client-side**: `synchronized`, sort the additions, then drop every deletion found among them by `binarySearch`, so the tombstone never reaches the buffer at all. `CQLKeyColumnValueStore.mutate` (`:673-676`) resolves **nothing** — it wraps its arguments and delegates — and the resolution happens in Cassandra, because `MaskedTimestamp.getDeletionTime` is `times.getTime(t) & 0xFFFFFFFFFFFFFFFEL` and `getAdditionTime` is the same with `| 1L`. **The addition time is the deletion time plus exactly one, by bit arithmetic**: the least significant bit of the provider's resolution is reserved as a delete/add discriminator, and per-column last-write-wins does the rest. That is also the answer to lesson 26's handover question — **a cell write at a fixed `(key, column, timestamp)` is an assignment, so replaying it is free; a JSON array append is an accumulation, so it is not.** The dividing line between the two write paths is not distributed-versus-local, it is assignment-versus-accumulation, and `storage.cql.idempotent-writes` (default `true`) is the one-line consequence. **Why the mechanism has to be temporal rather than structural: a CQL mutation is not one request.** The default unlogged path does `Iterator.concat(deletions, additions).grouped(20)` and fires each group as its own async `UNLOGGED` batch, so a key with more than 20 column operations is sent as several concurrent requests whose arrival order is unspecified — and the result is still deterministic. **Three old debts discharged.** Lesson 18's: `fb.locking(useExternalLocking)` with the option defaulting `false`, so `ConsistentKeyLocker` **does** run on Cassandra — and setting it `true` makes `acquireLock` a method whose body is only its inverted guard, so the option **disables locking rather than delegating it**, which the option's own description admits in the words "read uncommitted" and "phantom reads". Lesson 16's: batch ordering is **implicit in the timestamps, not explicit in the batch**, and the `LOGGED` alternative is one unbounded batch across every table and key. Lesson 20's `setDirectColumnByStartOnlyAllowed`: its only consumer in the codebase is `CQLSliceQueryUtil`, whose grouping rule `groupSize = min(slice-limit, limit)` means **a limit-1 direct-equality query forms a group of one, so `IN`-grouping cannot fire for it** — sound, because CQL's `LIMIT` is per result set rather than per `IN` element. **Fourth, the module's character is graceful degradation**: five places — token-range scans, `PER PARTITION LIMIT`, parallel scan, Cassandra-5 compression option names, and `cdc=true` on a pre-existing table — where an unsupported backend produces one `warn` at store open and a quietly different store for the rest of its life, on the stated principle that a scan-only optimisation must not fail store open and with it every graph open. Reading those five comments is the fastest way to understand what "CQL-compatible" costs. **Fifth, the most promising defect-shaped thing in the module is a reachability question, not a finding:** with `graph.assign-timestamp=false` the statements carry no `USING TIMESTAMP` at all, and the unlogged path's `.grouped(20)` can then put a delete and its matching insert into different concurrent batches — at which point the whole correctness argument above stops holding. That is candidate 74, and it is deliberately **not** stated as a confirmed defect.
+**Daily Diff procedure, revised 2026-11-27 and this supersedes the earlier rule.** The front page
+`https://tdd.cat/` is a **floor, never a ceiling**: on 2026-11-27 it named the 11-25 edition while
+`https://tdd.cat/2026-11-26/` served 200 and `https://tdd.cat/archive/` correctly listed 11-26 as
+Latest. So: try `https://tdd.cat/{today}/`; then fetch **both** the front page and `/archive/`; take
+the **maximum fetchable** edition across all three, probing the slash form for any date either
+advertises. Editions covered to date: 11-08 through 11-22, then 11-24, 11-25 and **11-26** — so
+**11-23 (54 stories) and 11-27 onward are uncovered**. The fallback pool still holds the unspent
+items from 2026-11-06 (two) and 2026-11-18 (two). There is **no `WebFetch` tool in this
+environment**; pages are fetched through a sub-agent, which must be asked for the structured item
+list (title, source, outbound URL, one-line gist) rather than for page text, and whose summarised
+portion is not reliable enough to quote. Always cross-check the item count against the page's own
+stated figure, and state how many items were actually recovered.
 
-- **26 — 2026-11-24** · [`2026/11/2026-11-24-janusgraph-index-provider-elasticsearch/README.md`](2026/11/2026-11-24-janusgraph-index-provider-elasticsearch/README.md) · **Mid-Part, so the re-pin question was correctly NOT re-raised.** Read the mixed-index SPI and its Elasticsearch implementation at the pinned commit. **Blob-SHA verified and cited by line number:** `ElasticSearchIndex` (2,028 lines, 119,295 bytes = `d80949e3`; cited at `:120`, `:185-188`, `:215-222`, `:224-232`, `:234-250`, `:252-266`, `:526-536`, `:543-562`, `:564-566`, `:568-576`, `:770-800`, `:802-813`, `:815-824`, `:826-835`, `:837-844`, `:846-854`, `:855-876`, `:866-868`, `:869-873`, `:874-875`, `:881-888`, `:897-916`, `:932-958`, `:1010-1047`, `:1015-1017`, `:1018-1023`, `:1025-1038`, `:1039-1046`, `:1162-1167`, `:1169-1171`, `:1173-1217`, `:1179-1192`, `:1197-1201`, `:1219-1238`, `:1275-1381`, `:1292-1295`, `:1300-1306`, `:1307-1350`, `:1314-1315`, `:1319`, `:1322`, `:1326-1330`, `:1336`, `:1344`, `:1346`, `:1352-1356`, `:1364-1368`, `:1369-1380`, `:1371-1372`, `:1383-1406`, `:1408-1422`, `:1424-1462`, `:1436-1441`, `:1451-1452`, `:1457-1458`, `:1459-1461`, `:1464-1468`, `:1507-1708`, `:1709-1728`, `:1718`, `:1730-1735`, `:1794-1804`, `:1806-1825`, `:1816`, `:1827-1847`, `:1854-1856`, `:1864-1870`, `:1872-1881`, `:1883-1925`, `:1928-1942`, `:1944-1956`, `:1959-1962`, `:1964-1967`, `:1995-2007`). **Read inline, member-name citations only:** `IndexProvider` (`b7b342bb`), `IndexFeatures` (`6651e246`), `IndexInformation` (`ded18cc9`), `IndexMutation` (`d2c44e46`), `IndexSelectionUtil` (`3ec0ec2a`), `AbstractESCompat` (`89543cd9`), and all four compat subclasses read in full — `ES6Compat` (`d686ce02`), `ES7Compat` (`fb0efe32`), `ES8Compat` (`bbd2b413`), `ES9Compat` (`73af9fc2`). **Seen only as `search_code` fragments:** `AdjacentVertexHasUniquePropertyOptimizerStrategy`, `AbstractIndexSelectionStrategy`, `BruteForceIndexSelectionStrategy`, `ApproximateIndexSelectionStrategy`, `IndexSerializer`, `HasStepFolder`, `IndexSelectionUtilTest`. Three directory listings with `fields: ["name","sha","size"]`; two `search_code` queries, both returning results. Three PR candidates logged (**71-73**) in [`tracks/janusgraph-registers-2.md`](tracks/janusgraph-registers-2.md), written in the same push as this file — **the register was brought to local disk by a delegated transcription and blob-SHA verified (18,388 bytes = `642bd570`) before being appended to**, the first time that method was used on a file being edited rather than read. Daily Diff: **today's edition had not published** (`2026-11-24.md` and `2026-11-23.md` both client errors), so the **fallback pool was drawn on for the first time** — the uncovered **2026-11-20** edition, 50 items, read in full across two fetches; deep dive on **Valkey 9.2's forkless snapshots**.
+**Mermaid.** Render every diagram with `mmdc` before pushing and then inspect the rendered SVG: grep
+it for a literal backslash-n (must be zero) and read the node labels back. Accumulated rules: quote
+every node label containing parentheses, commas, `->`, `|` or angle brackets; **do not use numeric
+HTML entities such as `&#40;` for parentheses — they render as literal `&(`** (found 2026-11-27);
+use named entities such as `&lt;` and `&amp;` for comparisons and ampersands; never escape a quote
+inside a label, drop the inner quotes instead; a semicolon inside a `sequenceDiagram` message is a
+statement separator, so use a comma; and a `flowchart` edge label takes a quoted string with
+`<br/>` in it and renders multi-line correctly.
 
-  **Findings.** **THE finding: the index SPI is the only write path in JanusGraph that is not idempotent by construction, and `LIST` cardinality is the entire reason.** Audit the five mutation primitives against the Painless scripts and exactly two are non-idempotent: `ctx._source[field].add(value)` for a `LIST` field, which appends a duplicate on a second application, and `remove(indexOf(value))`, which removes another occurrence or none. `SET` is saved by one guard — `field.cardinality != 'SET' || indexOf(value) == -1` — and every `SINGLE` operation is naturally idempotent (`ctx._source.remove(name)` on an absent key, and `putAll(params.doc)` rewriting the same value). **The fix reached up into the core rather than down into the backend**: `IndexMutation` gained a `completeDocument` field carrying the element's whole indexed state, *"supplied once, from the element's state at commit"*, with the design note that *"reading the element again would read the same state"* — so it costs no read. `addUpdatesCarryingTheCompleteDocument` (`:855-876`) then collapses every change to one document into **one** update whose upsert is the complete document, exploiting three mechanisms at once: Elasticsearch **writes the upsert and skips the script** when the document is missing, so "recreate whole" and "apply the delta" become the same request; one item per document is the **maximum atomicity** the bulk API offers; and a retried item therefore never replays a *part* that had applied. The in-source comment at `:846-854` is the clearest statement of the problem in the codebase. Second: **`mutate` has three request shapes and the non-idempotent one is still live.** Shape A is a whole-document delete, guarded on `hasDeletions() && isDeleted()`; shape B is the single complete-document update; shape C — reached whenever `completeDocument` is `null` for an existing document — emits up to **three** separate bulk items for one `_id` (field-deletion script `:1314-1315`, addition script `:1336`, `{"doc": …}` merge `:1344`), with `upsert` deliberately `null` when deletions are present (`:1326-1330`). That is exactly the shape shape B's own javadoc argues against (candidate **73**, reachability untraced: `IndexSerializer` and `IndexTransaction` were not read). Third: **the retry machinery and the idempotence machinery are a matched pair.** `retainUnappliedDocuments` (`:770-800`) **mutates the caller's map in place** — a contract declared in `IndexProvider.mutate`'s own javadoc, *"a caller must not rely on the map being unchanged after a failure"* — in four independent steps, each wrapped by `narrowQuietly` (`:805-813`) so that an immutable map simply resends that store whole, and guarded by `namesPendingDocuments` (`:826-835`) so that a response naming documents the mutation no longer holds narrows nothing. Every step fails **toward** resending more, which is only sound because shape B makes the duplicate work correct. The residual hazard the lesson does **not** claim either way: shape B guarantees all-or-nothing within a document, not script idempotence against a document that already holds the outcome, so a bulk item that applied and was then reported failed still double-applies a `LIST` add. Fourth: **`register` is a non-transactional side effect of a transaction.** Called synchronously from `ManagementSystem.addIndexKey:802` (lesson 25), it can `checkForOrCreateIndex` **and** `pushMapping` before the management transaction commits, and nothing compensates in either direction — a failed register can leave a stray ES index, and a successful register followed by a rollback leaves ES holding a mapping the schema has never heard of. ES mappings being additive and practically irremovable, the drift accumulates one way, with no documented repair. Fifth, **debt (d) is settled and the answer is "no filter at all"**: `IndexSelectionUtil` has six public static methods and **not one reference to `SchemaStatus`**; `existsMatchingIndex`/`getMatchingIndexes` apply only the caller's `Predicate<IndexType>`, and `AdjacentVertexHasUniquePropertyOptimizerStrategy` passes `indexType -> indexType.isCompositeIndex() && …`. So a unique composite index at `INSTALLED`, `REGISTERED` or `DISABLED` still drives the rewrite although the composite read gate is `== ENABLED`. **The absence is verified; the consequence is not** (candidate **72**, Hands-On B). Sixth, a **correction to the handover**: there is no `supportsExistsQuery()` in `IndexFeatures` at the pinned commit — the file was read in full and the nearest member is `supportsGeoExists()`. Seventh: **all four `*Compat` classes produce identical `IndexFeatures`**, each being `coreFeatures().setWildcardField(CUSTOM_ALL_FIELD).supportsGeoContains().build()`, so `coreFeatures()`'s `setWildcardField("_all")` is **unreachable** (candidate **71**) and version dependence lives in a boolean field, an `IllegalArgumentException` and an `unmapped_type` comment instead. `supportsDocumentTTL` is `false` for every ES version, leaving `IndexMutation.determineTTL()`'s uniform-TTL `checkArgument` with no ES consumer. Eighth, inherited item (b) settled: **Elasticsearch has no page-doubling equivalent of `SolrIndex`'s** — it sizes pages once, with three options (`limited-result-max-page-size` **250**, `adaptive-point-in-time-max-page-size` **500**, `adaptive-point-in-time-max-shards` **1**), all three carrying `positiveInt()` verifiers where lesson 24's candidate 66 found none on the core batching options. The doubling that does affect an ES-backed query is `LimitAdjustingIterator`'s, one layer up.
+**Sub-agents.** State the prohibition verbatim in every sub-agent prompt — naming `curl`, `wget`,
+`gh`, `git` and `raw.githubusercontent.com`, and instructing the sub-agent to report failure rather
+than find another route. It was obeyed and reported on 2026-11-26 and again on 2026-11-27.
 
-- **25 — 2026-11-23** · [`2026/11/2026-11-23-janusgraph-management-index-lifecycle/README.md`](2026/11/2026-11-23-janusgraph-management-index-lifecycle/README.md) · **Part VI opened. Mid-Part, so the re-pin question was correctly NOT re-raised.** Read the management and index-lifecycle surface at the pinned commit. **Blob-SHA verified against the directory listing and cited by line number:** `ManagementSystem` (1,815 lines, 86,864 bytes = `a722a7d9`; cited at `:190-207`, `:209-213`, `:241-268`, `:253`, `:256-257`, `:340-393`, `:365`, `:367`, `:368`, `:387`, `:389-391`, `:622-639`, `:628-639`, `:655-679`, `:704-706`, `:720-724`, `:746-767`, `:758`, `:770-808`, `:785-791`, `:791`, `:802`, `:807`, `:831-879`, `:841-846`, `:852`, `:860`, `:877`, `:967`, `:977`, `:980-1140`, `:987-996`, `:1000-1019`, `:1013-1016`, `:1026-1032`, `:1033-1051`, `:1052-1056`, `:1100-1112`, `:1130-1135`, `:1142-1147`, `:1154-1166`, `:1207-1301`, `:1227-1287`, `:1237-1242`, `:1244-1254`, `:1289-1299`, `:1303-1305`, `:1310-1319`, `:1321-1326`, `:1328-1341`, `:1334`, `:1343-1361`, `:1351`, `:1392-1459`, `:1436-1458`) and `ManagementLogger` (505 lines, 24,707 bytes = `1980d1fb`; `:71`, `:169-230`, `:176-207`, `:208-224`, `:235-237`, `:239-260`, `:275-286`, `:288-296`, `:306-315`, `:317-326`, `:328-339`, `:341-357`, `:382-441`). **Read inline, member-name citations only:** `SchemaStatus` (`7b40611d`), `SchemaAction` (`b2bf7951`), `JanusGraphIndexWrapper` (`94d0458d`), `GraphIndexStatusWatcher` (`3ebe2f6a`), `AbstractIndexStatusWatcher` (`e0ab9913`), `IndexUpdateJob` (`f1b9b521`), `IndexRepairJob` (`434abee9`). Two directory listings, one with `fields: ["name","sha","size"]` — **the cheap SHA-verification method this run introduced**. One `search_code` query, returning nothing. Three PR candidates logged (**68-70**) in [`tracks/janusgraph-registers-2.md`](tracks/janusgraph-registers-2.md), written in the same run as this file, as the second of two consecutive pushes. Daily Diff: the **2026-11-22** edition (38 items, **read in full**), deep dive on **Apache Kvrocks**, Redis mapped onto RocksDB, with a sidebar on **ParadeDB**'s filter-aware vector search.
-
-  **Findings.** Paragraph compressed 2026-11-26 under the roll-off rule, and the `Verified by lesson 25`
-  block removed in the same run; the full versions are in git history at the 2026-11-23 through 2026-11-25
-  commits, and the facts lesson 28 was promised are carried in *Notes For The Next Run* below and were all
-  used. The one-line substance: **most indexes never enter the INSTALLED → REGISTERED → ENABLED lifecycle
-  at all, and one expression decides it** — `canIndexBeEnabled`, which writes `ENABLED` directly when any
-  one key or the `indexOnly` constraint is new in the same management transaction, because the backfill is
-  then provably empty; **"the index's status" is two physically different things**, one `SchemaStatus`
-  property on the index vertex for a composite or relation-type index versus **one status per field**, held
-  as the last slot of each `INDEX_FIELD` edge's `Parameter[]` behind an `assert`, so a mixed index is N
-  lifecycles rather than one; and **the INSTALLED → REGISTERED transition is an unpersisted callback in the
-  issuing JVM's heap**, so what `REGISTERED` guarantees is not "every instance has seen the change" but
-  "every instance has seen it and every transaction that predated it has finished" — which is what makes a
-  reindex safe, and what strands an index at `INSTALLED` with no coded recovery path if that JVM dies
-  mid-handshake. Three PR candidates, **68-70**.
-
-- **24 — 2026-11-22** · [`2026/11/2026-11-22-janusgraph-step-multiquery-batching/README.md`](2026/11/2026-11-22-janusgraph-step-multiquery-batching/README.md) · **Findings.** Paragraph compressed 2026-11-25 under the roll-off rule, and the `Verified by lesson 24` block removed in the same run; the full versions are in git history at the 2026-11-22 through 2026-11-24 commits, and the facts lesson 28 and the capstone were promised are carried in *Notes For The Next Run* below. The one-line substance: **the batch size of a `JanusGraphVertexStep` is written by two different strategies and on the shipped default the second write always wins** — the field defaults to `Integer.MAX_VALUE`, `JanusGraphLocalQueryOptimizerStrategy`'s pass 5 writes `cache.tx-cache-size`, and `JanusGraphMultiQueryStrategy` then overwrites it with 2500 because `query.batch.limited` defaults to `true`, so **`cache.tx-cache-size` has no effect on batching on a default graph**; the two steps are not the matched pair their names suggest, only one compiling a query inside itself and only the other batching; and a batch is always a *hint* rather than a correctness constraint. This run also performed the **Part V/VI re-pin review**, which the pin survived for the fifth time. Three PR candidates, **65-67**.
 
 ## Syllabus
 
-### Part I — Orientation and the storage contract (`diskstorage/`, `janusgraph-inmemory`)
+### Part I — Physical storage and the heap (`access/heap`, `storage/page`, `storage/smgr`)
 
-- [x] 01 — Setup and the data model: fork, build `janusgraph-inmemory`, module map, and `docs/advanced-topics/data-model.md` (edgestore rows, relation columns)
-- [x] 02 — `KeyColumnValueStore`: `getSlice`, `mutate`, `acquireLock`, plus `StaticBuffer`, `Entry`, `SliceQuery`, `KeySliceQuery`
-- [x] 03 — `KeyColumnValueStoreManager` and `StoreFeatures`: how a backend advertises ordered scans, locking, batch mutation, and where core branches on them
-- [x] 04 — `InMemoryKeyColumnValueStore`: answering a slice query over a sorted in-memory structure
-- [x] 05 — `OrderedKeyValueStoreManagerAdapter` and `BerkeleyJEKeyValueStore`: faking key-column-value on an ordered key-value store
-- [x] 06 — The test harness: `JanusGraphTest`, `InMemoryGraphTest`, backend test suites, and how a PR's test is expected to look
-- [x] 07 — `Backend` and `BackendTransaction`: the stores that get opened (edgestore, graphindex, system_properties, ids, logs) and the cache/locker wrappers
+- [x] 01 — The cluster on disk: `base/<dboid>/<relfilenode>`, the three forks, and 1 GB segment files
+- [x] 02 — The page: `PageHeaderData`'s 24 bytes, `pd_lower`/`pd_upper`, the line pointer array, and special space
+- [x] 03 — `HeapTupleHeaderData`: `t_xmin`, `t_xmax`, `t_ctid`, `t_infomask`/`t_infomask2`, and `t_hoff`
+- [x] 04 — Attribute storage: MAXALIGN padding between attributes, 1-byte vs 4-byte varlena headers, `atthasmissing`, and TOAST
+- [x] 05 — The Free Space Map: the FSM tree pages and how a page with room is found
+- [x] 06 — The Visibility Map: `PD_ALL_VISIBLE`, all-frozen, and the index-only scan it enables
+- [x] 07 — HOT updates and page pruning: redirect line pointers, `heap_page_prune()`, and the HOT chain
+- [x] 08 — `smgr` and `md.c`: relation extension, the segment map, and the fsync request queue
 
-### Part II — Graph ⇄ bytes (`graphdb/idmanagement`, `graphdb/database`)
+### Part II — Shared memory: buffers and locks (`storage/buffer`, `storage/lmgr`)
 
-- [x] 08 — `IDManager`: vertex ID bit layout, partition bits, vertex-type suffixes, and how row keys are derived
-- [x] 09 — `VertexIDAssigner` and the ID authority: block allocation from the ids store without per-insert coordination
-- [x] 10 — `EdgeSerializer.writeRelation`: the column layout for edges and properties, direction, sort keys
-- [x] 11 — `EdgeSerializer.parseRelation` and `RelationCache`: decoding columns back into relations
-- [x] 12 — `StandardSerializer`: attribute encodings, order-preserving serializers, and custom types
-- [x] 13 — System types and schema storage: schema vertices, `BaseKey`/`BaseLabel`, and how a property-key definition is persisted
+- [x] 09 — The buffer manager: `BufferDesc`, the clock-sweep victim search, and the strategy ring
+- [x] 10 — Buffer pins versus content locks, and the LWLock implementation
+- [ ] 11 — The heavyweight lock manager: `LOCKTAG`, lock partitions, and the deadlock detector
+- [ ] 12 — Tuple locks: the four strengths, the conflict table, and the `LockTuple`/`XactLockTableWait` protocol
 
-### Part III — The write path (`core`, `graphdb/transaction`, `graphdb/database`, `diskstorage/locking`)
+### Part III — MVCC and transaction management (`access/transam`)
 
-- [x] 14 — `JanusGraphFactory.open` → `GraphDatabaseConfiguration` → `StandardJanusGraph` constructor: local vs global (fixed/masked) config
-- [x] 15 — `StandardJanusGraphTx`: `addVertex`, `addEdge`, property writes, added/deleted relation containers, and the vertex cache
-- [x] 16 — `StandardJanusGraph.commit` and `prepareCommit`: deletes, additions, mutations, and the order they are emitted in
-- [x] 17 — Composite indexes on write: `IndexSerializer` and the graphindex entries
-- [x] 18 — Locking: `ExpectedValueCheckingStore` and `ConsistentKeyLocker`, and how uniqueness survives an eventually consistent store
+- [ ] 13 — Transaction identifiers: xid assignment, `pg_xact`, and the two status bits per transaction
+- [ ] 14 — Snapshots: `SnapshotData`'s `xmin`/`xmax`/`xip`, and `HeapTupleSatisfiesMVCC`'s decision order
+- [ ] 15 — Hint bits: why the first read after a commit writes, and what that costs
+- [ ] 16 — Subtransactions: `pg_subtrans`, the subxid cache, and combo CIDs
+- [ ] 17 — MultiXacts: `pg_multixact`'s offsets and members, member flags, and multixact freezing
+- [ ] 18 — Freezing and wraparound: `relfrozenxid`, `datfrozenxid`, and the anti-wraparound VACUUM
+- [ ] 19 — VACUUM: the two heap passes, the dead-TID store, and index bulk deletion
 
-### Part IV — The read path (`graphdb/vertices`, `graphdb/query`)
+### Part IV — Isolation (`storage/lmgr/README-SSI`)
 
-- [x] 19 — `StandardVertex`/`CacheVertex`, lazy adjacency loading, and the transaction-level and database-level caches
-- [x] 20 — `BasicVertexCentricQueryBuilder`: `v.edges(...)` → `SliceQuery`, and vertex-centric indexes
-- [x] 21 — `GraphCentricQueryBuilder`: index selection between composite, mixed, and full scan
-- [x] 22 — `QueryProcessor`, limits, sub-query merging, and query profiling
+- [ ] 20 — Serializable Snapshot Isolation: SIREAD locks, the dangerous-structure test, and false positives
 
-### Part V — Gremlin integration (`graphdb/tinkerpop`)
+### Part V — WAL, recovery, and replication (`access/transam`, `replication`)
 
-- [x] 23 — The strategy layer: `JanusGraphLocalQueryOptimizerStrategy` and the other optimizer strategies
-- [x] 24 — `JanusGraphStep` and `JanusGraphVertexStep`: folding `has`/`limit`/`order` into storage queries, and multi-query batching
+- [ ] 21 — The WAL record: `XLogRecord`, block references, and the resource manager table
+- [ ] 22 — `XLogInsert`: WAL insertion locks, registered buffers, and full-page images
+- [ ] 23 — Commit: `XLogFlush`, `synchronous_commit` levels, and group commit
+- [ ] 24 — Checkpoints: the checkpointer's spread writes and the REDO pointer
+- [ ] 25 — Crash recovery: the redo loop and the per-page LSN comparison
+- [ ] 26 — Streaming replication: walsender, walreceiver, and physical replication slots
+- [ ] 27 — Logical decoding: the reorder buffer and the output plugin callbacks
 
-### Part VI — Schema, indexes, and production backends
+### Part VI — Access methods (`access/nbtree`, `indexam`)
 
-- [x] 25 — `ManagementSystem` and the index lifecycle: INSTALLED → REGISTERED → ENABLED, and reindex jobs
-- [x] 26 — Mixed indexes: the `IndexProvider` SPI and `ElasticSearchIndex`
-- [x] 27 — The CQL backend: `CQLKeyColumnValueStore` compared line-for-line with the in-memory store
-- [x] 28 — Transaction log, CDC, and stale-index repair: what happens when the edgestore and a mixed index disagree
+- [ ] 28 — nbtree: the Lehman-Yao variant, the high key, and right-links
+- [ ] 29 — nbtree page splits, deduplication, and the half-dead page deletion dance
+- [ ] 30 — The index AM interface: `amgettuple`, `amgetbitmap`, and the bitmap heap scan
 
-## Notes For The Next Run
+### Part VII — Planner and executor (`optimizer`, `executor`)
 
-**THE SYLLABUS IS COMPLETE. The next run writes the CAPSTONE, not a lesson** — this is Case C of the task:
-a `YYYY-MM-DD-janusgraph-capstone/README.md` assembling Parts I-VI end to end, one diagram covering every
-layer, the cross-cutting tradeoffs, and a project-scale exercise. Record JanusGraph under
-`## Completed Subjects` with its date range and item count (28 items, 2026-10-30 to 2026-11-26), and then
-**resume the paused PostgreSQL track at lesson 11** per `tracks/postgresql.md` — do **not** start a new
-subject, and do not pick a fresh database. The paused-track instructions are the authority on how.
+- [ ] 31 — The planner: `RelOptInfo`, `Path`, the cost constants, and the join-order search
+- [ ] 32 — The executor: the `PlanState` tree, `ExecProcNode`, and tuple slots
+- [ ] 33 — Row locking in the executor: `LockRows`, `table_tuple_lock`, and EvalPlanQual re-checks
+- [ ] 34 — Parallel query: parallel safety, the Gather node, and shared tuple queues
+- [ ] 35 — The table AM interface: what `heap` assumes and what a different table AM must supply
 
-**Syllabus unchanged for the whole of Part VI. No item was added, split, merged or reordered at any point;
-the 28 stand exactly as written on 2026-10-30.** Lesson 28 was the first unchecked item and is now checked.
+<!--
+NOTE BLOCK POLICY (set 2026-10-12, lesson 27; carried into the PostgreSQL track 2026-10-19).
+This block holds the scope and handover notes for the three most recent lessons only. Older notes
+are not deleted: they are preserved verbatim in this file's own git history, and TRACK-ARCHIVE.md
+records exactly which commit and blob to read for each archived range. Never drop a note without
+adding its archive row first.
 
-**Re-pin: PERFORMED this run and the pin stands for the sixth time.** `list_commits` on `master` returned
-`a59ae8d8` (2026-10-28) as the newest commit — the same three newest commits as at lessons 13, 18, 22 and
-24, so the repository has not moved in 29 days. **No further review is due**: the capstone cites files the
-track already read at this pin. If the capstone reads anything new, verify it by blob SHA against a
-directory listing before citing a line number, exactly as every lesson from 22 on has.
+-- SQLITE TRACK CLOSED 2026-10-19 (capstone). --------------------------------------------------
+The SQLite track's lessons 31-33 notes were archived on that run; see TRACK-ARCHIVE.md, row
+"31 - 33". The capstone document (2026/10/2026-10-19-sqlite-capstone/README.md) closes the track
+and records which items were deliberately left unread. None of these carry forward into the
+PostgreSQL track. Do not hand them to a PostgreSQL lesson.
 
-**The one sentence the capstone should build its durability section around.** JanusGraph's write-ahead log
-does not make a commit atomic; it **borrows** the storage backend's atomicity for one log entry and then
-uses that entry as evidence that the storage write landed. Everything else follows: the log carries element
-ids rather than document content, so repair is a **re-derivation from storage** and is therefore idempotent,
-convergent, order-free and robust to a wrong log entry; composite indexes need no log because they commit
-with storage; mixed indexes need one because they commit after it; and the user log is the one consumer for
-which re-derivation is impossible, so it gets a **re-send** and an unstated idempotence requirement. On
-default CQL the borrowed atomicity is not there at all — different store, different partition, several
-concurrent unlogged batches — and the dangerous direction is **losing the log entry while keeping the
-storage write**, which `PRECOMMIT`-only handling counts as a success.
+-- LESSON 08 (2026-10-27) AS TAUGHT ------------------------------------------------------------
+Document: 2026/10/2026-10-27-postgres-smgr-md-segments-fsync-queue/README.md (single README, not
+split -- the segment map, the extension batching and the fsync queue are three sections of one
+vertical slice, and splitting would have hidden that they are the same layer).
 
-**Carried facts the capstone may cite without re-deriving** (full detail in the `Verified by lesson 26/27/28`
-blocks below, which this run deliberately did NOT roll off):
+SOURCE PROVENANCE: `apt-get source postgresql-16` again, version 16.15-0ubuntu0.24.04.1, the same
+build the cluster runs. LESSON 07'S ROUTE WORKS AND IS NOW THE DEFAULT -- see the environment notes
+below for the exact recipe (deb-src on noble, then apt-get source into a world-readable dir).
+PATCH CHECK, AND IT MATTERS MORE THIS RUN THAN LAST: there are 15 patches in debian/patches/ now,
+and ONE OF THEM TOUCHES bufmgr.c (v8-0001-Fix-recovery-conflict-SIGUSR1-handling.patch). Its only
+bufmgr.c hunk is at LockBufferForCleanup(), nowhere near ExtendBufferedRel*, so the extension code
+quoted is upstream verbatim -- but DO NOT repeat lesson 07's blanket "no patch touches anything we
+read"; extract the +++/--- paths and check per file. md.c, smgr.c, sync.c, hio.c, checkpointer.c
+and fd.c are untouched. Trees/releases so far: 01 @ddd468ca, 02 @3cde90ec, 03 @f2edf5dd,
+04 @f52d4051, 05 @126976a8, 06 @0019a1ec, 07 = release 16.15, 08 = release 16.15.
+Files read IN FULL: storage/smgr/README (52 lines), include/storage/smgr.h, include/storage/sync.h.
+Read substantially: storage/smgr/md.c (1649 lines -- every function named in the lesson),
+storage/sync/sync.c (624 lines). Read in part: postmaster/checkpointer.c (ForwardSyncRequest,
+CompactCheckpointerRequestQueue, the CheckpointerShmemStruct declaration, CheckpointerShmemSize),
+access/heap/hio.c (RelationAddBlocks), storage/buffer/bufmgr.c (ExtendBufferedRelBy/To/Common/
+Shared, LimitAdditionalPins), common/file_utils.c (pg_pwrite_zeros), utils/misc/guc_tables.c
+(the file_extend_method entry), include/storage/fd.h (enum FileExtendMethod),
+include/port/pg_iovec.h (PG_IOV_MAX), catalog/storage.c (AddPendingSync, smgrDoPendingSyncs),
+access/nbtree/nbtsort.c (the smgrimmedsync call site).
 
-- **Defaults that bound everything.** `tx.log-tx` **false** (GLOBAL), `tx.max-commit-time` **300 s**
-  (GLOBAL), `storage.write-time` **100 s**, `TRANSACTION_LOG_DEFAULT_TTL` **7 days**, `log.num-buckets`
-  **1**, `log.read-threads` **1**, `log.send-delay` **1000 ms**, `graph.assign-timestamp` **true** but
-  `LOCAL`, `storage.transactions` **true**, `storage.cql.atomic-batch-mutate` **false**,
-  `storage.cql.batch-statement-size` **20**, `storage.cql.use-external-locking` **false**,
-  `query.batch.limited` **true** with batch size **2500**.
-- **The arithmetic result worth putting in the capstone verbatim:** `max-commit-time` must *exceed*
-  `write-time × (1 + indexBackends)`, so the shipped 300 s/100 s pair is safe for **at most one** index
-  backend and warns at two.
-- **The three-way idempotence taxonomy the track converged on**, which is the best cross-cutting theme it
-  produced: a **cell write** at a fixed `(key, column, timestamp)` is an assignment and replays for free
-  (lesson 27); a **mixed-index document** is rewritten whole from storage and so is an assignment too, by
-  construction (lessons 26 and 28); a **`LIST` field script append** and a **user-log event** are
-  accumulations and deliveries, and replay is unsafe for both. The dividing line is never
-  distributed-versus-local.
+*** THIS RUN HAD A CLUSTER, EVERY number is measured, AND THE PRIMARY INSTRUMENT WAS strace, NOT
+SQL. *** PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1), x86_64, gcc 13.3.0, Linux 6.18, ext4,
+2 vCPU / 8 GB RAM, ~30 GB free. block_size 8192, segment_size 131072 blocks, wal_segment_size
+16 MB, wal_level replica, max_wal_size 1 GB, checkpoint_timeout 300 s, fsync on, data_sync_retry
+off, max_files_per_process 1000, file_extend_method posix_fallocate, shared_buffers 128 MB except
+where a measurement says otherwise, data_checksums OFF.
+*** A DIFFERENT CLUSTER RECIPE WORKED THIS RUN AND IS SIMPLER: `apt-get install postgresql
+postgresql-contrib` then `pg_ctlcluster 16 main start`, running psql as the postgres user via
+`su postgres -c`. No initdb, no /var/tmp dance, ALTER SYSTEM + pg_ctlcluster restart works for
+PGC_POSTMASTER settings, and the log is at /var/log/postgresql/postgresql-16-main.log which is
+where log_checkpoints and DEBUG1 output land. Both recipes work; this one is fewer steps. The
+world-readable-script trap still applies: put psql -f scripts in /tmp/<dir> with chmod 777. ***
 
-**The capstone's open-items ledger. Nineteen Hands-On experiments are now outstanding** — lesson 24's three,
-25's four, 26's four, 27's four and 28's four — and **not one run in this track has ever executed
-JanusGraph**, so every finding is read rather than reproduced. State that plainly in the capstone; it is the
-single largest qualification on the whole track. Cheapest first:
+TOOK, and must not be re-taught:
+- THE SWITCH: smgrsw[] has ONE element, 16 md* function pointers, and the README's own defence of
+  the indirection quoted ("Removing the switch layer would save nothing noticeable anyway, since
+  storage-access operations are surely far more expensive than one extra layer of C function
+  calls"). smgropen() does NO I/O -- hash entry only, keyed on RelFileLocatorBackend.
+- THE SEGMENT MAP, structurally: SMgrRelationData's md_num_open_segs[fork] + md_seg_fds[fork] ->
+  MdfdVec { File mdfd_vfd; BlockNumber mdfd_segno; } -> fd.c VFD -> file. _fdvec_resize() NEVER
+  SHRINKS, deliberately, "because we want mdtruncate() to be able to promise that it won't allocate
+  memory, so that it is allowed in a critical section". _mdfd_openseg asserts segments open in
+  strict order -- NO SPARSE MAP. md_num_open_segs IS A CACHE, NOT A CENSUS (header comment quoted).
+- *** THE 1 GB SEGMENT BOUNDARY, CROSSED AND MEASURED -- lesson 01's arithmetic is now an
+  observation, which is what its handover asked for. *** 1,000,000 rows x 1000-byte pad ->
+  base/16388/16438, 142,858 blocks, 1,170,292,736 bytes. On disk: segment 0 = EXACTLY
+  1,073,741,824 bytes = 131,072 blocks = RELSEG_SIZE; `.1` = 96,550,912 = 11,786 blocks;
+  `_fsm` = 311,296 (38 blocks); no `_vm` until the first VACUUM. 131072 + 11786 = 142858 exactly.
+  SIDE DETAIL: stat reports segment 0 as 2,097,160 x 512 B = 1,073,745,920 allocated, 4,096 bytes
+  MORE than apparent -- ext4 extent metadata, not PostgreSQL.
+- *** mdnblocks() IS TWO SYSCALLS AND THE TRACE SHOWS THE LOOP CONDITION:
+    openat("base/16388/16438") = 14 ; lseek(14,0,SEEK_END) = 1073741824   <- == RELSEG_SIZE, advance
+    openat("base/16388/16438.1") = 15 ; lseek(15,0,SEEK_END) = 96550912   <- < RELSEG_SIZE, return
+  1.45 ms for the pair. _mdfd_openseg deliberately passes NO O_CREAT here ("might create a segment
+  which has vanished through some operating system misadventure"). ***
+- *** RELATION SIZE IS A SYSCALL, EVERY TIME, OUTSIDE RECOVERY -- MEASURED: the same backend did
+  lseek(15,0,SEEK_END) again 3 s later for the same unchanged relation. smgrnblocks_cached()
+  returns InvalidBlockNumber when not InRecovery, reason quoted from smgr.h ("lack of a shared
+  invalidation mechanism for changes in file size"). THIS IS THE REMOVED-REDUNDANCY THREAD'S
+  STRUCTURAL LIMIT: PostgreSQL stores a relation's size NOWHERE, where SQLite keeps a page count
+  in the header at offset 28 and validates it against the change counter. ***
+- *** RELATION EXTENSION, THE LESSON'S BEST EXPERIMENT: THE SAME 20,000 ROWS, FOUR SYSCALL SHAPES.
+    (1) INSERT..SELECT (no bistate):        2,860 pwritev, iovcnt=1, 0 fallocate; 2,858 blocks
+    (2) COPY (bistate):                     48 fallocate, 1 pwritev;              2,896 blocks
+    (3) COPY, file_extend_method=write_zeros: 0 fallocate, 97 pwritev;            2,896 blocks
+    (4) COPY, shared_buffers=128kB:         2,861 pwritev, iovcnt=1;              2,858 blocks
+  (2)'s fallocate lengths IN ORDER: 81920, 81920, 163840, 327680, then 524288 x 44 = 10, 10, 20,
+  40, 64, 64, ... That is hio.c arithmetic exactly: extend_by = num_pages*(1+waitcount), then
+  Max(.., bistate->already_extended_by) which ACCUMULATES (0->10->20->40->80), then
+  Min(.., MAX_BUFFERS_TO_EXTEND_BY = 64). 48 syscalls instead of 2,860 = 60x. ***
+- *** THE CLAMP NOBODY EXPECTS, and the most operationally surprising thing in the lesson:
+  LimitAdditionalPins() computes NBuffers / (MaxBackends + NUM_AUXILIARY_PROCS), subtracts
+  PrivateRefCountOverflowed + REFCOUNT_ARRAY_ENTRIES, floors at 1. At shared_buffers=128kB
+  (16 buffers) with max_connections=100 the quotient is 0, so EVERY extension went back to ONE
+  BLOCK -- measured, row (4). EXTENSION BATCHING IS A FUNCTION OF shared_buffers /
+  max_connections, documented nowhere a DBA would look. ***
+- THE COST OF BATCHING, measured: 2,896 vs 2,858 blocks = +38 blocks = +1.3% permanent slack for
+  the same 20,000 rows. Bulk extension over-extends by design (not_in_fsm_pages, then
+  FreeSpaceMapVacuumRange, or bistate->next_free).
+- file_extend_method IS A REAL GUC IN THIS BUILD (PGC_SIGHUP, RESOURCES_DISK, default
+  posix_fallocate, alternative write_zeros, the fallocate option compiled in only
+  #ifdef HAVE_POSIX_FALLOCATE). *** IT CHANGES THE SYSCALL, NOT THE CLOCK -- MEASURED: five COPY
+  runs of a 97 MB CSV each way, medians 638 ms (fallocate) vs 670 ms (write_zeros), no difference
+  outside noise. What DOES move: backend write_bytes in /proc/<pid>/io, 197,615,616 vs 219,070,464
+  for a 117,047,296-byte relation (+21.5 MB, +10.9%). HONEST LIMIT STATED IN THE LESSON:
+  write_bytes cannot separate WAL from heap writeback, and the nominal 117 MB of zero writes mostly
+  never reach the device because the real data overwrites the same page-cache pages. A cold-cache
+  or blktrace run would be needed for a precise figure. ***
+- pg_pwrite_zeros / FileZero: PG_IOV_MAX = Min(IOV_MAX, 32), and EVERY iovec points at the SAME
+  `static const PGIOAlignedBlock zbuffer` of BLCKSZ. MEASURED: a 40-block extension splits 32 + 8,
+  a 64-block extension splits 32 + 32.
+- *** pg_stat_io SEES BLOCKS, NOT SYSCALLS -- worth remembering before trusting it for I/O shape.
+  MEASURED after pg_stat_reset_shared('io'): client backend / relation / bulkwrite extends = 14288,
+  exactly the relation's block count, writes = 12240, fsyncs NULL; client backend / relation /
+  normal extends = 6 (the FSM fork, extended without a strategy). Those 14,288 blocks were ~224
+  fallocate calls. IOOP_EXTEND is counted with extend_by as its count argument. ***
+- *** skipFsync IS A TRANSFER OF OBLIGATION, NOT A WAIVER, and the proof is a measurement that
+  looks like a bug: four plain `CREATE TABLE q (id int, pad text)` produced FOUR fsync() syscalls
+  in the CLIENT BACKEND, on relfilenodes that pg_class identifies as pg_toast_*_index. nbtsort.c
+  builds btrees OUTSIDE shared buffers with smgrextend(..., skipFsync=true) and pays the debt in
+  _bt_leafbuild's `if (wstate->btws_use_wal) smgrimmedsync(...)`, comment quoted. THE TELL IN THE
+  TRACE is openat("<relfilenode>.1") = -1 ENOENT immediately before the fsync -- that is
+  mdimmedsync's deliberate probe past the last active segment, which mdnblocks would never do. ***
+  NOT taken here: smgrDoPendingSyncs / wal_skip_threshold is DEAD CODE at wal_level=replica
+  because AddPendingSync is guarded by `relpersistence == PERMANENT && !XLogIsNeeded()`. Verified
+  by reading the guard, not measured. A LESSON THAT RUNS WITH wal_level=minimal CAN TAKE IT.
+- THE FSYNC REQUEST QUEUE, the part nobody reads, now read: FileTag { int16 handler; int16 forknum;
+  RelFileLocator rlocator; uint32 segno; } is the WHOLE design. Constants that are code, not
+  folklore: max_requests = Min(NBuffers, MAX_CHECKPOINT_REQUESTS=10000000) -> 16,384 at
+  shared_buffers=128MB and 16 at 128kB (DERIVED from checkpointer.c:912, nothing exposes it);
+  FSYNCS_PER_ABSORB = UNLINKS_PER_ABSORB = 10; too_full = (num_requests >= max_requests/2) with the
+  SetLatch deliberately AFTER LWLockRelease. FOUR request types (SYNC/UNLINK/FORGET/FILTER) and SIX
+  handlers (MD, CLOG, COMMIT_TS, MULTIXACT_OFFSET, MULTIXACT_MEMBER, NONE) share one queue.
+  retryOnError DIFFERS BY CALLER and the difference is a durability argument: register_dirty_segment
+  passes FALSE (fall back to a local fsync), register_unlink_segment and register_forget_request
+  pass TRUE (spin on WaitLatch 10 ms forever), because dropping an unlink leaks a file.
+- *** THE OBSERVATION TECHNIQUE WORTH REUSING: log_min_messages = debug1 MAKES
+  ProcessSyncRequests() PRINT ONE LINE PER pendingOps ENTRY. That is a direct dump of the
+  checkpointer's hash table, with real paths. MEASURED after CHECKPOINT (drain), then two UPDATEs
+  by ctid '(0,1)' and '(131072,1)' on the two-segment relation, then CHECKPOINT:
+    number=1 file=base/16388/16438   time=0.421 ms
+    number=2 file=base/16388/16438.1 time=0.125 ms
+    number=3 file=pg_xact/0000       time=0.138 ms
+  "wrote 4 buffers ... sync files=3". THREE FACTS: segno is part of the key so ONE RELATION COSTS
+  TWO ENTRIES; pg_xact rides the same queue via SYNC_HANDLER_CLOG; and `sync files=N` in
+  checkpoint complete IS ckpt_sync_rels, i.e. literally the number of hash entries processed. ***
+- *** THE DEDUP RATIO, MEASURED: ~40,800 block writes (buffers_backend 24,490 + buffers_clean 100 +
+  3 + the checkpoint's own 16,214) collapsed into sync files=21, longest=0.083 s. The 22,500-block
+  heap written and rewritten three times is ONE entry fsynced once in 59.153 ms; its `_fsm` fork is
+  a SEPARATE entry (forknum is in the key -- this is the mechanical justification for "forks grow
+  and truncate independently", which lessons 05/06 asserted from the README). ~1,940:1. ***
+- buffers_backend_fsync STAYED 0 IN EVERY CONFIGURATION, including 57,987 backend writes against a
+  16-SLOT queue. That is the design working, not a weak test: CompactCheckpointerRequestQueue
+  hashes {type, ftag} and keeps only the last occurrence, so a queue of near-duplicates always
+  compacts and ForwardSyncRequest never returns false. THE FAILURE NEEDS A QUEUE BOTH FULL AND
+  DUPLICATE-FREE -- many distinct hot segments, not many writes.
+- *** AN EXPERIMENT THAT FAILED, REPORTED AS A FAILURE IN THE DOCUMENT: SIGSTOPping the
+  checkpointer to force queue overflow DEADLOCKED -- the inserting backend hit max_wal_size and
+  waited for a checkpoint that could not start. Abandoned, checkpointer resumed. THE QUEUE-FULL
+  FALLBACK IN register_dirty_segment() WAS READ AND NEVER EXECUTED. DO NOT REPEAT THIS METHOD. ***
+- *** THE INACTIVE ZERO-LENGTH SEGMENT, OBSERVED -- lesson 01 derived it, nothing had seen it.
+  DELETE FROM seg WHERE ctid >= '(100000,1)' then VACUUM: "truncated 142858 to 100000 pages".
+  After: segment 0 = 819,200,000 B (= 100,000 x 8192), `.1` = 0 BYTES AND STILL PRESENT,
+  `_fsm` 311,296 -> 221,184, `_vm` created at 32,768 (4 blocks). mdtruncate's reason quoted ("other
+  backends and/or the checkpointer might be holding open file references"), plus
+  register_dirty_segment being called ON A TRUNCATION (the queue carries "this file got shorter"
+  with the same FileTag), and Assert(v != &md_seg_fds[fork][0]) -- "we never drop the 1st segment".
+  AND THE ZERO-LENGTH SEGMENT IS INVISIBLE ABOVE: a fresh backend scanning the table did
+  openat("base/16388/16438") + lseek = 819200000 and made ZERO references to `.1` in the whole
+  trace. NOT REACHED: truncating to an exact multiple of RELSEG_SIZE, which the comment says keeps
+  segment K+1 at length 0. ***
+- ANSWERS TO THE THREE INHERITED QUESTIONS, recorded so nobody re-asks them:
+  (1) LESSON 06'S "why does bulk extension overshoot": RelationAddBlocks's waitcount multiplier and
+      the accumulating bistate->already_extended_by, capped at 64. Measured ramp above.
+  (2) LESSON 07'S "N cold updates produce exactly N new blocks": consistent with extend_by = 1 on
+      the no-bistate path -- heap_update's RelationGetBufferForTuple has no BulkInsertState, so each
+      cold update that cannot fit extends by exactly one block. The FSM question (can a cold update
+      be routed back onto a prune-recovered page) is STILL OPEN; the answer needs
+      FreeSpaceMapVacuumRange, which is lesson 19's.
+  (3) LESSON 05'S "is the FSM's 3-block floor a consequence of extension": NO. It is
+      fsm_logical_to_physical's interleaving (the bottom page cannot be block 0), which lesson 05
+      already derived. smgrextend has nothing to do with it. CLOSED.
+- WAL AND EXTENSION: not separately measured this run, but stated with evidence from the code --
+  mdextend/mdzeroextend emit no WAL; the new page's contents are logged by whatever writes into it.
+  A LESSON THAT WANTS THE EVIDENCE SHOULD pg_waldump an INSERT that extends and show there is no
+  extension record. Lesson 08's Next Steps do not claim otherwise.
+DELIBERATELY TREATED AS BLACK BOXES: GetVictimBuffer, StrategyFreeBuffer, IOContextForStrategy and
+the bulkwrite ring (09); BufferDesc, the clock sweep (09); pin accounting beyond the one line in
+LimitAdditionalPins (10); max_safe_fds and the VFD LRU (named, not measured); BufferSync and the
+checkpoint's spread writes (24); pendingUnlinks/SyncPostCheckpoint (19).
 
-1. **Lesson 28's Hands-On B** — four lines of `jshell`, no build: proves candidate 80's precondition is dead.
-2. **Lesson 27's Hands-On A** — two minutes in `jshell`: reproduces the LSB delete/add mask.
-3. **Lesson 26's Hands-On B** — `inmemory`, one unique composite index, `DISABLE_INDEX`, re-profile; settles candidate 72.
-4. **Lesson 28's Hands-On C** — one unit test in `janusgraph-core` against the package-private `nanosUntilExpiry`.
-5. Everything else needs Docker.
+NO SYLLABUS REVISION THIS RUN. Lesson 08's title was taught exactly as written -- relation
+extension, the segment map and the fsync request queue were all three taken in full -- and all
+three inherited questions were answered or explicitly closed.
 
-**Filing gates still in force:** candidate 65 not until lesson 24's Hands-On B; 70 not until 25's Hands-On D;
-72 not until 26's Hands-On B; 74 is now a *configuration-drift* claim and needs the two-instance case
-demonstrated; **79 must not be filed until `BackendTransaction.commitIndexes` has been read**, because its
-whole weight rests on whether that method can throw. **80 is the only candidate in the register that is
-provable by reading alone and safe to file today**, and it is a two-line diff.
+Throwaway tables left by this run (cluster does not persist; names listed only to avoid collisions
+within a future run): seg, ext_insert, ext_copy, ext_copy_wz, tiny_copy, q1..q4, dedup, b, io_t,
+iostat_t. NOTE: this run did NOT use the pgNN_ prefix convention and should have. Lesson 09 should
+go back to pg9_*.
 
-**Three reads the capstone should spend its budget on, in order.** (a)
-`BackendTransaction.commitIndexes` — gates candidate 79 and completes the commit path Parts III and VI both
-depend on. (b) `IndexTransaction.restore` — the single primitive **both** repair paths funnel into
-(`StandardTransactionLogProcessor:428` and `MixedIndexStaleEntryRemover:178`) and never read; it also decides
-whether `batchSize` is a memory knob or a request-size knob. (c) one `search_code` for
-`MIXED_INDEX_REINDEX_BATCH_SIZE`, which closes lesson 26's metrics debt and names the caller that passes
-`batchSize` into `MixedIndexStaleEntryRemover.submit`.
+-- LESSON 09 (2026-10-28) AS TAUGHT ------------------------------------------------------------
+Document: 2026/10/2026-10-28-postgres-buffer-manager-clock-sweep/README.md (single README, not
+split -- BufferDesc, the sweep and the ring are one decision procedure, and the ring only makes
+sense as a modification of the sweep).
 
-**Open and unresolved across the whole track, deliberately not filled in.** (a) Whether any production path
-passes a real limit to `QueryUtil.processIntersectingRetrievals` (candidate 51 is a reachability claim).
-(b) `BackendQueryHolder`'s duplicated `isFitted` in `hashCode` (candidate 54). (c)
-`IndexCandidateGroup.getTotalScore()`'s `Double.NEGATIVE_INFINITY` sentinel colliding with
-`IndexCandidate`'s default score (inside candidate 50). (d) Lesson 23's §2.2 strategy-ordering question.
-(e) Whether `BatchProcessingQueue.removeLast()` has any caller — `HasStepBatchFetcher` and
-`DropStepBatchFetcher` unread, so it must **not** be called dead code. (f) Whether
-`ElasticSearchBulkFailureException` can report an item as failed after it applied, which decides whether
-lesson 26's shape B has a residual duplication hazard; `TransientFailures` (`6aba13b8`) and
-`ElasticSearchBulkFailureException` (`e52ae410`) unread. (g) Which core call sites invoke
-`IndexMutation.setCompleteDocument`, i.e. whether shape C is reachable for a real update. (h)
-`BasicVertexCentricQueryBuilder:711`'s `Preconditions.checkArgument(bestCandidate != null, …)` reachability —
-lesson 20's other debt, unowned since lesson 27; **the capstone should settle it or record it as open.** (i)
-**New from lesson 28:** lesson 24's `JanusGraphStep:118` order assert is still unresolved and a stale mixed
-index is precisely its trigger condition, which makes it the one open item with a demonstrated route to
-wrong *results* rather than wrong *metrics*.
+SOURCE PROVENANCE: `apt-get source postgresql-16` for the third run in a row, version
+16.15-0ubuntu0.24.04.1, the same build the cluster runs. PATCH CHECK DONE PER FILE as lesson 08
+insisted: the patch series touches src/Makefile.global.in, bufmgr.c, procsignal.c, postgres.c,
+pgstat_database.c, psql/settings.h, fe_utils/print.h, pg_config_manual.h, storage/procsignal.h,
+tcop/tcopprot.h and tutorial/README. freelist.c, buf_init.c, buf_table.c and buf_internals.h are
+UNTOUCHED; bufmgr.c's only hunk is at LockBufferForCleanup() (line 4923), nowhere near
+BufferAlloc / GetVictimBuffer / PinBuffer / ExtendBufferedRel*. Trees/releases so far:
+01 @ddd468ca, 02 @3cde90ec, 03 @f2edf5dd, 04 @f52d4051, 05 @126976a8, 06 @0019a1ec,
+07 = release 16.15, 08 = release 16.15, 09 = release 16.15.
+Files read IN FULL: storage/buffer/README (276 lines -- lesson 08's handover asked for this and it
+was worth it), storage/buffer/freelist.c (774 lines), include/storage/buf_internals.h (440 lines),
+storage/buffer/buf_init.c (186 lines). Read in part: storage/buffer/bufmgr.c (5676 lines --
+BufferAlloc, GetVictimBuffer, PinBuffer, PinBuffer_Locked, UnpinBuffer, InvalidateVictimBuffer,
+BgBufferSync), include/storage/lwlock.h (NUM_BUFFER_PARTITIONS), access/heap/heapam.c (initscan's
+`rs_nblocks > NBuffers / 4`), and the pg_buffercache 1.4 extension SQL in
+/usr/share/postgresql/16/extension/.
 
-**Never touch an earlier entry's `## My Notes`.** Sessions 01-04 keep their templates. They are his to fill
-at any time; if a future run finds content in any of them, answer those questions in that run's entry
-regardless of mode.
+*** THIS RUN HAD A CLUSTER, EVERY number is measured, AND THE INSTRUMENT WAS pg_buffercache +
+pg_stat_io + pg_shmem_allocations -- NOT strace. *** PostgreSQL 16.15 (Ubuntu
+16.15-0ubuntu0.24.04.1), x86_64, gcc 13.3.0, Linux 6.18, ext4, 2 vCPU / 8 GB RAM. block_size 8192,
+shared_buffers 128 MB = 16,384 buffers except where a measurement says otherwise,
+vacuum_buffer_usage_limit 256 kB, bgwriter_lru_maxpages 100, bgwriter_lru_multiplier 2.0,
+data_checksums OFF, fsync on. pg_buffercache 1.4 AND pg_prewarm 1.2 INSTALLED FOR THE FIRST TIME IN
+THIS TRACK -- both were already present in /usr/share/postgresql/16/extension/, `CREATE EXTENSION`
+is all it took.
+*** RECIPE NOTE, SIMPLER AGAIN THAN LESSON 08'S: postgresql-16 was ALREADY INSTALLED in the sandbox
+image this run (psql 16.15 on PATH, cluster "16 main" present but down). `pg_ctlcluster 16 main
+start` was the only step, and `sudo -u postgres psql -X -q` works directly -- no `su postgres -c`
+quoting, no initdb, no /var/tmp dance. CHECK FOR AN EXISTING CLUSTER WITH pg_lsclusters BEFORE
+INSTALLING ANYTHING. Two traps hit this run: (a) ALTER SYSTEM cannot run inside an implicit
+transaction block, so psql -c with TWO statements fails -- use one -c per ALTER SYSTEM; (b) VACUUM
+likewise cannot share a -c with other statements. ***
+*** NO DEBUG SYMBOLS: postgresql-16-dbgsym IS NOT IN THE UBUNTU 24.04 ARCHIVE (apt-cache policy
+returns nothing, apt-get install says "Unable to locate package"). gdb is installed but cannot
+resolve StrategyControl, which is a static in freelist.c. ANY LESSON PLANNING TO READ A
+SHARED-MEMORY STRUCT DIRECTLY MUST FIND ANOTHER WAY -- see the arc trick below, which is the way. ***
 
-**Entry size.** Lesson 05 ~35 KB, 06 ~63, 07 ~78, 08 ~67, 09 ~61, 10 ~70, 11 ~56, 12 ~91, 13 ~72, 14 ~75,
-15 ~86, 16 ~87, 17 ~64, 18 ~78, 19 ~69, 20 ~76, 21 ~103, 22 ~77, 23 ~59, 24 ~59, 25 ~51, 26 ~62, 27 ~70,
-**28 ~76** (digest ~17). A large share of each is permalink URLs, which are not prose.
+TOOK, and must not be re-taught:
+- THE FOUR SHMEM ARRAYS and their per-buffer costs, MEASURED out of pg_shmem_allocations at
+  shared_buffers=128MB and divided by 16,384: "Buffer Descriptors" 1,048,576 = EXACTLY 64.0 B
+  (BUFFERDESC_PAD_TO_SIZE = (SIZEOF_VOID_P == 8 ? 64 : 1), pure cache-line padding against false
+  sharing); "Buffer Blocks" 134,221,824 = 16384*8192 + 4096, the remainder being PG_IO_ALIGN_SIZE
+  slack so the pool start can be TYPEALIGNed; "Buffer IO Condition Variables" 262,144 = 16.0 B
+  (deliberately OUTSIDE BufferDesc to keep it under 64 B -- header comment says they would fit
+  "but for now that is not done"); "Checkpoint BufferIds" 327,680 = 20.0 B = sizeof(CkptSortItem),
+  preallocated so a checkpoint never mallocs (LESSON 24'S). *** AND "Buffer Strategy Status" = 28
+  BYTES TOTAL FOR THE WHOLE CLUSTER -- that is the entire replacement policy's shared state. ***
+  TRAP RECORDED: "Shared Buffer Lookup Table" is only 2,896 B; that is the HTAB directory, the
+  elements come from a separate ShmemInitHash freelist and do not carry the name.
+- THE 32-BIT STATE WORD, which is the heart of the whole file: 18-bit refcount (mask (1U<<18)-1),
+  4-bit usagecount (mask 0x003C0000, shift 18), 10 flag bits (mask 0xFFC00000). ALL TEN FLAGS
+  tabulated with their bit numbers: BM_LOCKED 22, BM_DIRTY 23, BM_VALID 24, BM_TAG_VALID 25,
+  BM_IO_IN_PROGRESS 26, BM_IO_ERROR 27, BM_JUST_DIRTIED 28, BM_PIN_COUNT_WAITER 29,
+  BM_CHECKPOINT_NEEDED 30, BM_PERMANENT 31. *** THE TRICK IS THAT BM_LOCKED IS THE BUFFER HEADER
+  SPINLOCK AND IT LIVES IN THE WORD IT PROTECTS, so pin/unpin/usagecount are a CAS with ZERO
+  lock-acquire pairs. The asymmetry from the header comment: a lock HOLDER may do arbitrary updates
+  in one store (clearing BM_LOCKED in the same write); a non-holder is restricted to CAS, and plain
+  atomic increment/OR/AND are FORBIDDEN because they cannot check BM_LOCKED. ***
+- BM_MAX_USAGE_COUNT = 5, with the tradeoff comment quoted ("a large value (comparable to NBuffers)
+  would approximate LRU semantics. But it can take as many as BM_MAX_USAGE_COUNT+1 complete cycles
+  of clock sweeps to find a free buffer"). Four bits would allow 15; the policy chooses 5.
+- BufferTag's five 4-byte fields (spcOid, dbOid, relNumber, forkNum, blockNum) and the constraint
+  that forces that shape, quoted: the tag "must be sufficient to determine where to write the
+  block, without reference to pg_class or pg_tablespace entries". SAME TUPLE as lesson 01's path
+  and lesson 08's FileTag -- the identity is stable from filename to buffer header.
+- NUM_BUFFER_PARTITIONS = 128 (lwlock.h), partition = hashcode % NUM_BUFFER_PARTITIONS, "NB:
+  NUM_BUFFER_PARTITIONS must be a power of 2". Share lock to look up, exclusive to change a tag.
+  Two rules: pin the found buffer BEFORE releasing the partition lock; lock multiple partitions in
+  partition-number order. README's history recorded: one cluster-wide BufMgrLock before 8.1, split
+  128 ways in 8.2.
+- StrategyGetBuffer's TWO-STAGE SEARCH, in full, with four details that are easy to miss:
+  (a) the freelist peek `firstFreeBuffer >= 0` is DELIBERATELY RACY and the comment defends it
+      ("it'd be sad to acquire it here -- uselessly in most cases ... that's pretty harmless");
+      the freelist is only never-used buffers plus InvalidateBuffer/tag-race returns, so once the
+      pool is full it stays empty forever and every allocation is a sweep.
+  (b) *** trycounter RESETS ON EVERY DECREMENT, NOT EVERY TICK. *** Only the PINNED branch does
+      --trycounter; the usagecount-decrement branch sets trycounter = NBuffers. So
+      "no unpinned buffers available" fires ONLY when NBuffers consecutive buffers were all
+      pinned, never because the sweep is doing work. The sweep may run arbitrarily long while
+      making progress.
+  (c) ClockSweepTick is LOCK-FREE EXCEPT ON WRAP: nextVictimBuffer is a pg_atomic_uint32 only ever
+      INCREMENTED, modulo applied at read time; the spinlock is taken on exactly one tick in
+      NBuffers, purely to keep completePasses consistent for StrategySyncStart. Comment accepts the
+      consequence ("buffers being returned slightly out of apparent order").
+  (d) THE VICTIM IS RETURNED WITH ITS HEADER SPINLOCK STILL HELD, and the comment says why ("To
+      ensure that no one else can pin the buffer before we do"). GetVictimBuffer immediately calls
+      PinBuffer_Locked. There is no window.
+- *** THE LESSON'S BEST TRICK, AND IT IS REUSABLE WHENEVER A SHARED-MEMORY COUNTER IS NOT EXPOSED:
+  LOCATE THE CLOCK HAND FROM pg_buffercache.bufferid. Fill the pool with one generation of blocks,
+  allocate exactly N fresh ones with pg_prewarm(...,'buffer',...) (which passes a NULL strategy, so
+  every block goes through the normal sweep), and ask which bufferids the new generation occupies.
+  MEASURED: 2,000 blocks landed in bufferid 373..2372 -- EXACTLY 2,000 CONSECUTIVE IDS, an arc, not
+  a scatter. Next batch predicted 2373..4372, measured 2396..4395 (23 buffers skipped because
+  catalog queries between the two calls re-pinned them); third batch predicted 4396..6395,
+  MEASURED 4396..6395 EXACTLY, with a lead()-based gap check returning holes = 0. SO: THE HAND
+  ADVANCES ONE BUFFER PER ALLOCATION PLUS ONE PER SKIP, and EVICTION ORDER IS POSITION ORDER, NOT
+  AGE ORDER -- 14,000 buffers at usagecount 0 sat untouched because the hand was elsewhere. ***
+- A SECOND SIGNATURE OF THE SWEEP, measured: after ONE full pass of allocations (16,384 prewarmed
+  blocks into a 16,384-buffer pool) the usagecount histogram was 0=16027, 1=211, 2=18, 3=99, 4=8,
+  5=21. BufferAlloc stamps each new tag with BUF_USAGECOUNT_ONE and the hand comes round and
+  decrements it back to 0, so A POOL JUST FILLED ONCE IS, BEHIND THE HAND, A POOL OF
+  USAGECOUNT-0 BUFFERS.
+- PinBuffer's CAS loop, and THE PART THAT MATTERS MOST: the whole usagecount block is guarded by
+  `ref == NULL` from GetPrivateRefCountEntry. If this backend already holds a pin it takes the else
+  branch and TOUCHES THE SHARED state WORD NOT AT ALL. *** THE SHARED COUNTER MEASURES DISTINCT
+  BACKEND PIN EPISODES, NOT ACCESSES. *** And with a strategy the increment is capped at 1 ("Ring
+  buffers shouldn't evict others from pool. Thus we don't make usagecount more than 1").
+  MEASURED saturation on a 3,449-block cached table, one full scan per iteration:
+  1, 2, 3, 4, 5, 5, 5, 5 -- exactly BM_MAX_USAGE_COUNT, so a 5-touch and a 500-touch page are
+  INDISTINGUISHABLE to the policy.
+- GetVictimBuffer's THREE `goto again` PATHS, each a real race: (1) the dirty victim's content lock
+  is held, so the acquisition is LWLockConditionalAcquire(LW_SHARED) and the comment names the bug
+  that forced it ("two backends are both trying to split btree index pages, and the second one just
+  happens to be trying to split the page the first one got from StrategyGetBuffer"); (2) a strategy
+  would need a WAL flush, so StrategyRejectBuffer votes -- BAS_BULKREAD only, from_ring only, and it
+  sets that slot to InvalidBuffer "necessary to prevent infinite loop if all ring members are
+  dirty"; (3) InvalidateVictimBuffer failed. EXIT CONTRACT asserted: refcount == 1 and NONE of
+  BM_TAG_VALID / BM_VALID / BM_DIRTY -- a victim is ANONYMOUS before BufferAlloc stamps the new tag.
+- *** reuses AND evictions IN pg_stat_io ARE THE SAME EVENT, labelled by from_ring:
+  pgstat_count_io_op(..., from_ring ? IOOP_REUSE : IOOP_EVICT). That is the measuring instrument
+  for everything about rings. ***
+- THE RING, structurally: GetAccessStrategy is a four-case switch -- BAS_NORMAL returns NULL (no
+  object at all), BAS_BULKREAD 256 kB, BAS_BULKWRITE 16*1024 kB, BAS_VACUUM 256 kB overridable by
+  vacuum_buffer_usage_limit. Then GetAccessStrategyWithSize does ring_buffers = kb / (BLCKSZ/1024),
+  returns NULL if 0 (*** 0 kB MEANS NO RING, NOT A TINY RING ***), and clamps
+  ring_buffers = Min(NBuffers / 8, ring_buffers). The object is BACKEND-PRIVATE, palloc'd, no lock:
+  btype, nbuffers, a `current` cursor, a flat Buffer[]. GetBufferFromRing accepts a slot only if
+  refcount == 0 AND usagecount <= 1 (the counterpart of PinBuffer's capped increment: 1 means
+  "only I touched this"). AND THE RING IS NOT A RESERVATION -- slots are filled by AddBufferToRing
+  from inside StrategyGetBuffer, i.e. by an ordinary sweep/freelist allocation.
+- *** THE SINGLE MOST REUSABLE FACT IN THE LESSON: reads - reuses = THE RING SIZE IN BUFFERS,
+  readable straight out of pg_stat_io with no source access. MEASURED FOUR WAYS:
+    seq scan t_mid (7,242 blk), bulkread:        7,242 - 7,210 = 32
+    VACUUM t_big, BUFFER_USAGE_LIMIT '256kB':   76,376 - 76,344 = 32
+    VACUUM t_big, BUFFER_USAGE_LIMIT '2MB':     49,775 - 49,519 = 256   (2MB/8kB, no rounding)
+    COPY FROM (15,560 extends), bulkwrite:      15,560 - 13,512 = 2,048
+    seq scan t_mid at shared_buffers=128kB:      7,242 - 7,240 = 2      (= Min(16/8, 32)) ***
+- THE SEQ-SCAN THRESHOLD, measured on both sides: initscan's `rs_nblocks > NBuffers / 4` = 4,096
+  blocks at 16,384 buffers. t_small (3,449 blk, BELOW) -> context `normal`, 3,449 buffers resident,
+  THE WHOLE TABLE CACHED. t_mid (7,242 blk, ABOVE) -> context `bulkread`, 32 buffers resident.
+  NOTHING GRADUAL. And the threshold MOVES WITH shared_buffers, so the same table and query change
+  caching behaviour completely when the pool is resized, with nothing in EXPLAIN to say so.
+- *** THE RING IS PER PARTICIPANT, NOT PER QUERY -- caught by accident. The first t_mid run was
+  taken with max_parallel_workers_per_gather=2 and showed 96 resident buffers, not 32, with the
+  leader reading only 2,392 of 7,242 blocks. leader + 2 workers x 32 = 96. BufferAccessStrategy is
+  palloc'd backend-local, so parallelism MULTIPLIES the footprint the ring is meant to bound. SET
+  max_parallel_workers_per_gather=0 FOR ANY BUFFER MEASUREMENT. ***
+- *** THE HEADLINE EXPERIMENT, AND THE ONE A LATER LESSON SHOULD CITE: THE SAME 242 MB READ, TWO
+  PLAN NODES, OPPOSITE OUTCOMES. Warm t_small (3,449 blk) to usagecount 2, then read t_big
+  (31,035 blk = 242 MB) through a 128 MB pool.
+    A) SEQ SCAN (BAS_BULKREAD): bulkread reads=31035 reuses=31003 EVICTIONS=0; t_small still 3,449
+       buffers at avg usagecount 2.00, UNTOUCHED; t_big occupies 32 buffers; 12,647 buffers unused.
+    B) INDEX SCAN (no strategy object): normal reads=36013 EVICTIONS=23320; t_small ZERO BUFFERS,
+       GONE; t_big 13,944 + index 2,210 buffers at avg usagecount 0.44; pool unused = 0.
+  initscan() builds a ring; index_beginscan and the bitmap heap scan DO NOT. An index scan that
+  touches most of a large table is the pathology the ring prevents AND the case it does not cover. ***
+- BUFFER_USAGE_LIMIT 0 MEASURED AS THE CONTROL: context flips from `vacuum` to `normal`, reuses
+  becomes NULL, and one VACUUM of t_big took 16,255 of 16,384 buffers with 60,309 evictions and
+  zero unused. That single row is the whole justification for the ring's existence.
+- BgBufferSync's ONE call into the policy: StrategySyncStart returns nextVictimBuffer % NBuffers,
+  completePasses PLUS nextVictimBuffer / NBuffers (correcting for an unlanded wrap), and
+  numBufferAllocs read with pg_atomic_exchange_u32(...,0) -- *** READING IT RESETS IT ***. The
+  bgwriter scans forward from that position "which it does not change!", keeps smoothed_density
+  (init 10.0) and multiplies by bgwriter_lru_multiplier, stopping at bgwriter_lru_maxpages.
+  MEASURED on the dirtied cluster: buffers_clean 10448, maxwritten_clean 95, buffers_alloc 804317,
+  buffers_backend 498979. NOTE: StrategyGetBuffer increments numBufferAllocs AFTER the ring check
+  ("buffers recycled by a strategy object are intentionally not counted here"), so buffers_alloc
+  UNDERCOUNTS ring-served accesses by design.
+- ANSWERS TO LESSON 08'S THREE INHERITED QUESTIONS, all three closed:
+  (1) GetVictimBuffer: opened in full (the three retry paths, the exit contract, the
+      IOOP_REUSE/IOOP_EVICT split). Lesson 08's quoted claim that "writing out victim buffers is
+      the most expensive part of extending the relation" is consistent with the code path
+      (FlushBuffer + ScheduleBufferTagForWriteback inside the BM_DIRTY branch) but was NOT priced
+      independently this run -- the extension path was not re-measured. Still open as a price.
+  (2) The bulkwrite ring: ANSWERED AND BETTER THAN ASKED. Lesson 08's "extends=14288, writes=12240,
+      the ring evicted 86% of what it created" is exactly reads/extends - reuses = ring size. This
+      run measured extends 15,560 and reuses 13,512 on a fresh COPY: the difference is 2,048, and
+      2,048 = Min(NBuffers/8, 16MB/8kB) = Min(2048, 2048), which at shared_buffers=128MB is a
+      coincidence of the two constants. The ring did not "waste" 86%; it reused 2,048 slots 13,512
+      times, writing out each previous occupant.
+  (3) What a pin costs: stated as the state-word CAS and the backend-private refcount short-circuit;
+      REFCOUNT_ARRAY_ENTRIES / PrivateRefCountOverflowed deliberately left to lesson 10.
+- *** UPSTREAM HAS ALREADY REMOVED THE FREELIST, and the lesson says so: commit
+  2c789405275928ce0d2ceb7c4add91d27df92502, "bufmgr: Remove freelist, always use clock-sweep",
+  Greg Burd, 2025-09-05, on master; reviewed by Tomas Vondra and Andres Freund; 6 files,
+  +31/-209, INCLUDING 40 LINES OF THE README THIS LESSON QUOTES. Rationale quoted from the commit
+  message: "While on the surface this appears to be removing an optimization it is in fact
+  eliminating code that induces overhead in the form of synchronization that is problematic for
+  multi-core systems", and the main motive was that "having the freelist would require dedicated
+  complexity in several upcoming patches". have_free_buffer() goes too, and pg_autoprewarm is
+  capped at NBuffers. A FOLLOW-ON PATCH REMOVES buffer_strategy_lock ENTIRELY. So the two-stage
+  search measured here is a snapshot of a structure mid-retirement; 16.15 still has both paths. ***
+- HONEST NULL RESULT, recorded as one: THE SIX-PASS BOUND IMPLIED BY BM_MAX_USAGE_COUNT IS NOT
+  VISIBLE IN WALL CLOCK on this hardware. A 16,035-block eviction storm against a pool saturated
+  at usagecount 5 measured 65.7/73.3/65.7 ms and at usagecount 1 measured 86.5/74.1/86.5 ms --
+  no separation above the noise, because the per-block 8 KB memcpy out of the OS page cache
+  dominates the header examinations. The bound is real in the code; this box cannot see it.
+  pg_prewarm's usagecount-K setup DOES work and is in the lesson (prewarm the same range K times).
+DELIBERATELY TREATED AS BLACK BOXES: the LWLock implementation and pins vs content locks (10) --
+LockBufHdr/UnlockBufHdr and content_lock are NAMED and counted, never explained; StartBufferIO /
+TerminateBufferIO and the BM_IO_IN_PROGRESS condition variable (named only); FlushBuffer's internals
+and the writeback context (24); BufferSync and BM_CHECKPOINT_NEEDED (24); hint bits and
+MarkBufferDirtyHint (15); localbuf.c and temp-table buffers (not scheduled -- a candidate for 35).
 
-**Mechanical notes, carried and confirmed again this run. Read this section before planning a run's pushes.**
-`get_file_contents` on a file whose doubled output exceeds roughly 40 KB returns an over-limit error that
-saves the JSON to a local file — the cheap way to read a large file, costing nothing in context. The correct
-extraction is `json.loads(longest_text)["content"][-1]["resource"]["text"]`, **not** the plain `text` value,
-which lesson 27 proved LOSSY rather than merely banner-prefixed. This run used the resource path for five
-files (`StandardTransactionLogProcessor`, `GraphDatabaseConfiguration`, `StandardJanusGraph`, this file and
-the root `README.md`) and **every blob SHA matched the API's reported value on the first attempt** — the
-method is now five-for-five across two runs. A directory listing with `fields: ["name","sha","size"]` gives
-every file's blob SHA in one cheap call and remains the preferred verification source. A file under roughly
-20 KB comes back inline with no line numbers; such a file must be written to local disk to be cited by line
-number, and **a lesson that does not do that must cite it by member name only**. This run delegated one
-transcription batch of six files, all six blob-SHA verified on the first attempt.
+NO SYLLABUS REVISION THIS RUN. Lesson 09's title was taught exactly as written -- BufferDesc, the
+clock-sweep victim search and the strategy ring were all three taken in full -- and all three of
+lesson 08's inherited questions were answered or explicitly narrowed. Lesson 08's handover asked
+for five measurements by name and all five were taken: (a) the usagecount histogram under a scan
+(and better, the hand's position); (b) the ring proved to be a ring (32 buffers of a 7,242-block
+table); (c) the BM_MAX_USAGE_COUNT = 5 ceiling by repeated reads; (d) reads/hits/evictions out of
+pg_stat_io across hit and miss; (e) pg_buffercache_summary and pg_buffercache_usage_counts, which
+DO exist in the 1.4 extension shipped with 16.
 
-**The rule on sub-agents held this run.** Lesson 27's first transcription batch silently fell back to
-`raw.githubusercontent.com`. This run stated the prohibition explicitly in the prompt — naming `curl`,
-`wget`, `gh`, `git` and `raw.githubusercontent.com`, and instructing the sub-agent to report failure rather
-than find another route — and it was obeyed and reported. **Keep doing that verbatim.**
+Throwaway tables left by this run (cluster does not persist; names listed only to avoid collisions
+within a future run): t_small, t_mid, t_big, t_copy, t_tiny, in database `bufdemo`. NOTE: LIKE
+LESSON 08, THIS RUN DID NOT USE THE pgNN_ PREFIX AND SHOULD HAVE. Lesson 10, please use pg10_*.
 
-**The real constraint on a run is OUTPUT, not input.** Every file pushed must be emitted in full as a tool
-argument; there is no server-side patch. Reading a 134 KB file is nearly free; *rewriting* it costs ~37 K
-output tokens. The method that works, used again this run: author only the documents the run writes, edit
-the large pre-existing files **in place on local disk with small scripted replacements** rather than
-re-emitting them, and **delegate their pushes** to sub-agents that read the finished bytes from disk — then
-verify every pushed blob SHA against the locally computed one. A silent truncation in a delegated push is
-the one failure mode this method introduces, so the verification is not optional. **This file shrank from
-99 KB to ~95 KB this run** by rolling off lesson 25's block and paragraph and lesson 23's one-liner while
-adding lesson 28's, so the ~110 KB structural-split threshold was **not** crossed. The capstone is the last
-run of this track and should not split anything; the split question dies with the track, and
-`tracks/janusgraph-verified.md` was never needed. The root `README.md`'s index is one row per line — **edit
-the row in place rather than rebuilding the table**; lessons 26, 27 and 28 all did.
+-- HANDOVER TO LESSON 10 -----------------------------------------------------------------------
+Scope for lesson 10, "Buffer pins versus content locks, and the LWLock implementation". LESSON 09
+NAMED BOTH MECHANISMS AND REFUSED TO EXPLAIN EITHER, so 10 has a clean surface to open.
+THE INHERITED QUESTIONS, in descending order of value:
+ (1) *** THE buffer/README's "Notes About Shared Buffer Access Rules" SECTION IS LESSON 10'S
+     PRIMARY TEXT AND LESSON 09 DID NOT TEACH IT. *** Lesson 09 read all 276 lines but taught only
+     the "Buffer Manager's Internal Locking", "Normal Buffer Replacement Strategy", "Buffer Ring
+     Replacement Strategy" and "Background Writer's Processing" sections. THE FIVE NUMBERED ACCESS
+     RULES AND THE CLEANUP-LOCK PROTOCOL ARE UNTOUCHED AND ARE 10'S CORE: rule 4 (hint bits may be
+     OR'd in under a SHARED lock because a conflicting update only loses a hint) and rule 5 (to
+     remove a tuple you must observe refcount == 1 while holding the exclusive lock) are the two
+     worth measuring. LockBufferForCleanup's single-waiter limitation ("The current implementation
+     only supports a single waiter for pin-count-1 on any particular shared buffer") and
+     BM_PIN_COUNT_WAITER / wait_backend_pgprocno are the mechanism; note that the ONE Debian patch
+     touching bufmgr.c patches exactly this function, so READ THE PATCH, not just the file.
+ (2) THE PRIVATE REFCOUNT MACHINERY, which lesson 09 used as an explanation and never opened:
+     GetPrivateRefCountEntry / ReservePrivateRefCountEntry / NewPrivateRefCountEntry,
+     REFCOUNT_ARRAY_ENTRIES, PrivateRefCountOverflowed, and the ResourceOwner integration
+     (ResourceOwnerRememberBuffer / ResourceOwnerEnlargeBuffers). *** LESSON 08 LEFT THIS AS A LIVE
+     OPEN ITEM BECAUSE LimitAdditionalPins() SUBTRACTS BOTH OF THEM AND THAT ARITHMETIC REDUCED A
+     64-BLOCK EXTENSION TO ONE BLOCK AT shared_buffers=128kB. *** Closing it closes a two-lesson
+     thread. Also: README says pins may be held for long intervals and across a whole seqscan page,
+     but NOT across transaction boundaries -- ask what enforces that.
+ (3) THE LWLock ITSELF: lwlock.c's state word, the shared/exclusive/wait-queue encoding,
+     LWLockAcquire / LWLockConditionalAcquire / LWLockAcquireOrWait, the tranches
+     (LWTRANCHE_BUFFER_CONTENT is assigned in buf_init.c and lesson 09 quoted that line), and the
+     MainLWLockArray layout with BUFFER_MAPPING_LWLOCK_OFFSET. Lesson 09 measured that
+     GetVictimBuffer MUST use LWLockConditionalAcquire or deadlock; 10 owns why.
+Take: storage/buffer/README's access-rules half IN FULL; storage/lmgr/lwlock.c and
+include/storage/lwlock.h (the state word, the wait queue, the tranche registry); bufmgr.c's
+LockBuffer / LockBufferForCleanup / ConditionalLockBufferForCleanup / CheckBufferIsPinnedOnce /
+PinBuffer / UnpinBuffer and the PrivateRefCount block at the top of the file; and
+include/storage/buf_internals.h's BufferDescriptorGetContentLock / BufferDescriptorGetIOCV.
+MEASURE IT. Good candidates: (a) pg_buffercache.pinning_backends and pg_buffercache_summary()'s
+buffers_pinned are THE ONLY SQL-VISIBLE PIN COUNTS -- find something that holds a pin long enough
+to see (a cursor left open mid-seqscan is the obvious one); (b) make LockBufferForCleanup WAIT, by
+running VACUUM against a table with an open cursor pinning a page, and watch pg_stat_activity's
+wait_event / wait_event_type (BufferPin); (c) pg_stat_activity and pg_wait_events (16 has the
+latter) give the LWLock wait_event names -- BufferMapping, BufferContent, BufferIO are all
+reachable; (d) prove rule 4 by watching a SELECT dirty a page via hint bits under a shared lock
+(pg_buffercache's isdirty before/after, with lesson 09's measurement method); (e) if a
+contention measurement is wanted, pgbench -c N with a small shared_buffers makes BufferMapping
+waits appear -- but note lesson 09's finding that this box is 2 vCPU, so contention results will be
+weak and should be reported as such.
+Do NOT re-explain: the page header, line pointers, lp_off/lp_len, the hole (02); the tuple header,
+t_ctid's four meanings, the infomask catalogues (03); alignment, varlena, the 126-byte boundary,
+TOAST (04); the FSM (05); ANY of the visibility map (06); LP_REDIRECT, the line-pointer state
+machine, pd_prune_xid, PD_PAGE_FULL, the Max(fillfactor, BLCKSZ/10) prune gate,
+heap_page_prune's plan/execute split, the HOT-blocking matrix (07); the smgr switch, the MdfdVec
+segment map, mdnblocks's walk, the RELSEG_SIZE invariant, mdzeroextend's branch, PG_IOV_MAX 32, the
+MAX_BUFFERS_TO_EXTEND_BY 64 ramp, skipFsync, FileTag, the whole fsync request queue (08); AND NOW,
+FROM 09: the four shmem arrays and their per-buffer sizes, the 32-bit state word and all ten BM_*
+flags, BM_MAX_USAGE_COUNT 5, BufferTag's five fields, NUM_BUFFER_PARTITIONS 128,
+StrategyGetBuffer's two-stage search and ClockSweepTick, trycounter's reset semantics,
+GetVictimBuffer's three retry paths, the IOOP_REUSE/IOOP_EVICT split, all four
+BufferAccessStrategyType ring sizes and the Min(NBuffers/8) cap, the initscan NBuffers/4 threshold,
+and BgBufferSync's StrategySyncStart call.
+Cite without re-deriving: 8192, 131072, 8160, 8164, 291, 24, 23, 126, 4069, 4095, FSM_CAT_STEP 32,
+the FSM leaf offset 4123+k, the fingerprint "00 20 04 20" at offsets 16-19 (= zero special space,
+NOT "heap"), MAPSIZE 8168, HEAPBLOCKS_PER_PAGE 32672, the VM offset formula 24 + (b % 32672)/4,
+VISIBLE_MASK8 0x55 / FROZEN_MASK8 0xaa, the 59-byte XLOG_HEAP2_VISIBLE record, the 59/61-byte
+XLOG_HEAP2_PRUNE record, the 71-byte HOT_UPDATE record, 166 vs 247 WAL bytes per update (HOT vs
+cold), the 140-bytes-per-row geometry, lesson 07's correction that lesson 06's "59 heap fetches" is
+rows-on-the-old-block + 1, RELSEG_SIZE observed as 1,073,741,824 bytes of segment 0,
+MAX_BUFFERS_TO_EXTEND_BY 64, PG_IOV_MAX 32, max_requests = Min(NBuffers, 10000000),
+FSYNCS_PER_ABSORB 10, the ~1,940:1 writes-to-fsyncs dedup ratio, and now: 64 bytes per BufferDesc,
+28 bytes of Buffer Strategy Status, 16,384 buffers at shared_buffers=128MB, the ring sizes
+32/2048/32 buffers and the Min(NBuffers/8) cap, reads-minus-reuses = ring size, the 4,096-block
+seq-scan threshold, and the 0-evictions-vs-23,320-evictions pair for the same 242 MB read.
+Do NOT take: the heavyweight lock manager, LOCKTAG and the deadlock detector (11); tuple lock
+strengths and the conflict table (12); hint bits' FPI machinery (15, 22); snapshots and
+GlobalVisState (14); the checkpointer's spread writes, BufferSync and BM_CHECKPOINT_NEEDED (24);
+crash recovery (25).
+OPEN ITEMS carried forward:
+- FOR LESSON 10: the three inherited questions above, and lesson 08's REFCOUNT_ARRAY_ENTRIES /
+  PrivateRefCountOverflowed item, which is now (2).
+- NEW FROM 09, FOR WHOEVER WANTS IT: write a tiny extension exposing StrategySyncStart()'s three
+  outputs as a SQL function. nextVictimBuffer and completePasses have NO SQL exposure, there are no
+  debug symbols in this sandbox, and the arc trick is an inference that only works on a quiet
+  cluster. That extension would turn it into a direct reading and make the six-pass bound
+  measurable.
+- NEW FROM 09: GetVictimBuffer's cost in the EXTENSION path was not priced (question (1) above is
+  only half closed). A run that re-does lesson 08's COPY measurement while watching pg_stat_io's
+  bulkwrite writes and the bgwriter's buffers_clean would close it.
+- FOR LESSON 14: unchanged -- GlobalVisState / vistest and heap_prune_satisfies_vacuum were black
+  boxes, and heap_page_prune_opt carries a live XXX about old_snapshot_threshold citing
+  postgresql.org/message-id/20200403001235.e6jfdll3gh2ygbuc%40alap3.anarazel.de.
+- FOR LESSON 19 (unchanged from 05/06/07/08, still not closed): fsm_vacuum_page() and
+  FreeSpaceMapVacuumRange() have STILL not been read -- they are the only code that makes the upper
+  FSM levels true, AND they are the answer to lesson 07's open question about whether a cold update
+  can be routed onto a prune-recovered page. Plus lesson 06's 18,400 WAL bytes over 118 blocks
+  breakdown, VACUUM's two heap passes, and 08's register_unlink_segment / pendingUnlinks /
+  SyncPostCheckpoint (the one-checkpoint delay before a dropped relation's file is unlinked is
+  observable with DROP TABLE + two CHECKPOINTs). NEW FROM 09: vacuum_buffer_usage_limit's full
+  range and VACUUM's ring behaviour are now measured (32 and 256 buffers at '256kB' and '2MB',
+  and the normal strategy at 0) -- cite those rather than re-measuring.
+- FOR LESSON 24: unchanged from 08 -- ProcessSyncRequests was read and BufferSync left alone; the
+  race the comment describes and the Absorb-after-BufferSync ordering are 24's. NEW FROM 09: the
+  "Checkpoint BufferIds" array is 20 bytes per buffer of preallocated shared memory and exists
+  precisely so a checkpoint never allocates; BM_CHECKPOINT_NEEDED is bit 30; and
+  ScheduleBufferTagForWriteback / WritebackContext / WRITEBACK_MAX_PENDING_FLUSHES were named in 09
+  and never explained.
+- FOR LESSON 29: unchanged -- lesson 07's cold-update WAL run emitted 74 Btree/DELETE records.
+- FOR LESSON 31: unchanged -- pg_class.relallvisible's cost formula, and whether costsize.c models
+  HOT at all. NEW FROM 09: whether the planner knows anything about shared_buffers at all (the
+  effective_cache_size / seq_page_cost relationship) is a fair question for 31, given that lesson
+  09 showed the SAME query's cache effect depends entirely on which node reads the heap.
+- UNOBSERVED, for whoever gets there first: MaxHeapTuplesPerPage = 291 has been DERIVED three times
+  (05, 07) and never reached.
+- UNOBSERVED BRANCH, for whichever lesson runs with checksums on first: every measurement in
+  lessons 03-09 was taken with data_checksums OFF. Still unexercised:
+  visibilitymap_prepare_truncate's XLogHintBitIsNeeded() -> log_newpage_buffer (06), and
+  heap_page_prune's MarkBufferDirtyHint branch under XLogHintBitIsNeeded() (07).
+- UNEXERCISED CODE PATHS: heap_prune_chain's outcome (4), the orphaned-redirect self-heal (07);
+  register_dirty_segment's queue-full local-fsync fallback and ExtendBufferedRelShared's
+  `existing_id >= 0` branch with its errhint("This has been seen to occur with buggy kernels")
+  (08); and NEW FROM 09, StrategyGetBuffer's `elog(ERROR, "no unpinned buffers available")` -- an
+  attempt to force it at shared_buffers=128kB (16 buffers) with a nested-loop join and a large
+  prewarm did NOT trigger it, because trycounter resets on every decrement. It needs NBuffers
+  SIMULTANEOUS pins, which means a query whose concurrent pin set exceeds the whole pool.
+- NOT MEASURED, carried from 07: the SUMMARIZING-INDEX (BRIN) HOT path.
+- NEW FROM 08, still worth one cheap run: truncate a relation to an exact multiple of RELSEG_SIZE
+  and check whether segment K+1 is kept at length 0, as mdtruncate's comment promises.
+- A DOCUMENTATION PATCH WORTH PROPOSING UPSTREAM, unchanged from 06: visibilitymap.c's LOCKING
+  section still says "only VACUUM currently sets visibility map bits", which heap_multi_insert's
+  all_frozen_set contradicts.
 
-**Mermaid.** Render every diagram with `mmdc` before pushing, and then **verify the rendered SVG** — grep it
-for a literal backslash-n (must be zero) and inspect the node labels, because a diagram that renders is not
-the same as a diagram that renders correctly. Lesson 28's three (two in the lesson, one in the digest) all
-rendered first time, with `\n`-free output, `<br/>` becoming `<br />`, and `&lt;` surviving as an entity so
-that `<` displays. Accumulated rules: quote every node label containing parentheses, commas, `->`, `|` or
-angle brackets; use HTML entities such as `&lt;` and `&amp;` for comparisons and ampersands; never escape a
-quote inside a label — drop the inner quotes instead; **a semicolon inside a `sequenceDiagram` message is a
-statement separator** — use a comma; a `sequenceDiagram` tolerates `--x`; and inside a `sequenceDiagram`
-message prefer the words "and"/"or" over `&`/`|` entities. New this run: an **edge label** in a
-`flowchart` takes a quoted string with `<br/>` in it and renders multi-line correctly, which is the cheapest
-way to put a condition on a transition without inventing a node.
+NOTE-BLOCK ROTATION DONE THIS RUN (2026-10-29, the lesson 10 run): lesson 07's note was dropped and
+lesson 10's was added. TRACK-ARCHIVE.md gained the row "PG 07" pointing at commit
+99a7b3b7eab710319907cbd11d5c311ebe61d4fa / blob 937bfd19f68fdc42eebe5c83f1f636869629a59e, which is
+the last state of TRACK.md carrying it, and that row was added FIRST, as the policy above requires.
+This block now holds 08, 09 and 10 -- exactly the three the policy allows. WHEN LESSON 11 SHIPS IT
+MUST DROP THE LESSON 08 BLOCK, and before dropping it MUST add its TRACK-ARCHIVE.md row first.
 
-**Daily Diff procedure — the slash form is UNRELIABLE, not reliable. Rewrite the expectation, not the steps.**
-Lesson 27 found `https://tdd.cat/{YYYY-MM-DD}/` served the complete 11-24 edition where `{date}.md` 404s, and
-concluded the slash form was the answer. **This run it failed for both 2026-11-26 and 2026-11-25** in the
-same session, while the front page loaded. So: **(a)** fetch `https://tdd.cat/{today}/`; **(b)** on a client
-error — now the common case — fetch the front page `https://tdd.cat/`, whose header names the current
-edition's date and story count and is the **only endpoint that has loaded every time**; **(c)** try that date
-in slash form, and if it also errors, **build the digest from the front page itself**, saying plainly how
-many of the stated items were recovered; **(d)** check this session log in both directions as a floor and a
-ceiling; **(e)** only then the uncovered-item fallback. **Do not trust `/archive/` or `/md` for currency.**
-The front page is truncated by the fetcher at ~40 K characters of ~90 K, so a front-page digest recovers
-roughly the first 20-22 items of a 50-60 item edition — **say so rather than implying coverage**. Editions
-covered so far, by date and size: 11-08 to 11-22 at 22, 50, 63, 58, 66, 47, 39, 49, 37, 57, 61, 61, 50, 47,
-38; **11-24 at 59** (lesson 27); **11-25 at 53, 22 items recovered** (this run). **The fallback pool still
-holds the unspent items from 2026-11-06 (two) and 2026-11-18 (two)**, untouched again. **Constraint still in
-force: there is no `WebFetch` tool in this environment** — pages are fetched through a sub-agent, which flags
-which parts are verbatim and which are an extracted summary, and the summary portion is not reliable enough
-to quote. **Always ask the sub-agent for the structured item list — title, source, outbound URL, one-line
-gist — rather than for the page text**, which a non-preapproved source makes it cap at ~125 characters
-anyway, and always cross-check the item count against the page's own stated figure.
+Known environment facts for a fresh session (verify, do not assume):
+- Block size 8 KB and segment size 1 GB are compile-time (BLCKSZ, RELSEG_SIZE) and exposed as the
+  read-only GUCs block_size and segment_size. State the build you measured.
+- pageinspect is what makes Part I observable (page_header, page_checksum, heap_page_items,
+  heap_tuple_infomask_flags, tuple_data_split, bt_page_items, bt_metap, fsm_page_contents). All
+  of it is SUPERUSER-ONLY. pg_freespacemap covered lesson 05; pg_visibility covers 06.
+  Lesson 01's hands-on installs all three; lesson 02's needs only pageinspect; lesson 05's needs
+  pageinspect and pg_freespacemap; lesson 07's needs pageinspect and pgstattuple; lesson 08 needed
+  only pageinspect (and barely that -- its instrument was strace); LESSON 09 NEEDED NEITHER, only
+  pg_buffercache 1.4 and pg_prewarm 1.2, both of which are now CONFIRMED PRESENT AND WORKING.
+- CONFIRMED 2026-10-22 THROUGH 2026-10-28 (seven runs): the cloud sandbox CAN run a cluster.
+  *** THREE RECIPES NOW, AND THE THIRD IS THE SHORTEST. CHECK pg_lsclusters FIRST. ***
+  (A) Lessons 03-07's: create a non-root user, initdb -D /var/tmp/pgdata --no-sync as that user,
+      pg_ctl with -o '-p 5455 -k /var/tmp'. TWO TRAPS: initdb refuses to run as root, and it
+      refuses a data directory under the scratchpad path -- /var/tmp works.
+  (B) Lesson 08's: `apt-get install postgresql postgresql-contrib`, then
+      `pg_ctlcluster 16 main start`, then run everything as `su postgres -c "psql ..."`.
+  (C) LESSON 09'S, AND TRY THIS FIRST: postgresql-16 was ALREADY INSTALLED in the sandbox image,
+      with psql 16.15 on PATH and the cluster "16 main" present but down. `pg_lsclusters` shows it.
+      Then `pg_ctlcluster 16 main start` and `sudo -u postgres psql -X -q -d DB -c "..."` -- no
+      su quoting, no initdb, no world-readable-script dance for -c work. ALTER SYSTEM +
+      `pg_ctlcluster 16 main restart` applies PGC_POSTMASTER settings (shared_buffers,
+      max_connections). The contrib extensions were already in
+      /usr/share/postgresql/16/extension/ even though postgresql-contrib reported as not installed
+      -- CHECK THE DIRECTORY BEFORE INSTALLING.
+      TWO TRAPS NEW THIS RUN: ALTER SYSTEM cannot run inside an implicit transaction block, so
+      `psql -c "ALTER SYSTEM SET a; ALTER SYSTEM SET b;"` FAILS -- one -c per statement. Same for
+      VACUUM. And `/usr/bin/time` does NOT exist; use psql's `\timing on` instead.
+  ALL recipes keep the world-readable-script trap for psql -f: put scratch SQL in /tmp/<dir> with
+  chmod 777 (or /var/tmp). The cluster is per-run and does not persist, so table names from earlier
+  runs are gone.
+- *** strace IS AVAILABLE AND IT IS THE RIGHT INSTRUMENT FOR ANYTHING BELOW THE BUFFER MANAGER.
+  gdb is installed BUT THERE ARE NO DEBUG SYMBOLS -- postgresql-16-dbgsym IS NOT IN THE UBUNTU
+  24.04 ARCHIVE (confirmed lesson 09: apt-cache policy returns nothing). SO gdb CANNOT READ
+  SHARED-MEMORY STRUCTS OR FILE-STATIC VARIABLES. THE HARNESS LESSON 08 BUILT AND LATER LESSONS
+  SHOULD COPY: mkfifo a pipe, start
+  `su postgres -c "psql -d DB -At -q < fifo > out"` in the background, write
+  "SELECT pg_backend_pid();" into the fifo, read the pid out of the output file, then
+  `strace -f -tt -p <pid> -e trace=<syscalls> -o trace.txt &`, then feed the real SQL into the fifo
+  and poll for a DONE marker. That gives a clean per-statement syscall trace of a NAMED backend.
+  Note that parallel workers are NOT children of that backend, so -f does not follow them; disable
+  parallelism or trace the postmaster if you need them. ***
+- *** WHEN A SHARED-MEMORY COUNTER IS NOT EXPOSED IN SQL, LESSON 09'S TECHNIQUE IS THE FALLBACK:
+  drive the structure to a known state, apply an exactly-counted number of operations, and read the
+  CONSEQUENCE out of a view that does exist. Locating nextVictimBuffer as a contiguous arc of
+  pg_buffercache.bufferid values is the worked example, and it predicted the next arc's start to
+  the buffer. pg_shmem_allocations is the other under-used view: every ShmemInitStruct name is
+  queryable with its size, so a per-element struct size can be read back by division. ***
+- Table names used so far, for avoiding collisions within a run: seg_demo (01), pg2_fill /
+  pg2_big (02), pg3_* and w8 / w9 / w16 / w72 / w73 (03), pg4_* (04), pg5_* (05), pg6_* (06),
+  pg7_* (07), 08's unprefixed set (seg, ext_*, tiny_copy, q1..q4, dedup, b, io_t, iostat_t) and
+  09's unprefixed set (t_small, t_mid, t_big, t_copy, t_tiny, in database `bufdemo`) -- two lapses
+  in a row. GO BACK TO THE pgNN_ PREFIX CONVENTION.
+- pg_waldump lives at /usr/lib/postgresql/16/bin/pg_waldump, works on the live cluster's segments,
+  and `--stats=record` prints a per-record-type record/FPI byte breakdown. Lesson 06 used it to
+  price XLOG_HEAP2_VISIBLE and lesson 07 to price XLOG_HEAP2_PRUNE against Btree/INSERT_LEAF.
+  Lessons 21-25 should use it rather than reasoning about WAL on paper. METHOD THAT WORKS WELL,
+  from lesson 07: pg_switch_wal() first, record pg_current_wal_lsn(), run the workload, record the
+  LSN again, then `pg_waldump -s <lsn1> -e <lsn2> --stats=record` for the table and
+  `-r <rmgr>` for verbatim records. That isolates one workload's WAL exactly.
+- *** GETTING THE SOURCE: `apt-get source postgresql-16` IS THE RIGHT ROUTE IN THIS SANDBOX AND
+  LESSONS 07, 08 AND 09 ALL USED IT. *** Ubuntu 24.04 ships deb-src DISABLED in
+  /etc/apt/sources.list.d/ubuntu.sources (a deb822 file with `Types: deb`); the fix is
+  `sed -i 's/^Types: deb$/Types: deb deb-src/'` on that file, then `apt-get update`, then
+  `apt-get source postgresql-16` into a world-readable dir. ~33 MB, a few seconds, and it unpacks
+  postgresql-16-16.15/ WITH debian/patches/ applied -- so CHECK WHICH FILES THE PATCH SERIES
+  TOUCHES BEFORE QUOTING ANYTHING, per file and not in bulk: as of 16.15 there are 15 patches and
+  one of them DOES touch src/backend/storage/buffer/bufmgr.c (at LockBufferForCleanup only).
+  Extract the +++/--- paths and check the hunk offsets. This is strictly better than WebFetching
+  files one at a time: it is the exact build the cluster runs, it allows reading a file IN FULL, and
+  WebFetch on postgresql.org summarises rather than reproducing. The Sources section must still
+  cite only URLs actually seen that run; the local tree is evidence, not a citation.
+- pg_buffercache 1.4 (pg_buffercache_pages, pg_buffercache_summary, pg_buffercache_usage_counts)
+  and pg_prewarm 1.2 are INSTALLED AND MEASURED AS OF LESSON 09 and are the right tools for
+  anything about the pool; pgstattuple was used by lesson 07 and is needed again by 19; amcheck for
+  lessons 28-29 (it is the closest thing PostgreSQL has to SQLite's integrity_check, and the
+  comparison is worth making explicitly when lesson 28 arrives).
+- *** MEASUREMENT HYGIENE ESTABLISHED BY LESSON 09 AND WORTH REPEATING: set
+  max_parallel_workers_per_gather = 0 for anything that counts buffers or I/O, because
+  backend-local structures (BufferAccessStrategy rings, and presumably more) are per participant
+  and parallel workers are a separate backend_type in pg_stat_io. And `pg_stat_reset_shared('io')`
+  immediately before each measurement -- pg_stat_io accumulates across the whole cluster lifetime
+  and its column is `context`, not `io_context`. ***
 
-### Verified by lesson 27, for the capstone to cite rather than re-derive
+-- LESSON 10 (2026-10-29) AS TAUGHT ------------------------------------------------------------
+Document: 2026/10/2026-10-29-postgres-pins-content-locks-lwlock/README.md (single README, not
+split -- pins, content locks and the cleanup lock are one access-control story, and the LWLock is
+the implementation of the middle one; splitting would have hidden that the cleanup lock is built
+out of the other two).
 
-- **The JanusGraph table on CQL is three blob columns, and the names are constants.**
-  `buildCreateTable` (`CQLKeyColumnValueStore:503-523`): partition key `key`, clustering column
-  `column1`, plain column `value`, all `DataTypes.BLOB`, names at `:123-127`. `buildCreateTable` and
-  `tableHasCdcEnabled` are **package-private and side-effect free** so the table options can be asserted
-  in unit tests with no live cluster — the shape a PR adding a table option should follow. Four option
-  helpers: `compactionOptions` (`:547-567`), `compressionOptions` (`:525-545`), `gcGraceSeconds`
-  (`:569-575`), `speculativeRetryOptions` (`:577-583`), each a no-op when its option is unset.
-  `compressionOptions` forks on major version ≥ 5 — `{"class", "chunk_length_in_kb"}` against
-  `{"sstable_compression", "chunk_length_kb"}`, and `{"enabled": false}` against `withNoCompression()`
-  because "Cassandra 5+ rejects `{'sstable_compression': ''}`". `getCassandraMajorVersion` (`:482-491`)
-  runs `SELECT release_version FROM system.local` and **returns 0 on any exception**, silently taking the
-  pre-5 branch. `withCDC(true)` applies only when `Backend.EDGESTORE_NAME.equals(tableName)` (`:516-520`).
-- **`MaskedTimestamp` is an LSB mask, not an arithmetic offset.** In `DistributedStoreManager`:
-  `getDeletionTime` = `times.getTime(t) & 0xFFFFFFFFFFFFFFFEL`, `getAdditionTime` = the same `| 1L`. The
-  addition time is the deletion time **plus exactly one**, always, by bit arithmetic rather than by
-  program flow — so the class javadoc's requirement ("the deletion time is prior to the addition time
-  since some storage backends use the time to resolve conflicts") cannot be violated.
-  `sleepAfterWrite` asserts it, and assertions are off in production, but nothing can break it.
-  **Consequence: the provider's effective timestamp resolution is halved** — two commits whose provider
-  timestamps differ only in the low bit produce the identical `(deletion, addition)` pair. Whether that
-  window is reachable is lesson 27's Hands-On C and is **not** established.
-- **`CQLKeyColumnValueStore.mutate` does no conflict resolution at all** (`:673-676`) — it wraps the
-  arguments in a singleton-of-singleton map and calls `storeManager.mutateMany`, which delegates to an
-  `executeManyFunction` chosen at construction (`CQLStoreManager:104`, `:157-158`, `:352-358`).
-- **`AbstractCQLMutateManyFunction`'s constructor installs two different closure pairs** (`:59-91`). With
-  `assignTimestamp`: `deletionsFunction` uses `commitTime.getDeletionTime(times)`, `additionsFunction`
-  uses `getAdditionTime(times)`, and both branch on `keyMutations.hasWholeRowDeletion()` to emit a single
-  `deleteRow` instead of N `deleteColumn`s. **Without it (`:78-90`), the statements carry no timestamp at
-  all** and `createMaskedTimestampFunction` becomes `txh -> null`, `sleepAfterWriteFunction` a no-op.
-  `addUsingTimestamp` has two overloads (`CQLKeyColumnValueStore:399-411`), one per statement type, each
-  adding `usingTimestamp(bindMarker(TIMESTAMP_BINDING))` **only when `isAssignTimestamp()`** — so the
-  prepared statements themselves differ by configuration.
-- **Whole-row deletion is a declared feature, not an optimisation the store took on itself.**
-  `CQLStoreFeaturesBuilder:65` declares `optimizedWholeRowDeletion(true)`, which is what makes core set
-  `hasWholeRowDeletion()`; `deleteRow` (`CQLKeyColumnValueStore:641-652`) binds only the partition key.
-  The in-memory equivalent is `InMemoryKeyColumnValueStore:127-129`, `kcv.remove(key)`.
-- **Idempotence is computed twice and the two must agree.** `CQLKeyColumnValueStore:305` is
-  `storeManager.isAssignTimestamp() && configuration.get(IDEMPOTENT_WRITES)`;
-  `AbstractCQLMutateManyFunction:63` is `assignTimestamp && idempotentWrites ? Boolean.TRUE : null`.
-  `withWriteIdempotence` (`:395-397`) sets `Boolean.TRUE` **or `null`, never `FALSE`**, so the fallback is
-  the driver's `basic.request.default-idempotence`. **A batch does not inherit its statements' flag** —
-  "the driver reads only the batch's flag" (`AbstractCQLMutateManyFunction:39-40`) — which is why both
-  exist. `storage.cql.idempotent-writes` defaults **`true`** (`CQLConfigOptions:120-130`). The one
-  documented leak: "an insert with a TTL sent again can expire later" — idempotent in value, not in
-  lifetime.
-- **The two batch strategies, and only one is atomic.** `storage.cql.atomic-batch-mutate` defaults
-  **`false`** (`CQLConfigOptions:113-118`). Unlogged (`CQLMutateManyUnloggedFunction:71-124`): per table,
-  per key, `Iterator.concat(deletions, additions).grouped(batchSize)` with `batch-statement-size` **20**
-  (`CQLConfigOptions:105-110`), each group its own `DefaultBatchType.UNLOGGED` statement via
-  `session.executeAsync`, all awaited by `CompletableFutureUtil.awaitAll`. Logged
-  (`CQLMutateManyLoggedFunction:65-104`): **one `DefaultBatchType.LOGGED` batch for every table and every
-  key, with no size bound**, executed synchronously. Both acquire a back-pressure permit and release it on
-  both the success and the exception path.
-- **`acquireLock` has no body beyond an inverted guard** (`CQLKeyColumnValueStore:678-684`): throws
-  `UnsupportedOperationException` when `!hasLocking()`, **returns having done nothing** when
-  `hasLocking()`. `CQLStoreFeaturesBuilder:63` is `fb.locking(useExternalLocking)` with
-  `storage.cql.use-external-locking` defaulting **`false`** (`CQLConfigOptions:91-102`), so
-  `ConsistentKeyLocker` runs by default and setting the option **disables locking rather than delegating
-  it**. The option description names the result: "read uncommitted", "dirty/non-repeatable/phantom
-  reads". The in-memory store's `acquireLock` throws **unconditionally**
-  (`InMemoryKeyColumnValueStore:131-134`).
-- **The full feature declaration** (`CQLStoreFeaturesBuilder:58-67`): `batchMutation(true)`,
-  `distributed(true)`, `timestamps(true)`, `cellTTL(true)`, `keyConsistent(global, local)`,
-  `locking(useExternalLocking)`, `optimisticLocking(true)`, `optimizedWholeRowDeletion(true)`,
-  `multiQuery(true)`; then `cellTTL(false).storeTTL(false)` if `storage.cql.ttl-enabled` is off
-  (`:68-70`). The global/local consistency pair is `QUORUM`/`QUORUM` against
-  `LOCAL_QUORUM`/`LOCAL_QUORUM`, selected by `only-use-local-consistency-for-system-operations`
-  (default `false`, `CQLConfigOptions:85-89`).
-- **Partitioner decides which scans exist** (`CQLStoreFeaturesBuilder:88-119`). `Murmur3Partitioner`,
-  `RandomPartitioner` and Amazon's `DefaultPartitioner` → `keyOrdered(false).orderedScan(false)
-  .unorderedScan(true)`, deployment `REMOTE`. `ByteOrderedPartitioner` → all three true, deployment
-  `LOCAL` only for a single local hostname. Anything else → `IllegalArgumentException`. A configured
-  partitioner disagreeing with the server's throws (`:80-83`); neither available also throws (`:84-87`).
-  **`scanKeyOrder(new TokenOrderKeyComparator(tokenMap))` is set for `Murmur3Partitioner` only**, which
-  "puts multi-query scans (e.g. a reindex) on the lossless merge-join strategy instead of the
-  bounded-buffer one, whose recovery from writes concurrent with the scan is capped";
-  `RandomPartitioner` is **deliberately excluded** because "no CI covers it and an undetected deviation
-  would fail every multi-query scan via the framework's order verification."
-- **Three independent graceful degradations, all warnings and none fatal.** (1) Token-range scan statement
-  rejected → `getKeysRangedToken = null`, `log.warn`, token-range parallel scans off
-  (`CQLKeyColumnValueStore:291-299`). (2) `PER PARTITION LIMIT` rejected → instance field
-  `scanPerPartitionLimitEnabled` flipped `false`, statement re-prepared without the clause
-  (`prepareScanStatement`, `:355-368`); named culprit Amazon Keyspaces; needs Cassandra 3.6+/ScyllaDB.
-  (3) Non-Murmur3 → `parallelScanSupported = false` (`:336-338`), because the tiling "is only correct for
-  the Murmur3 partitioner, whose tokens are plain longs that tile `[Long.MIN_VALUE, Long.MAX_VALUE]`".
-  The stated principle in each case: a scan-only optimisation must not fail store open.
-- **`PER PARTITION LIMIT` binding** (`:370-379`): `query.hasLimit() && query.getLimit() >= 1 ?
-  query.getLimit() : Integer.MAX_VALUE`, because the clause must be strictly positive and
-  `Integer.MAX_VALUE` is "semantically equivalent to omitting the clause" — so "a limit-0 query still
-  yields keys with zero entries". `scanStatementBuilder` (`:802-813`) checks
-  `getVariableDefinitions().contains(PER_PARTITION_LIMIT_BINDING)` rather than carrying a separate flag.
-  `storage.cql.scan-per-partition-limit-enabled` defaults **`true`** (`CQLConfigOptions:267-280`); its
-  description states the problem — a scan job's grounding query has a per-key limit of 1, and without the
-  pushdown "the grounding query alone transfers the whole table".
-- **"Parallel scan" is two different things.** `getKeys(SliceQuery, txh)` (`:718-750`) tiles the ring when
-  `parallelScanSupported && parallelScanTokenRanges > 1`, but `io.vavr Iterator.concat` "drains the ranges
-  back-to-back on the single scan thread, so deeper paging is sequential range-by-range rather than fully
-  parallel" — only the **first page** of each range is concurrent. Ring order is preserved because "the
-  multi-query scan merge in `StandardScannerExecutor` relies on" it. **True parallelism comes from
-  `SplittableScanStore`**: `getUnorderedScanSplitCount()` (`:752-755`) and `getKeysForSplit` (`:757-774`),
-  which the scan-job framework drains on dedicated threads. `storage.cql.parallel-scan-token-ranges`
-  defaults **1** (`CQLConfigOptions:237-251`). `tokenRangesFor` (`:776-789`) memoizes in a
-  `volatile long[][]` keyed implicitly by array length; the race is benign because
-  `CQLTokenRangeSplitter.splitMurmur3Ring` is pure, and the reason to memoize is that cost would otherwise
-  "grow quadratically with the split count". **Range predicates are half-open at opposite ends:**
-  token-bounded scan is `token(key) > start AND token(key) <= end` (`:284-285`), key-range scan is
-  `>= start AND < end` (`:255-256`). Every scan statement carries `.allowFiltering()`.
-- **`CQLPagingIterator` (`:829-872`) has one page of lookahead**: `hasNext` starts the fetch of page N+1
-  *before* draining page N (`:851-863`). The invariant that makes it safe, from the class javadoc: "A page
-  fetch holds one back-pressure permit only while it is in flight (released on completion), so the
-  lookahead never holds more concurrent permits than the previous drain-then-fetch implementation — it
-  merely overlaps the network wait with client-side row processing." `storage.cql.scan-page-size` defaults
-  **0**, meaning fall back to `storage.page-size` (`:339-340`, `CQLConfigOptions:253-265`); **transactional
-  slice reads keep using `storage.page-size`** and are separately tunable.
-- **Two `CQLColValGetter`s are built, not one** (`:217-222`): the multi-key schema is the single-key schema
-  **plus `EntryMetaData.ROW_KEY`**, because an `IN` over several partition keys cannot attribute a returned
-  cell without selecting the key back. The cost is stated in `grouping.keys-allowed`'s description: "any
-  CQL query grouped with more than 1 key will require to return a row key for any column fetched."
-  `CQLColValGetter.getMetaData` handles `TIMESTAMP` (`writetime` alias), `TTL` (`ttl` alias) and `ROW_KEY`
-  (null → shared empty buffer, `:59-60`) and throws on anything else. `addTimestampFunction` (`:413-424`)
-  and `addTTLFunction` (`:432-437`) are per-table, gated on `STORE_META_TIMESTAMPS` / `STORE_META_TTL`.
-- **`setDirectColumnByStartOnlyAllowed` has exactly one consumer in the codebase**:
-  `CQLSliceQueryUtil.getQueriesGroupedByDirectEqualityQueries`. Set by `EdgeSerializer.getQuery` via
-  `isDirectColumnByStartOnlyAllowed(type)`. Grouping rule: `groupSize = query.hasLimit() ? max(1,
-  min(sliceGroupingLimit, query.getLimit())) : sliceGroupingLimit`, groups keyed by shared limit, range
-  queries never grouped. Reason, from the javadoc: the merged query "asks for that many columns, and a
-  query whose column was cut off would be cached with an incomplete result" — CQL's `LIMIT` is per result
-  set, not per `IN` element. **So `limit = 1` ⇒ `groupSize = 1` ⇒ no grouping.**
-  `grouping.slice-allowed` defaults `true`, `grouping.slice-limit` **20** (`CQLConfigOptions:844-862`).
-- **`EXCEPTION_MAPPER` (`:141-154`) is the module's single classification funnel**, used even by
-  `CQLStoreManager.mutateMany` (`:356`). It unwraps one `ExecutionException`, **restores the interrupt
-  flag** before returning for `InterruptedException`, passes an existing `BackendException` through
-  without re-wrapping, maps `QueryValidationException` and `isKeySizeTooLarge` to
-  `PermanentBackendException`, and **defaults everything else to `TemporaryBackendException`** — sound
-  only because CQL writes are idempotent. `isKeySizeTooLarge` (`:156-170`) digs an
-  `AllNodesFailedException` out of the chain and **matches `error.getMessage().startsWith("Key size too
-  large:")`** — a string prefix match on a ScyllaDB `ServerError`, load-bearing for retry classification.
-- **`CQLTransaction` (60 lines) does one thing**: translate `storage.cql.read-consistency-level` and
-  `…-write-consistency-level` (both default `QUORUM`, `CQLConfigOptions:64-76`) into driver
-  `ConsistencyLevel`s once per transaction, read through `getCustomOption` so a transaction can override.
-  `getTransaction(txh)` is a `Preconditions.checkArgument` downcast called on every read and write path.
-- **Both stores refuse the same two things.** `getKeys(MultiSlicesQuery, txh)` throws
-  `UnsupportedOperationException` in `CQLKeyColumnValueStore:815-818` **and**
-  `InMemoryKeyColumnValueStore:146-149`. `CQLStoreManager.getLocalKeyPartition()` throws (`:346-349`).
-- **`InMemoryColumnValueStore` resolves add-over-delete client-side.** `mutate` is `synchronized`, sorts
-  the additions, then drops every deletion found among them by `binarySearch` — comment, verbatim:
-  `//Filter out deletions that are also added`. It then takes a second lock from `getLock(txh)`, which is
-  a lazily-created `ReentrantLock` when the transaction carries `storage.transactions` and
-  `NoLock.INSTANCE` otherwise. The row buffer starts as a `SinglePageEntryBuffer` and switches to
-  `MultiPageEntryBuffer` above `DEF_PAGE_SIZE = 500` entries, with a code comment declining to switch
-  back. **A latent NPE, unverified for reachability:** `numPages`, `numEntries`,
-  `createFragmentationReport` and `quickDefragment` each call `this.lock.lock()` **directly**, bypassing
-  `getLock`, so on a store whose transactions never carried `storage.transactions` the field is still
-  `null`. The default of `storage.transactions` was **not** read this run.
-- **The in-memory multi-key read is a sequential `for` loop** (`InMemoryKeyColumnValueStore:109-114`); the
-  CQL one is parallel futures through `GroupingAsyncQueryExecutionService` with optional `IN` grouping,
-  and the comment at `CQLKeyColumnValueStore:613-617` states both reasons it is not
-  `KeyColumnValueStoreUtil.getMultiRangeSliceNonOptimized`.
-- **Cassandra's own documented guarantees, checked this run** (architecture → Dynamo page): resolution is
-  per column — "Cassandra applies separate mutation timestamps to every column of every row within a CQL
-  partition", "each column in a row resolves concurrent mutations according to last-write-wins conflict
-  resolution", modelled as "a Last-Write-Wins Element-Set conflict-free replicated data type for each CQL
-  row". Timestamps come "either from a client clock or, absent a client-provided timestamp, from the
-  coordinator node's clock", and "Cassandra's correctness does depend on these clocks". Writes "are always
-  sent to all replicas, regardless of consistency level"; the read-your-write guarantee is the overlap
-  `W + R > RF`, not the consistency level alone. **The equal-timestamp tie-break rule is NOT stated on
-  that page** — no claim about it belongs anywhere in this track until Hands-On C runs.
-- **Blob SHAs at the pin, for a future run to re-verify against without re-reading:**
-  `CQLKeyColumnValueStore.java` 47,914 = `f11ea637` (873 lines); `CQLStoreManager.java` 18,740 =
-  `09f7b055` (374); `CQLConfigOptions.java` 48,346 = `2f1adabe`; `CQLStoreFeaturesBuilder.java` 7,091 =
-  `a13eacac` (129); `CQLTransaction.java` 2,609 = `349bf72b` (60); `CQLColValGetter.java` 2,423 =
-  `66ea2658` (65); `AbstractCQLMutateManyFunction.java` 5,614 = `ea850c4e` (100);
-  `CQLMutateManyUnloggedFunction.java` 6,189 = `7d3d3ee6` (125); `CQLMutateManyLoggedFunction.java`
-  4,860 = `8a9a9f7d` (106); `InMemoryKeyColumnValueStore.java` 19,258 = `83650bf4` (471). Read inline, no
-  line numbers: `InMemoryColumnValueStore.java` = `5569f1a0`, `DistributedStoreManager.java` = `89ed24d5`,
-  `CQLSliceQueryUtil.java` = `2efd226b`. Not read: `CQLTokenRangeSplitter.java` = `e0b2b2cd`,
-  `CQLResultSetKeyIterator.java` = `ced1edfe`, `CQLSubsetIterator.java` = `8b601f76`,
-  `CQLMapKeyIterator.java` = `129c0f98`, `QueryGroups.java` = `4f1b7656`,
-  `TokenOrderKeyComparator.java` = `b9877b5b`, and the whole `cql/service` package.
+SOURCE PROVENANCE: `apt-get source postgresql-16` for the fourth run in a row, version
+16.15-0ubuntu0.24.04.1, the same build the cluster runs. PATCH CHECK DONE PER FILE: lwlock.c,
+lwlock.h, lwlocknames.txt, buf_internals.h, pruneheap.c, vacuumlazy.c and proclist_types.h are
+UNTOUCHED. *** bufmgr.c's single hunk IS INSIDE THIS LESSON'S SUBJECT THIS TIME and was read
+directly: v8-0001-Fix-recovery-conflict-SIGUSR1-handling.patch changes TWO COMMENT LINES above
+HoldingBufferPinThatDelaysRecovery() at line 4923 ("Check called from RecoveryConflictInterrupt
+handler" -> "Check called from ProcessRecoveryConflictInterrupts()"). NO EXECUTABLE LINE of the pin
+or lock path differs from upstream. *** Trees/releases so far: 01 @ddd468ca, 02 @3cde90ec,
+03 @f2edf5dd, 04 @f52d4051, 05 @126976a8, 06 @0019a1ec, 07 = release 16.15, 08 = release 16.15,
+09 = release 16.15, 10 = release 16.15.
+Files read IN FULL: storage/lmgr/lwlock.c (1994 lines), include/storage/lwlock.h (222 lines),
+storage/lmgr/lwlocknames.txt (54 lines), storage/buffer/README (276 lines, re-read for the
+access-rules section). Read in part: storage/buffer/bufmgr.c (PinBuffer, UnpinBuffer,
+ReservePrivateRefCountEntry, NewPrivateRefCountEntry, GetPrivateRefCountEntry, LockBuffer,
+LockBufferForCleanup, ConditionalLockBufferForCleanup, CheckBufferIsPinnedOnce,
+HoldingBufferPinThatDelaysRecovery, the PrivateRefCount comment block at 175-205),
+access/heap/pruneheap.c (heap_page_prune_opt), access/heap/vacuumlazy.c (the cleanup-lock branch of
+lazy_scan_heap at 958-1001), include/postmaster/postmaster.h (MAX_BACKENDS and its note),
+include/storage/proclist_types.h, and the XLogReadBufferForRedoExtended(..., true, ...) call sites
+across src/backend/access/.
 
-### Verified by lesson 26, for the capstone to cite rather than re-derive
+*** THIS RUN HAD TWO CLUSTERS -- A PRIMARY AND A STREAMING STANDBY -- AND EVERY number is measured.
+*** PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1), x86_64, Linux 6.18, ext4, 2 vCPU / 8 GB RAM.
+shared_buffers 128 MB = 16,384 buffers, max_connections 100, block_size 8192, data_checksums OFF.
+pg_buffercache 1.4, pageinspect 1.12, pg_prewarm 1.2, pgbench 16.15.
+*** THREE NEW ENVIRONMENT FACTS, ALL REUSABLE:
+(a) postgresql-16 WAS ALREADY INSTALLED AGAIN (lesson 09's note holds); `pg_ctlcluster 16 main
+    start` was the only step. deb-src had to be re-enabled: `sed -i 's/^Types: deb$/Types: deb
+    deb-src/' /etc/apt/sources.list.d/ubuntu.sources` then `apt-get update`.
+(b) *** postgresql-server-dev-16 INSTALLS AND IS THE ANSWER TO LESSON 09'S "NO DEBUG SYMBOLS"
+    PROBLEM FOR ANYTHING THAT IS A COMPILE-TIME CONSTANT. A 30-line C program compiled with
+    `gcc -I $(pg_config --includedir-server)` prints sizeof/offsetof/macro values directly. TRAP:
+    postgres.h #defines printf to pg_printf, which is not in any library you link, so `#undef
+    printf` and use fprintf(stdout, ...). This does NOT help with runtime shared-memory statics
+    (StrategyControl, nextVictimBuffer) -- lesson 09's arc trick is still the way for those. ***
+(c) A STANDBY IS CHEAP AND WORTH BUILDING: `pg_basebackup -D /var/lib/postgresql/16/standby -R -C
+    -S lab_standby -X stream -c fast -h /var/run/postgresql -U postgres`, then start it with
+    pg_ctl and -o '-c port=5433 -c data_directory=... -c hot_standby=on -c
+    max_standby_streaming_delay=8s -c log_recovery_conflict_waits=on', pointing config_file/hba_file
+    at /etc/postgresql/16/main/. chmod 700 the data dir first. wal_level was already replica.
+    LESSONS 24-27 SHOULD DO THIS. ***
+Traps hit: VACUUM and ALTER SYSTEM still cannot share a `psql -c` with other statements -- put GUCs
+in PGOPTIONS instead (`PGOPTIONS='-c vacuum_freeze_min_age=0' psql -c 'VACUUM (FREEZE) t'`). And
+psql -f scripts AND any file a background psql writes must live somewhere world-readable
+(/var/tmp/lab, chmod a+w) -- the scratchpad path is not readable by the postgres user.
 
-- **`IndexProvider` is twelve abstract methods plus one constant and one static helper, and it
-  `extends IndexInformation`.** Schema: `register`. Write: `mutate`, `restore`. Read: `query(IndexQuery)`
-  → `Stream<String>`, `query(RawQuery)` → `Stream<RawQuery.Result<String>>`, `totals(RawQuery)` → `Long`,
-  `queryAggregation(IndexQuery, …, Aggregation)` → `Number`. Lifecycle: `beginTransaction`, `close`,
-  `clearStorage`, `clearStore(String)`, `exists`. Inherited: `supports(KeyInformation,
-  JanusGraphPredicate)`, `supports(KeyInformation)`, `supportsOrdering(KeyInformation)` (**`default
-  true`**), `mapKey2Field`, `getFeatures`. The two-level map is **store → documentId → mutation**; "store"
-  is the mixed index name. `REPLACEMENT_CHAR` is `'•'` and `IndexProvider.checkKeyValidity` is a
-  `static` interface method rejecting any key containing it; `ElasticSearchIndex.mapKey2Field`
-  (`:1959-1962`) uses it for exactly one substitution, `' '` → `'•'`.
-- **`mutate`'s javadoc declares a mutability contract**: *"A provider may remove from this map the
-  documents it knows to have applied before it throws a `TemporaryBackendException` … a caller must not
-  rely on the map being unchanged after a failure."* `restore`'s declares the other half: it *"does not do
-  a delta-update, but entirely replaces the documents"*, and an **empty entry list means delete**, not
-  "no change".
-- **`IndexFeatures` has exactly eleven fields.** `supportsDocumentTTL`, `defaultStringMapping`,
-  `supportedStringMappings`, `wildcardField`, `supportedCardinalities`, `supportsNanoseconds`,
-  `supportsCustomAnalyzer`, `supportsGeoContains`, `supportsGeoExists`, `supportsNotQueryNormalForm`,
-  `supportsOrderingListProperty`. Builder defaults: `false`, `Mapping.TEXT`, empty, `"*"`, empty, and
-  `false` for the rest. The constructor enforces `defaultMap != null && defaultMap != Mapping.DEFAULT` and
-  `supportedMap` non-empty **and containing** `defaultMap`. The accessor for the not-normal-form flag is
-  `supportNotQueryNormalForm()` — **no trailing `s`**. **There is no `supportsExistsQuery()`.**
-- **All four Elasticsearch compat classes produce identical features.** `AbstractESCompat.coreFeatures()`
-  sets `TEXT` default, `{TEXT, TEXTSTRING, STRING}` mappings, wildcard `"_all"`, cardinalities
-  `{SINGLE, LIST, SET}`, `supportsNanoseconds`, `supportsCustomAnalyzer`, `supportsGeoExists`,
-  `supportNotQueryNormalForm`, `supportsOrderingListProperty`. Every subclass is then exactly
-  `coreFeatures().setWildcardField(CUSTOM_ALL_FIELD).supportsGeoContains().build()` — `ES6Compat`
-  (`d686ce02`, 1,132 bytes), `ES7Compat` (`fb0efe32`, 1,065), `ES8Compat` (`bbd2b413`, 1,065),
-  `ES9Compat` (`73af9fc2`, 1,065), all four read in full. So **`"_all"` is unreachable** (candidate 71),
-  **`supportsDocumentTTL` is `false` for every ES version**, and `IndexFeatures` carries no
-  version-dependent information for Elasticsearch at all.
-- **`ElasticSearchIndex.supportsOrdering` is narrower than it looks.** A string key is sortable only when
-  its mapping is `STRING` or `TEXTSTRING` **and** it carries no `ParameterType.STRING_ANALYZER` parameter
-  (`:1946-1956`), because `pushMapping` maps an analysed `STRING` key to ES `text`. Non-string: `Number`,
-  `Date`, `Instant`, `Boolean`, `UUID` all sortable. **Adding a custom analyser to a `STRING` key silently
-  removes the index's ability to sort by it**, and the consequence lands in query compilation.
-- **`IndexSelectionUtil.indexCoversOrder(index, orders, serializer)` tests three things per order key**:
-  `index.indexesKey(key)`, `serializer.supportsOrdering(index, index.getField(key))`, and — for a `LIST`
-  or `SET` key — `serializer.features(index).supportsOrderingListProperty()`. The two-argument overload is
-  `@Deprecated` and tests only the first. `IndexSerializer.allMixedIndexBackendSupportsOrderingListProperty()`
-  **returns `false` when `mixedIndexes.isEmpty()`**, so a pure-composite graph cannot fold a vertex order
-  on a `LIST` key. `AbstractIndexSelectionStrategy.createIndexRawCandidates` applies
-  `supportNotQueryNormalForm()` as a **candidacy filter** under a top-level `Or`, alongside the composite
-  exclusion lesson 21 found.
-- **`IndexSelectionUtil` contains no `SchemaStatus` reference.** Six public static methods:
-  `indexCoversOrder` ×2, `getMatchingIndexes` ×2, `existsMatchingIndex` ×2, plus
-  `isIndexSatisfiedByGivenKeys` and the private `getKeyIndexesForCondition`. Discovery is
-  `ConditionUtil.traversal` collecting `((InternalRelationType) key).getKeyIndexes()` per
-  `PredicateCondition`, filtered **only** by the caller's `Predicate<IndexType>`.
-  `AdjacentVertexHasUniquePropertyOptimizerStrategy` passes `indexType -> indexType.isCompositeIndex() && …`.
-  Test-only strategies `DeprecatedOrderCoverageIndexSelectionStrategy` and
-  `CandidateIgnoringIndexSelectionStrategy` ship from `janusgraph-backend-testutils/src/main/java` — the
-  same pattern lesson 06 found for the backend suites.
-- **`IndexMutation` carries the element's complete indexed state, and that is the load-bearing SPI fact.**
-  Fields beyond `Mutation`'s: `storeRetriever`, `isNew`, `isDeleted`, `completeDocument`, `reAdditions`.
-  `hasCompleteDocument()` is `completeDocument != null` and **includes an empty one**;
-  `getCompleteDocument()` has a `checkState`. `merge` resolves by recency — *"the one merged in was
-  supplied later and stands"*. `consolidate()` additionally records, for **collection fields only**, every
-  value present in both deletions and additions as a `reAddition`, because `super.consolidate` drops that
-  deletion; `entryConversionFunction` is the **`(field, value)` pair** for a collection field and the
-  **field name** for `SINGLE`, with an unknown field treated as `SINGLE` via a `keyInformation != null`
-  guard. `determineTTL()` returns 0 if there are deletions, and otherwise enforces a **uniform** TTL
-  across all additions with a `checkArgument` plus `assert ttl >= 0` — a check no ES path can act on.
-- **The three Painless scripts, and the idempotence audit.** `PARAMETERIZED_DELETION_SCRIPT` (`:526-536`),
-  `PARAMETERIZED_MUTATION_SCRIPT` (`:543-562`, the shape-B script, ending `ctx._source.putAll(params.doc)`
-  **last**), `PARAMETERIZED_ADDITION_SCRIPT` (`:568-576`). Idempotent: `SINGLE` delete
-  (`ctx._source.remove(name)`), `SINGLE` assign (`putAll`), `SET` add (guarded by
-  `field.cardinality != 'SET' || indexOf(value) == -1`). **Not idempotent: `LIST` add and `LIST`/`SET`
-  remove** — `add(value)` appends a duplicate, `remove(indexOf(value))` removes another occurrence or
-  none. Within one document a `SINGLE` assignment always wins over a `SINGLE` deletion of the same field,
-  because `putAll` runs after the deletion loop.
-- **`mutate`'s three request shapes, and the preconditions.** Checks at `:1292-1295`:
-  `assert mutation.isConsolidated()` (**off in production**), `!(isNew && isDeleted)`,
-  `!isNew || !hasDeletions`, `!isDeleted || !hasAdditions`. Shape **A** `:1300-1303` whole-document delete,
-  guarded `hasDeletions() && isDeleted()` — a mutation flagged `isDeleted()` with no deletion entries falls
-  through. Shape **B** `:1304-1306` → `addUpdatesCarryingTheCompleteDocument` `:855-876`, **one** update
-  with three parameter lists in one stored script and the complete document as upsert; early-returns at
-  `:866-868` when all three are empty; the last argument of
-  `createUpdateRequestWithCompleteDocument` is `collectionAdditions.isEmpty() && singleValuedAdditions.isEmpty()`.
-  Shape **C** `:1307-1350`, up to three items for one `_id`: field-deletion script `:1314-1315`;
-  `createIndexRequest` `:1322` if `isNew()`; otherwise addition script `:1336` **and** `{"doc": …}` merge
-  `:1344`, with `upsert` deliberately `null` when `hasDeletions()` (`:1326-1330`). Per store: an ingest
-  pipeline means its own `bulkRequest` and immediate `appliedStores` marking (`:1352-1356`); everything
-  else pools into one bulk (`:1364-1368`).
-- **Why shape B works, in one sentence from `:846-854`:** *"Elasticsearch writes the upsert of an update
-  whose document is missing and skips that update's script"*, so one item per document is both the maximum
-  atomicity the bulk API offers and the mechanism that makes "recreate whole" and "apply the delta" the
-  same request. `completeDocument(mutation, …)` (`:881-888`) returns `null` on `isNew()`, `isDeleted()`,
-  `!hasCompleteDocument()`, **or an empty entry list**.
-- **`retainUnappliedDocuments` (`:770-800`) edits the caller's map, fail-safe toward duplication.** Step 1
-  `mutations.keySet().removeAll(appliedStores)` — on `UnsupportedOperationException` it **returns
-  immediately** and the whole mutation is resent. Step 2 `findBulkFailure` walks
-  `TransientFailures.causalChain` for an `ElasticSearchBulkFailureException`. Step 3 `documentsToResend`
-  unions `getFailedDocumentsByStore()` with `getUnsentDocumentsByStore()`. Step 4 `namesPendingDocuments`
-  aborts the narrowing unless every named document is still present. Then per store in `storesInBulk`,
-  `retainAll`, removing the store if it empties. `narrowQuietly` (`:805-813`) logs at **debug** and returns
-  `false` per step. The catch block reserves `log.error` for a mutation about to be dropped and
-  `log.warn` for a reattemptable one (`:1371-1372`).
-- **`restore` (`:1424-1462`) is unconditionally idempotent** — two shapes, no scripts, no narrowing, plain
-  `throw convert(e)` — which is why `IndexRepairJob` needs none of the above.
-- **Read-side specifics.** `query(IndexQuery)` sets `setDisableSourceRetrieval(true)` (`:1718`), as does
-  the raw-query path (`:1816`), which `AbstractESCompat.createRequestBody` turns into `"_source": false`.
-  `addOrderToQuery` (`:1794-1804`) sorts a `TEXTSTRING` key by its dual field `key__STRING`
-  (`STRING_MAPPING_SUFFIX` at `:120`) and always passes an `unmapped_type`, which cannot be null and
-  cannot be `"string"` from ES 8 on (`:1730-1735`). `countBound(offset, query)` (`:1864-1870`) passes
-  `offset + limit` or **0 meaning no bound**, including on `int` overflow, *"as a bound no count reaches
-  would only keep Elasticsearch from answering a count from its statistics"*; `countsNothing(query)`
-  (`:1854-1856`) short-circuits `limit <= 0` to 0 with no request. `queryAggregation` (`:1827-1847`)
-  dispatches COUNT/MIN/MAX/AVG/SUM and throws `UnsupportedOperationException` on anything else.
-- **Elasticsearch paging is sized once, not doubled** — the answer to lesson 24's inherited item (b).
-  `limited-result-max-page-size` **250**, `adaptive-point-in-time-max-page-size` **500**,
-  `adaptive-point-in-time-max-shards` **1**, `scroll-keep-alive` **60 s** (`GLOBAL_OFFLINE`),
-  `paging-mode` default `adaptive_point_in_time`, `allow-partial-results` **false**. All three page-size
-  options carry `ConfigOption.positiveInt()`. The documented measurements: on ES 9.5.4 a PIT read pages of
-  an index of 2–3 shards **4% to 37% slower** than a scroll even in index order, and kept up with a scroll
-  at pages up to 500 hits but not 1,000. `index.max_result_window` is 10,000 by default and **JanusGraph
-  lifts it only on the indexes it creates** (`MAX_RESULT_WINDOW` at `:586`). The doubling that affects an
-  ES-backed query is `LimitAdjustingIterator`'s, one layer up in `QueryProcessor`.
-- **`register` (`:1010-1047`), and what it can leave behind.** Validates mapping against data type
-  (`:1015-1017`); rejects `PREFIX_TREE` on ES 8+ with a logged `IllegalArgumentException` — **not** a
-  `BackendException` — (`:1018-1023`); then either checks an external mapping, throwing
-  `PermanentBackendException` if it is absent or non-dynamic and lacks the field (`:1025-1038`), or calls
-  `checkForOrCreateIndex` **and** `pushMapping` (`:1039-1046`). Called synchronously from inside the
-  management transaction, so a stray ES index or an orphaned field mapping are both reachable states with
-  no compensating code at either end.
-- **`getNewDocument` (`:1173-1217`) de-duplicates in a `LinkedListMultimap` and resolves `SINGLE` with
-  `Iterators.getLast`** (`:1190`), so last-wins is decided by additions-list order. `SET`/`LIST` go through
-  `.toArray()` and reject `byte[]` with a `checkArgument` **inside a stream `filter`** (`:1197-1201`) — a
-  side-effecting predicate, sound only because the stream is sequential and fully consumed. A dual-mapped
-  key is written twice, under `key` and `key__STRING` (`:1209-1211`). `convertToEsType` (`:1219-1238`)
-  narrows every whole `Number` to `long` and every other to `double`, converts `Instant` → `Date`, `UUID` →
-  `String`, and throws `IllegalArgumentException` on anything else.
+TOOK, and must not be re-taught:
+- THE TWO MECHANISMS AND THEIR DIFFERENT PROPOSITIONS, from storage/buffer/README: a pin says THE
+  PAGE IS STILL HERE, a content lock says NOBODY IS EDITING IT. All five access rules tabulated.
+  *** RULE 2 IS WHY PINS EXIST AT ALL (drop the content lock, keep the pin, keep reading tuple
+  data) and it is the licence under which lesson 03 read a HeapTuple pointing into shared memory.
+  RULE 4 (hint bits need only a shared lock) IS LESSON 15'S and was deliberately left there. ***
+  Ordering is absolute: LockBuffer() opens with Assert(BufferIsPinned(buffer)), and UnpinBuffer
+  closes with Assert(!LWLockHeldByMe(content_lock)). Lock inside pin, always.
+- *** BUF_REFCOUNT_MASK == MAX_BACKENDS == 262143 == 2^18-1, AND THAT IS CAUSAL, NOT A COINCIDENCE.
+  postmaster.h: "MAX_BACKENDS is limited to 2^18-1 because that's the width reserved for buffer
+  references in buf_internals.h." The server's process ceiling IS the refcount field width.
+  Lesson 09 measured the field; this closes why it is that wide. ***
+- THE BACKEND-LOCAL PIN HALF: REFCOUNT_ARRAY_ENTRIES = 8, PrivateRefCountArray + PrivateRefCountHash
+  overflow, round-robin displacement via PrivateRefCountClock++ % 8, and the Reserve/New split whose
+  reason is quoted ("called with a spinlock held"). A repeat pin of a buffer you already hold is a
+  linear scan of 8 slots plus ref->refcount++ -- NO ATOMICS AT ALL on that path.
+  MEASURED: 12 cursors in one transaction on 12 one-page tables -> 12 pinned buffers,
+  pinning_backends=1 each, buffers_pinned=12, so FOUR entries were in the overflow hash.
+  PrivateRefCountOverflowed is not exposed in SQL -- the overflow is inferred from 12 > 8.
+- *** THE SAME BACKEND SHOWED TWELVE PINS AND ZERO pg_locks ROWS ABOUT THEM (only relation
+  AccessShareLocks). PINS ARE NOT LOCKS AND NO LOCK-MONITORING QUERY WILL EVER SEE THEM. ***
+- MEASURED: a 37,500-page seq scan held ~5 pins at the sampled instant, 0 before and after. A scan
+  pins one page at a time; that is what makes "pins may be held for long intervals" survivable.
+- *** THE STRUCT NUMBERS, PRINTED BY COMPILED PROBE, NOT DERIVED: sizeof(LWLock) = 16,
+  LWLOCK_PADDED_SIZE = PG_CACHE_LINE_SIZE = 128, sizeof(LWLockPadded) = 128;
+  sizeof(BufferDesc) = 52, BufferDescPadded = 64, offsetof(state) = 24,
+  offsetof(wait_backend_pgprocno) = 28, offsetof(content_lock) = 36.
+  NUM_INDIVIDUAL_LWLOCKS = 48 (45 named locks, 3 retired slots 0/10/45), NUM_BUFFER_PARTITIONS 128,
+  NUM_LOCK_PARTITIONS 16, NUM_PREDICATELOCK_PARTITIONS 16, NUM_FIXED_LWLOCKS = 208.
+  OFFSETS: individual 0, buffer-mapping 48, lock-manager 176, predicate-lock 192.
+  LWTRANCHE_BUFFER_CONTENT = 56, LWTRANCHE_FIRST_USER_DEFINED = 77, 29 builtin tranche names. ***
+- *** THE SIZE ASYMMETRY, THE LESSON'S BEST STRUCTURAL POINT: 208 named LWLocks = 26,624 bytes
+  (LWLockShmemSize adds sizeof(int)+128 = 26,756) for the WHOLE SERVER -- ProcArrayLock,
+  WALWriteLock, all 128 buffer-mapping partitions -- while 16,384 buffer content locks cost
+  16384*16 = 262,144 bytes, A QUARTER of the 1,048,576-byte "Buffer Descriptors" allocation lesson
+  09 measured. AND THE PADDING GOES THE "WRONG" WAY: the 208 rare locks are each padded to a full
+  128-byte cache line (112 bytes of padding apiece, lwlock.h's reason quoted), the 16,384 hot ones
+  are packed TWO PER CACHE LINE at 64 bytes per descriptor, so buffers i and i^1 false-share.
+  Padding them would cost 2 MB instead of 262 KB. NOT MEASURED -- see open items. ***
+  TRAP: the main array is allocated with ShmemAlloc(), not ShmemInitStruct(), so it has NO ROW in
+  pg_shmem_allocations -- it is inside the "<anonymous>" entry (4,730,240 B here).
+- THE 32-BIT LWLock STATE WORD, all bits: LW_FLAG_HAS_WAITERS 1<<30, LW_FLAG_RELEASE_OK 1<<29,
+  LW_FLAG_LOCKED 1<<28, LW_VAL_EXCLUSIVE 1<<24 = 16777216, LW_VAL_SHARED 1,
+  LW_SHARED_MASK (1<<24)-1, LW_LOCK_MASK (1<<25)-1. The exclusive sentinel is ADDED TO THE SAME
+  COUNTER the shared holders increment, guarded by StaticAssertDecl(LW_VAL_EXCLUSIVE >
+  MAX_BACKENDS).
+- *** A STALE COMMENT FOUND AND REPORTED: lwlock.c's comment above LW_SHARED_MASK says "Must be
+  greater than MAX_BACKENDS - which is 2^23-1, so we're fine." MAX_BACKENDS IS 0x3FFFF = 2^18-1 IN
+  THIS TREE. The assertion still holds (64x headroom, not 2x); postmaster.h mentions 2^23-1 as a
+  DIFFERENT ceiling (inval.c's 3-byte backend id). THE CODE IS RIGHT AND THE COMMENT IS STALE BY
+  ONE REFACTOR -- say so if any later lesson quotes it. ***
+- LWLockAttemptLock: ONE CAS LOOP, NO SPINLOCK, never blocks, returns true meaning "you must wait".
+  *** THE CAS IS ISSUED EVEN WHEN THE LOCK IS SEEN AS BUSY, swapping in the unchanged value,
+  because "this doubles as a memory barrier" (quoted). *** Shared acquisition of an uncontended
+  lock is a single successful CAS. HISTORY: commit ab5194e6f617a9a9e7aadb3dd1cee948a42d0755
+  "Improve LWLock scalability", Andres Freund, 2014-12-25, reviewed by Amit Kapila and Robert Haas,
+  +653/-302 across lwlock.c and lwlock.h, fetched from the pgsql-committers archive and quoted.
+- THE FOUR-PHASE ACQUIRE and the race it closes (header quoted: "by the time we have finished
+  queuing, the former locker very well might have already finished it's work"). Attempt, queue,
+  attempt again, sleep, loop back to attempt. *** BEING WOKEN DOES NOT MEAN OWNING THE LOCK, and
+  the refusal to hand off is argued from a 29-Dec-2001 discussion, quoted ("a process swap for
+  every lock acquisition"). *** LWLockDequeueSelf is the cost of winning phase 3. extraWaits
+  re-posts unrelated semaphore signals. *** LWLockReportWaitStart() IN PHASE 4 IS THE ONLY REASON
+  ANY OF THIS IS SQL-VISIBLE: a lock taken in phase 1 or 3 is reported NOWHERE. ***
+- THE WAIT-LIST MUTEX IS BIT 28 OF THE WORD IT GUARDS. pg_atomic_fetch_or_u32 to take it, then
+  PLAIN NON-ATOMIC READS in the perform_spin_delay loop, then fetch_and to release. The fast paths
+  never touch it; comment quoted ("even though the wait list is locked, non-conflicting lock
+  operations may still happen concurrently").
+- LWLockWakeup's policy: EITHER one exclusive waiter OR a contiguous run of shared waiters up to the
+  first exclusive one, never both. LW_WS_PENDING_WAKEUP is set before the semaphore is posted so
+  LWLockDequeueSelf needs no rescan. LW_FLAG_RELEASE_OK is cleared to stop wakeup storms
+  ("Prevent additional wakeups until retryer gets to run"). LWLockQueueSelf puts
+  LW_WAIT_UNTIL_FREE waiters on the HEAD (proclist_push_head) and everyone else on the TAIL.
+  proclist_head is two ints holding head/tail PGPROCNO -- INDEXES, NOT POINTERS, which is why the
+  list works across processes mapping shmem at different addresses.
+- *** LWLOCKS HAVE NO DEADLOCK DETECTION, NO TIMEOUT, NO FAIRNESS COUNTER, NO ORDERING
+  ENFORCEMENT. That absence is lesson 11's entire reason to exist. The only protection is
+  convention in comments, e.g. the README's "they must be locked in partition-number order". ***
+- held_lwlocks[MAX_SIMUL_LWLOCKS=200] (3,200 B), searched BACKWARDS on release ("Usually, but not
+  always, it will be the latest-acquired lock"), overflow is elog(ERROR, "too many LWLocks taken")
+  checked BEFORE HOLD_INTERRUPTS(). *** HOLD_INTERRUPTS() SPANS THE WHOLE HELD PERIOD, SO A BACKEND
+  HOLDING AN LWLOCK CANNOT BE CANCELLED -- statement_timeout, pg_cancel_backend() and recovery
+  conflicts all queue behind it. Reason quoted. This is the premise the §13 standby measurement
+  depends on: what gets cancelled is the PIN, not the lock. *** LWLockReleaseAll() on the error path.
+- CALL-SITE COUNTS, grepped: LWLockAcquire 505, LWLockConditionalAcquire 14, LockBuffer 365,
+  LockBufferForCleanup 15, ConditionalLockBufferForCleanup 7, and *** LWLockAcquireOrWait = 3
+  (ONLY xlog.c:2593, WALWriteLock) and LWLockWaitForVar = 5 (ONLY xlog.c:1503, WALInsertLocks).
+  TWO ENTRY POINTS EXIST FOR ONE SUBSYSTEM EACH -- BOTH ARE LESSONS 22-23 AND WERE LEFT THERE. ***
+- THE CLEANUP LOCK AS A PROTOCOL, not a mode: exclusive content lock, then LockBufHdr, then
+  refcount == 1. *** THE WAITER QUEUE IS ONE int (wait_backend_pgprocno, offset 28) AND ONE FLAG
+  (BM_PIN_COUNT_WAITER, bit 29), with elog(ERROR, "multiple backends attempting to wait for
+  pincount 1") as the overflow handler. ITS SAFETY IS BORROWED FROM LESSON 11: the README argues
+  from the relation-level ShareUpdateExclusiveLock that stops two VACUUMs overlapping. ***
+  The handoff is in UnpinBuffer, signalled by THE LAST OTHER PIN-HOLDER, never by a timer, and the
+  waiter keeps its own pin throughout -- hence CheckBufferIsPinnedOnce's elog(ERROR, "incorrect
+  local pin count") if you hold two.
+- heap_page_prune_opt's ladder RE-READ and the gate NAMED: step 1 RecoveryInProgress() -> return
+  (SO A STANDBY NEVER PRUNES ON ITS OWN -- every cleanup lock there comes from replay), step 5 is
+  ConditionalLockBufferForCleanup. *** THIS CLOSES LESSON 07'S "OPPORTUNISTIC": one cursor on the
+  page and pruning is skipped with NO retry, NO queue and NO counter anywhere. *** Lesson 07's
+  819-byte minfree arithmetic was cited, not re-derived.
+- *** THE PRIMARY-SIDE HEADLINE. An aggressive VACUUM (FREEZE) of a ONE-PAGE, 40-TUPLE table spent
+  22.03 OF ITS 22.03 SECONDS blocked on one cursor's pin. pg_stat_activity: wait_event_type =
+  BufferPin, wait_event = BufferPin. pg_locks for that pid: TWO ROWS, BOTH GRANTED (virtualxid
+  ExclusiveLock, relation ShareUpdateExclusiveLock) -- NO ungranted row, NOTHING for
+  pg_blocking_pids() to find. VACUUM VERBOSE reported "1 page, 40 tuples, 30 hits, 0 misses,
+  elapsed: 22.03 s" and HAS NO LINE FOR A CLEANUP-LOCK WAIT. Recipe: vacuum_freeze_min_age=0 +
+  vacuum_freeze_table_age=0 forces aggressive, so lazy_scan_noprune returns false and
+  lazy_scan_heap falls through to LockBufferForCleanup under Assert(vacrel->aggressive).
+  NON-AGGRESSIVE VACUUM NEVER WAITS -- it takes a share lock, runs lazy_scan_noprune and leaves
+  relfrozenxid alone. The pin costs you latency OR freezing progress, decided by a GUC. ***
+- *** THE STANDBY HEADLINE, AND THE REASON THIS LESSON NEEDED TWO CLUSTERS. Only heap_xlog_prune
+  (heapam.c:9345), btree_xlog_vacuum (nbtxlog.c:614) and 8 hash_xlog.c sites pass
+  get_cleanup_lock = true to XLogReadBufferForRedoExtended. One FETCH 1 on the standby held
+  Heap2/PRUNE redo at 0/3C059830 for 8000.427 ms -- within HALF A MILLISECOND of
+  max_standby_streaming_delay = 8s -- logged verbatim as "recovery still waiting after 1000.161 ms"
+  (deadlock_timeout, LOG ONLY, no cancel) then "recovery finished waiting after 8000.427 ms", with
+  the CONTEXT line showing nredirected 20 / redirected [1->41 ... 20->60] / blk 0. The query died
+  with 'canceling statement due to conflict with recovery / User was holding shared buffer pin for
+  too long' and confl_bufferpin went 0 -> 1.
+  SETUP THAT MAKES IT WORK, AND THE CONFOUND TO AVOID: the pin holder must take its snapshot AFTER
+  the updates commit, or ResolveRecoveryConflictWithSnapshot fires first and you measure the
+  horizon instead of the pin. Recipe: open a long-lived snapshot ON THE PRIMARY, do the UPDATEs
+  under it (so nothing prunes early), COMMIT it, open the standby cursor, THEN VACUUM the primary.
+  ALSO: the primary's own reads prune opportunistically, so do not SELECT the table between the
+  commit and the VACUUM or there will be no prune record to replay. ***
+  set_ps_display_suffix("waiting") and LogRecoveryConflict are BOTH inside if (InHotStandby), so the
+  primary case has NO log line and NO ps suffix at any log_* setting -- confirmed by ps.
+- *** WHAT ACTUALLY WAITS, 8,785 pg_stat_activity SAMPLES AT ~50 ms OVER THREE WORKLOADS, AND THE
+  RESULT IS A NULL RESULT FOR THE LESSON'S OWN SUBJECT. 1,697 (19.3%) were on an LWLock, in only 7
+  of the 45+29 available tranches.
+    A) 16 clients, HOT UPDATEs on ONE heap page, 8,190 tps, 227,882 updates, 3,424 samples:
+       WALWrite 1525 (44.5%), Lock|transactionid 823, ClientRead 501, CPU 245, IO|WALSync 189,
+       Lock|tuple 111, LockManager 27, ProcArray 1. *** ZERO BufferContent. ***
+    B) 293 MB table / 128 MB shared_buffers, random UPDATE, synchronous_commit=off, 21,258 tps,
+       1,584 samples, 430,279 client-backend evictions + 403,185 writes in pg_stat_io:
+       ClientRead 1357, CPU 185, IO|DataFileWrite 27, ProcArrayGroupUpdate 10, BufferMapping 2,
+       IO|DataFileRead 2, ProcArray 1. *** STILL ZERO BufferContent. ***
+    C) 32 clients, monotonic INSERT into a bigserial PK (rightmost btree leaf), 31,744 tps,
+       3,777 samples: ClientRead 3444, CPU 185, *** BufferContent 100 *** (30% of non-idle,
+       non-CPU), XactBuffer 32, XidGen 6, XactGroupUpdate 6, ProcArray 2, LockManager 1,
+       IO|DataFileExtend 1.
+  CONCLUSION, AND IT IS THE LESSON'S THESIS: content locks are held for tens of instructions, so a
+  50 ms sampler cannot see them even with 16-way serialization on one page. THE LWLOCKS YOU CAN SEE
+  WAITING ARE THE ONES HELD ACROSS AN I/O (WALWriteLock, or FlushBuffer's SHARED content lock
+  during a write). A rightmost-page btree split is the one cheap way to make BufferContent appear.
+  SAMPLER: a bash loop of `psql -At -c "select wait_event_type, wait_event from pg_stat_activity
+  where backend_type='client backend'"` every 0.05 s into a world-readable file. ***
+DELIBERATELY TREATED AS BLACK BOXES, and the next lessons own them: the heavyweight lock manager,
+LOCKTAG, lock partitions and the deadlock detector (11); tuple locks and Lock|tuple /
+Lock|transactionid, which DOMINATED workload A and were left unexplained on purpose (12);
+pg_xact and XactBuffer (13); hint bits and rule 4 (15); freezing, relfrozenxid and why
+lazy_scan_noprune cannot finish an aggressive page (18); VACUUM's two passes (19); WALInsertLocks,
+XLogInsert, XLogFlush, group commit and the two exotic LWLock entry points (22-23);
+BufferSync and BM_CHECKPOINT_NEEDED (24); the startup process, redo and
+ResolveRecoveryConflictWithBufferPin's internals (25); walsender/walreceiver and the slot (26);
+btree leaf-page pins and xs_want_itup (28-30).
 
-## Paused Subjects
+NO SYLLABUS REVISION THIS RUN. Lesson 10's title was taught exactly as written -- buffer pins,
+content locks and the LWLock implementation were all three taken in full -- plus the two deferrals
+lesson 09's handover assigned (BM_PIN_COUNT_WAITER / wait_backend_pgprocno, and
+pg_buffercache.pinning_backends / buffers_pinned as pin instruments, which lesson 09's Next Steps
+item 6 asked for by name). Lesson 11's title needs no change: this lesson established exactly the
+gap it fills (no deadlock detection, no timeout, no ordering enforcement in LWLocks) and already
+borrowed ShareUpdateExclusiveLock from it, so the partitions/LOCKTAG/detector framing is right.
 
-### PostgreSQL Internals — paused 2026-10-30 after lesson 10 of 35
+OPEN ITEMS HANDED FORWARD, in priority order:
+(1) *** THE CONTENT-LOCK FALSE SHARING IS CLAIMED BUT NOT MEASURED. *** Two BufferDescs per
+    128-byte cache line is arithmetic, not an experiment. Pin two backends to different cores and
+    compare exclusive-content-lock throughput on buffers i / i^1 versus i / i+2.
+(2) The 50 ms sampling floor. -DLWLOCK_STATS (sh_acquire_count, ex_acquire_count, block_count,
+    dequeue_self_count, spin_delay_count, dumped at backend exit) or eBPF on the
+    TRACE_POSTGRESQL_LWLOCK_* tracepoints would turn workload A's zero into a real block count and
+    give the phase-3 win rate. Both need a rebuild; neither was attempted.
+(3) A SKIPPED CLEANUP LOCK IS COUNTED NOWHERE -- same gap lesson 09 found in GetVictimBuffer's
+    retry paths. Auditing all 14 LWLockConditionalAcquire sites for silent-failure accounting is a
+    bounded task with a patch at the end of it.
+(4) max_standby_streaming_delay = -1 plus hot_standby_feedback = on was NOT run: replay should
+    stall unboundedly with confl_bufferpin staying 0. A June 2026 pgsql-hackers thread ("[PATCH]
+    Prevent repeated deadlock-check signals in standby buffer pin waits") identifies that regime as
+    untested upstream and is worth reading before lessons 25-26.
+(5) Whether a btree INDEX-ONLY scan's leaf pin (kept when xs_want_itup is set) can stall
+    btree_xlog_vacuum replay the same way. Bring this to lesson 30.
 
-Paused at Aryant's request to make JanusGraph the active track. **Nothing was dropped.** The full
-PostgreSQL track state — syllabus with lessons 01–10 checked, the handover note block, environment
-recipes, and archive pointers — is preserved verbatim in
-[`tracks/postgresql.md`](tracks/postgresql.md). When the JanusGraph track completes, that file
-becomes `TRACK.md` again and the next run resumes at **lesson 11 — the heavyweight lock manager**.
+Throwaway tables left by this run (cluster does not persist; names listed only to avoid collisions
+within a future run): pintab1..pintab12, t_freeze, t_prune, t_std, t_std2, onepage, big1,
+rightmost. NOTE: like lesson 08, this run did NOT use the pgNN_ prefix convention. Lesson 11 should
+use pg11_*.
+-->
 
 ## Completed Subjects
+
+### JanusGraph Codebase — 28 lessons, 2026-10-30 to 2026-11-26 (capstone 2026-11-27)
+
+Bottom-up deep dive through the JanusGraph source at pinned commit `a59ae8d8` (2026-10-28), in six
+parts: the storage contract (01-07), graph ⇄ bytes (08-13), the write path (14-18), the read path
+(19-22), Gremlin integration (23-24), and schema, mixed indexes and production backends (25-28).
+Sessions 01-04 ran in `contributor-reading` mode and shipped with their `## My Notes` half as the
+untouched template; the mode switched to `lesson` on 2026-11-03 and the 24 carried questions were
+settled as the syllabus reached them. **Sessions 01-04's `## My Notes` remain Aryant's to fill at
+any time and must never be edited by a run.** Capstone:
+[`2026/11/2026-11-27-janusgraph-capstone/README.md`](2026/11/2026-11-27-janusgraph-capstone/README.md).
+
+The full 28-item syllabus, the session log, and the `Verified by lesson 26/27/28` fact blocks are
+preserved in this file's git history, in the commit immediately preceding the 2026-11-27 capstone
+commit. The lesson documents themselves are indexed in the root [`README.md`](README.md), which is
+the real record of what was taught. **The track's actual deliverable is the PR-candidate register**,
+which was deliberately not archived and stays live at
+[`tracks/janusgraph-registers.md`](tracks/janusgraph-registers.md) (candidates 1-64, frozen, plus
+the "Still open, and who owns it" ledger) and
+[`tracks/janusgraph-registers-2.md`](tracks/janusgraph-registers-2.md) (65-83, next free 84).
+
+**Closing summary.** A property graph folded onto one sorted row per vertex, where every graph
+concept is an encoding decision and the only distributed-systems machinery exists because a mixed
+index commits *after* storage. Atomicity is **borrowed**, once: `PRIMARY_SUCCESS` is written inside
+the storage mutation so it can serve as evidence that the storage write landed — and on default CQL
+that loan does not clear, because the log is a different store in a different partition written by
+a different unlogged batch. Repair is therefore **re-derivation from the edgestore, never a replay
+of the log**, which is what makes it idempotent, convergent, order-free and correct even when the
+log entry is wrong. The track's best transferable idea is the three-way idempotence taxonomy —
+assignment, accumulation, delivery — whose dividing line has nothing to do with distribution. And
+its honest qualification: **28 lessons, 20 outstanding experiments, and not one run ever executed
+JanusGraph.**
 
 ### SQLite Internals — 33 lessons, 2026-09-16 to 2026-10-18 (capstone 2026-10-19)
 
