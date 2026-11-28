@@ -48,6 +48,7 @@ commit you reach them through.
 | **PG 05** | **PostgreSQL Internals** | commit `5d3a81e3c7b92c6679f964fb9354092862b4c6a3` (2026-10-26, the last commit before the twelfth trim) | `54c92e672c6081eec9935d5f6f8514ad8520a7ed` |
 | **PG 06** | **PostgreSQL Internals** | commit `01878f9bb5d3979a81c03925c2ae8219292b7dc6` (2026-10-28, the last commit before the thirteenth trim) | `df40aec01bc9a115a92e1d609bce79b1b8901e25` |
 | **PG 07** | **PostgreSQL Internals** | commit `99a7b3b7eab710319907cbd11d5c311ebe61d4fa` (2026-10-29, the last commit before the fourteenth trim) | `937bfd19f68fdc42eebe5c83f1f636869629a59e` |
+| **PG 08** | **PostgreSQL Internals** | commit `0fe7e863679c97fa83c2cc7ce35226b40c87ff6c` (2026-11-28, the last commit before the fifteenth trim — the first after the 29-day pause) | `458173fa9a1255ce9f3ce6232eec4ae5cffa6da2` |
 
 Notes on the rows:
 
@@ -210,13 +211,34 @@ Notes on the rows:
   819-byte prune heuristic located to within one row, the HOT-blocking matrix, the zero-growth
   steady state, the WAL comparison (166 vs 247 bytes/update), and the one-idle-transaction
   finding. Archived on **2026-10-29 by the lesson 10 run**.
+- The **PG 08** blob carries the notes for PostgreSQL lessons **08, 09 and 10** together with the
+  handover that was written *to* lesson 11, and it is also **the last state of `TRACK.md` from
+  before the 29-day JanusGraph pause ended** — the version the 2026-11-27 run restored
+  byte-for-byte from git history. It is therefore the right place to read lesson 08's note — the
+  one on `smgr` and `md.c`: the segment map, relation extension batching and the fsync request
+  queue, with `strace` rather than SQL as the primary instrument, the 142,858-block relation whose
+  segment 0 measured exactly 1,073,741,824 bytes, and the `VACUUM` truncation that left a
+  zero-byte `.1` segment invisible to `mdnblocks`. It is also where the **per-file patch-check
+  discipline** was established: lesson 08 found that one of the Debian patches touches `bufmgr.c`
+  and insisted that the `+++`/`---` paths be extracted **per file rather than in bulk**, which is
+  the rule every later lesson has followed. Archived on **2026-11-28 by the lesson 11 run**.
+  **Read it with lesson 11's note in hand for one correction of method, not of fact:** lesson 08's
+  note recorded 15 patches in `debian/patches/series`; lesson 11 re-fetched the same
+  16.15-0ubuntu0.24.04.1 source on 2026-11-28 and counted **14**. The series is not frozen even
+  within one upstream version, which is exactly why the check is per-run and per-file.
 - Lessons 01–12 of the SQLite track predate the note block; those lessons have no handover notes,
   only their documents.
 
 After the 2026-10-19 run, `TRACK.md` describes a **new track — PostgreSQL Internals, 35 lessons** —
-and after the 2026-10-29 run its note block holds the notes for PostgreSQL lessons **08, 09 and
-10** plus the handover to lesson 11. Every SQLite note, and now PostgreSQL lessons 01–07's, lives
+and after the 2026-11-28 run its note block holds the notes for PostgreSQL lessons **09, 10 and
+11** plus the handover to lesson 12. Every SQLite note, and now PostgreSQL lessons 01–08's, lives
 in git history, indexed by the table above.
+
+**The 29-day pause changed nothing about this file's contract.** The PostgreSQL track was paused on
+2026-10-30 after lesson 10 and resumed on 2026-11-27; lesson 11 shipped on 2026-11-28 and performed
+the fifteenth trim exactly as the procedure below requires — archive row first, then drop. A pause
+does not rotate the note block, so the `PG 08` row is the first archival in **30 days** and the
+block it trimmed had sat unchanged throughout.
 
 ## Procedure for the next trim
 
@@ -248,8 +270,10 @@ lesson 06's "59 heap fetches after one cold update" turned out not to be a const
 an archived or live note as *what that run believed*, not as established fact: it is working memory,
 and one header fetch (or one re-measurement) is usually enough to check a specific claim before
 building on it. When a later lesson overturns an earlier note, record the correction in the new note
-**and** annotate the archived row, as the `PG 02`, `PG 03`, `PG 04`, `PG 05` and `PG 06` rows above
-now are.
+**and** annotate the archived row, as the `PG 02`, `PG 03`, `PG 04`, `PG 05`, `PG 06` and `PG 08`
+rows above now are. The `PG 08` annotation is the mildest kind and worth the precedent: it corrects
+a **count of patches**, not a claim about PostgreSQL, and the lesson it teaches is that an
+environment fact can go stale inside a single upstream version.
 
 ## What this file is not
 
