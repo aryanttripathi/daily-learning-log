@@ -22,6 +22,15 @@ Every lesson is written to be *runnable*: it carries a hands-on exercise you can
   5. Identify editions by **date**, never by the archive's edition number, which has been observed moving backwards. Take the item count from the endpoint you took the items from and say which one that was — the HTML and PDF renderings of one edition have disagreed 43 against 33 (2026-10-24). Edition size carries no information about completeness (2026-11-10). A large edition's page can exceed the ~100 KB one WebFetch returns, so its tail needs a second call with an offset (2026-11-11, used for real on 2026-11-13).
   6. **If the best item in an edition cannot be verified, pick another and say why** (2026-11-15). XRAID was the most on-topic item in the 2026-11-14 edition and both of its primary sources — the mailing-list archive and the author's slides — are robots-disallowed, with the secondary report stating outright that it does not describe the mechanism. A digest says that and deep-dives something it could actually read, rather than filling the gap with plausible generalities.
 
+  **2026-11-28 broke nothing and is recorded here for that reason.** Both `/2026-11-28/` and
+  `/2026-11-27/` returned `client_error`; the front page named 2026-11-26 at 46 stories and
+  `/archive/` **agreed**, marking 11-26 as *"Latest"* across 151 editions. The maximum fetchable
+  edition was therefore one the previous run had already digested, and the **fallback-pool rule
+  added on 2026-11-22 fired exactly as written** — digest a whole uncovered edition before falling
+  back to a single spent item — closing the 2026-11-23 edition (54 stories). **The fallback pool is
+  now empty of whole editions**; only four unspent single items remain, two from 2026-11-06 and two
+  from 2026-11-18. A rule that works on its first real test is worth one sentence, not a table row.
+
   **There is no leader endpoint and no usable negative signal.** Every rule of the form "poll X first" has been killed on its first or second test, and a `client_error` on a dated page is a statement about one minute, not about whether the edition exists or will. The first-party explanation, found 2026-10-24, predicts the whole pattern: the front page states that *"Editions are published with a 2-day settling window so the highest-signal discussions and insights surface"* — so the front page and archive surface the *settled* view while RSS and the dated permalinks can expose an edition before it has settled.
 
   The full 28-row per-run observation log that produced these rules is preserved in this file's **git history**; the last commit carrying it in full is the one immediately preceding the 2026-11-14 entry. It was rolled off here under the same convention `TRACK.md` uses, because its own last five rows recorded nothing new and said future rows were worth writing only when something broke. The twelve runs that actually changed a rule:
@@ -50,28 +59,31 @@ Every lesson is written to be *runnable*: it carries a hands-on exercise you can
 
 ## Current Track
 
-**PostgreSQL Internals**: **Lesson 11 of 35** · mode `lesson` · **resumed 2026-11-27** after 28 days
-paused · [syllabus and progress &rarr;](TRACK.md)
+**PostgreSQL Internals**: **Lesson 12 of 35** next · mode `lesson` · 11 shipped · [syllabus and
+progress &rarr;](TRACK.md)
 
 The track was paused on 2026-10-30 after lesson 10 so that JanusGraph could be the active subject.
-That track completed on 2026-11-26 and its capstone shipped on 2026-11-27, so PostgreSQL resumes at
-**lesson 11 — the heavyweight lock manager: `LOCKTAG`, lock partitions, and the deadlock detector**.
-Nothing was dropped while it was paused: the full state — the 35-item syllabus with lessons 01–10
-checked, the NOTE BLOCK with the handover notes for lessons 08–10, and the environment and
-source-provenance recipes — was preserved in git history and has been restored into
-[`TRACK.md`](TRACK.md) byte-for-byte, verified by blob SHA before editing. The former
-`tracks/postgresql.md` pointer file was deleted in the same commit, as its own instructions
-required.
+That track completed on 2026-11-26 and its capstone shipped on 2026-11-27, so PostgreSQL resumed at
+**lesson 11 — the heavyweight lock manager**, which shipped on 2026-11-28 as the first entry after
+a 29-day gap. The source is now **pinned in `TRACK.md`'s front matter**: Ubuntu source package
+`postgresql-16` 16.15-0ubuntu0.24.04.1, re-fetched and patch-checked per file, a practice carried
+over from the JanusGraph track and the single most useful procedural thing that track produced.
 
-The first ten lessons covered physical storage and the heap (the cluster on disk, the page,
+**Next: lesson 12 — tuple locks: the four strengths, the conflict table, and the
+`LockTuple`/`XactLockTableWait` protocol.**
+
+The first eleven lessons covered physical storage and the heap (the cluster on disk, the page,
 `HeapTupleHeaderData`, attribute storage and TOAST, the FSM, the VM, HOT updates and pruning, `smgr`
-and `md.c`) and the first half of shared memory (the buffer manager and clock sweep, then pins
-versus content locks and the LWLock implementation). Lesson 11 climbs from LWLocks to the
-heavyweight lock manager.
+and `md.c`) and all of shared memory's locking layer (the buffer manager and clock sweep, pins
+versus content locks and the LWLock implementation, then the heavyweight lock manager — `LOCKTAG`,
+the eight-mode conflict table, 16 hash partitions, the 16-slot fast path, and `deadlock.c`).
+Lesson 12 moves from locking *objects* to locking *rows*, and Part III — MVCC and transaction
+management — begins at lesson 13.
 
 ## Paused Tracks
 
-**None.** The PostgreSQL track was the only paused subject and it is now active again.
+**None.** The PostgreSQL track was the only paused subject and it has been active again since
+2026-11-27, with its first post-pause entry on 2026-11-28.
 
 ### Previous track: JanusGraph Codebase — complete
 
@@ -239,3 +251,4 @@ Entries before 2026-09-16 predate the track model. They came from a five-slot to
 | 2026-11-25 | 27 | [The CQL backend — CQLKeyColumnValueStore against the in-memory store](2026/11/2026-11-25-janusgraph-cql-store-vs-inmemory/README.md) | JanusGraph | [digest (2026-11-24 edition)](2026/11/2026-11-25-janusgraph-cql-store-vs-inmemory/daily-diff.md) |
 | 2026-11-26 | 28 | [The transaction log, and what repairs a stale mixed index](2026/11/2026-11-26-janusgraph-tx-log-stale-index-repair/README.md) | JanusGraph | [digest (2026-11-25 edition)](2026/11/2026-11-26-janusgraph-tx-log-stale-index-repair/daily-diff.md) |
 | 2026-11-27 | — | [JanusGraph Capstone — A Property Graph Folded Onto Sorted Rows, and the One Guarantee It Borrows](2026/11/2026-11-27-janusgraph-capstone/README.md) | JanusGraph · capstone | [digest (2026-11-26 edition)](2026/11/2026-11-27-janusgraph-capstone/daily-diff.md) |
+| 2026-11-28 | 11 | [The heavyweight lock manager — `LOCKTAG`, 16 partitions, 16 fast-path slots, and a detector that charges one second](2026/11/2026-11-28-postgres-heavyweight-lock-manager/README.md) | PostgreSQL | [digest (2026-11-23 edition, fallback pool)](2026/11/2026-11-28-postgres-heavyweight-lock-manager/daily-diff.md) |
