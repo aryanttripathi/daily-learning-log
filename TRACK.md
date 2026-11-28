@@ -6,9 +6,16 @@ started: 2026-10-19
 paused: 2026-10-30 (after lesson 10, to make JanusGraph the active track)
 resumed: 2026-11-27 (JanusGraph track completed; capstone 2026-11-27)
 lessons-total: 35
-lessons-done: 10
-resume-at: 11
+lessons-done: 11
+resume-at: 12
 paused-tracks: none
+source-pin: Ubuntu source package postgresql-16 16.15-0ubuntu0.24.04.1, re-fetched and
+  patch-checked per file on 2026-11-28 by the lesson 11 run. Lessons 07-11 all read this same
+  release. Lessons 01-06 read upstream git trees: 01 @ddd468ca, 02 @3cde90ec, 03 @f2edf5dd,
+  04 @f52d4051, 05 @126976a8, 06 @0019a1ec. RE-VERIFY THE PATCH SERIES AT EACH PART BOUNDARY:
+  as of 2026-11-28 there are 14 patches in debian/patches/series and the backend C files they
+  touch are bufmgr.c, procsignal.c, postgres.c, pgstat_database.c, extension.c, dfmgr.c,
+  guc_tables.c and llvmjit.c -- extract the +++/--- paths per file, never in bulk
 previous-track: JanusGraph, 28 lessons 2026-10-30 .. 2026-11-26, capstone 2026-11-27; PR-candidate
   registers live on at tracks/janusgraph-registers.md (1-64, FROZEN) and
   tracks/janusgraph-registers-2.md (65-83, next free 84) and are NOT part of this track
@@ -18,7 +25,8 @@ previous-track: JanusGraph, 28 lessons 2026-10-30 .. 2026-11-26, capstone 2026-1
 
 Sequential deep dive. One lesson per day, each building on the last.
 
-**STATUS: resumed 2026-11-27 — lesson 10 shipped 2026-10-29, and the next run takes lesson 11.**
+**STATUS: active. Lesson 11 shipped 2026-11-28, the first entry after the 29-day pause, and the
+next run takes lesson 12.**
 The syllabus was written on 2026-10-19, the day the SQLite track's capstone shipped. The track was
 paused on 2026-10-30 at Aryant's request so that JanusGraph could be the active subject; that track
 ran 28 lessons and closed with its capstone on 2026-11-27, and **this file was restored from commit
@@ -56,62 +64,84 @@ writer concurrency, cost-model resolution, and the verification oracle — are e
 a floating-point cost model, and no `integrity_check` at all. Every lesson in this track should be
 readable as the other answer to a question SQLite already answered.
 
-## Notes For The Next Run — READ THIS FIRST, the track has just resumed
+## Notes For The Next Run — READ THIS FIRST
 
-**The next item is lesson 11 — the heavyweight lock manager: `LOCKTAG`, lock partitions, and the
-deadlock detector.** It is the first unchecked item and nothing was skipped: lessons 01-10 shipped
-between 2026-10-19 and 2026-10-29 and are indexed in the root [`README.md`](README.md).
+**The next item is lesson 12 — tuple locks: the four strengths, the conflict table, and the
+`LockTuple`/`XactLockTableWait` protocol.** It is the first unchecked item and nothing was skipped:
+lessons 01-10 shipped 2026-10-20 to 2026-10-29, the track was paused for 29 days, and lesson 11
+shipped 2026-11-28. All eleven are indexed in the root [`README.md`](README.md).
 
-**Before writing lesson 11, re-read the handover notes for lessons 09 and 10** in the NOTE BLOCK
-below. They are the whole reason this file was preserved rather than summarised, and they say what
-lesson 11 must pick up. Two of their instructions are operational and easy to miss:
+**Lesson 11 handed lesson 12 a loaded gun, and the NOTE BLOCK below says so in detail.** Three
+things from it are operational:
 
-- **Use the `pg11_*` prefix for every throwaway table this run creates.** Lessons 08 and 10 both
-  failed to use the `pgNN_` convention; the note records the collision names to avoid.
-- **The lessons 09 and 10 notes set up the buffer-manager/LWLock boundary** that lesson 11's
-  heavyweight lock manager sits on top of. Lesson 11 should not re-explain pins, content locks or
-  the LWLock implementation.
+- **Lesson 11 measured `Lock | transactionid` and `Lock | tuple` and deliberately did not explain
+  them.** It proved that the `wait_event` string for a heavyweight lock *is* `LockTagTypeNames[]`
+  indexed by the `LOCKTAG` type byte, which means lesson 10's workload A (823 samples on
+  `Lock | transactionid`, 111 on `Lock | tuple`) was reading `locktag_type == 5` and `== 4`.
+  **Lesson 12 owes the mechanism.** Lesson 11's exercise 4 produced a two-edge deadlock whose both
+  edges were `LOCKTAG_TRANSACTION` from a pair of plain `UPDATE`s that never named a tuple lock —
+  that is the thing to open.
+- **`LOCKTAG_TUPLE` is a physical address** `(dboid, reloid, blocknum, offnum)`, so it stops naming
+  the same logical row the instant the tuple moves. Lesson 11 stated this as lesson 12's problem
+  statement and did not resolve it.
+- **Do not re-teach `LOCKTAG`, the conflict table, the 16 partitions, the fast path or
+  `deadlock.c`.** Lesson 11 took all five in full. Lesson 12's conflict table is the *tuple-lock*
+  one (`HEAP_LOCK_*` / `MultiXactStatus`), which is a different table at a different granularity.
+- **Use the `pg12_*` prefix for every throwaway table.** Lesson 11 used `pg11_*` throughout and the
+  convention is back on track after lessons 08, 09 and 10 all lapsed.
 
-**Source provenance.** The PostgreSQL track's environment and source-provenance recipes are in the
-NOTE BLOCK. Re-establish the source commit the way those recipes do, and record it here — a 29-day
-gap has passed since lesson 10, so **do not assume the commit lessons 01-10 used is still current**;
-the JanusGraph track's practice of pinning a commit in the front matter and re-verifying it by blob
-SHA at each Part boundary is worth carrying over to this track, and is the single most useful
-procedural thing the JanusGraph track produced.
+**Source provenance.** The commit is now pinned in the front matter (`source-pin`) and was
+re-fetched and patch-checked per file on 2026-11-28. `apt-get source postgresql-16` remains the
+route; the recipe is in the NOTE BLOCK. Re-verify the patch series at each Part boundary — Part III
+begins at lesson 13, so the next verification is due then.
 
-**Entry size, carried from the JanusGraph track.** Lessons there ran 51-103 KB with the digest at
-roughly 17 KB. The real constraint on a run is **output**, not input: every file pushed must be
-emitted in full as a tool argument, so large pre-existing files (this one, the root `README.md`)
-should be edited **in place on local disk with small scripted replacements** and their pushes
-delegated, with every pushed blob SHA verified against the locally computed one. The root
-`README.md` index is one row per line — **edit the row, do not rebuild the table.**
+**Entry size.** Lesson 11 shipped at 46 KB with a 14 KB digest. The real constraint on a run is
+**output**, not input: every file pushed must be emitted in full as a tool argument, so large
+pre-existing files (this one, the root `README.md`) should be edited **in place on local disk with
+small scripted replacements**. The root `README.md` index is one row per line — **edit the row, do
+not rebuild the table.** Lesson 11's run did exactly that and it works.
 
-**Daily Diff procedure, revised 2026-11-27 and this supersedes the earlier rule.** The front page
-`https://tdd.cat/` is a **floor, never a ceiling**: on 2026-11-27 it named the 11-25 edition while
-`https://tdd.cat/2026-11-26/` served 200 and `https://tdd.cat/archive/` correctly listed 11-26 as
-Latest. So: try `https://tdd.cat/{today}/`; then fetch **both** the front page and `/archive/`; take
-the **maximum fetchable** edition across all three, probing the slash form for any date either
-advertises. Editions covered to date: 11-08 through 11-22, then 11-24, 11-25 and **11-26** — so
-**11-23 (54 stories) and 11-27 onward are uncovered**. The fallback pool still holds the unspent
-items from 2026-11-06 (two) and 2026-11-18 (two). There is **no `WebFetch` tool in this
-environment**; pages are fetched through a sub-agent, which must be asked for the structured item
-list (title, source, outbound URL, one-line gist) rather than for page text, and whose summarised
-portion is not reliable enough to quote. Always cross-check the item count against the page's own
-stated figure, and state how many items were actually recovered.
+**Reading this file at all is now a two-step job.** At 92 KB, `get_file_contents` on `TRACK.md`
+**exceeds the MCP tool-result token limit and fails**, saving the content to a local file instead.
+Lesson 11's run recovered it with `python3 -I -c "json.load(...)"` on the saved path, extracting
+`d[0]['text']` and stripping the `[Resource from github at ...] ` prefix, then read it with `sed -n`.
+The root `README.md` (52 KB) fails the same way. **Budget for this: two tool calls plus a script,
+not one call.**
+
+**Daily Diff procedure — the 2026-11-27 rule held and was used in anger on 2026-11-28.** The front
+page `https://tdd.cat/` is a **floor, never a ceiling**. Try `https://tdd.cat/{today}/`; then fetch
+**both** the front page and `https://tdd.cat/archive/`; take the **maximum fetchable** edition
+across all three, probing the slash form for any date either advertises. On 2026-11-28 both
+`/2026-11-28/` and `/2026-11-27/` returned `client_error`, the front page named 11-26 (46 stories)
+and `/archive/` agreed, marking 11-26 as Latest across 151 editions — so the maximum fetchable
+edition was one the previous run had already digested, and the **fallback-pool rule** fired as
+written: digest a whole uncovered edition before falling back to a single spent item.
+**Editions covered to date: 11-08 through 11-26 inclusive — 11-23 was closed on 2026-11-28 and the
+fallback pool is now EMPTY of whole editions.** 11-27 onward are uncovered and had not published as
+of 03:4x UTC on 2026-11-28. The remaining unspent single items are from the 2026-11-06 edition (two)
+and the 2026-11-18 edition (two). There is **no `WebFetch` tool in this environment**; pages are
+fetched through a sub-agent, which must be asked for the structured item list (title, source,
+outbound URL, one-line gist) rather than for page text, and whose summarised tail portion is not
+reliable enough to quote — on 2026-11-28 the 11-23 tail summary claimed 31 rows, listed 29, and
+duplicated one verbatim item. Always cross-check the item count against the page's own stated figure
+and state how many items were actually recovered verbatim.
 
 **Mermaid.** Render every diagram with `mmdc` before pushing and then inspect the rendered SVG: grep
 it for a literal backslash-n (must be zero) and read the node labels back. Accumulated rules: quote
 every node label containing parentheses, commas, `->`, `|` or angle brackets; **do not use numeric
 HTML entities such as `&#40;` for parentheses — they render as literal `&(`** (found 2026-11-27);
-use named entities such as `&lt;` and `&amp;` for comparisons and ampersands; never escape a quote
-inside a label, drop the inner quotes instead; a semicolon inside a `sequenceDiagram` message is a
-statement separator, so use a comma; and a `flowchart` edge label takes a quoted string with
-`<br/>` in it and renders multi-line correctly.
+use named entities such as `&lt;`, `&gt;` and `&amp;` for comparisons and ampersands, which
+rendered correctly on 2026-11-28 in both diagram 1 (`MyProc-&gt;fpInfoLock`, `nLocks &gt; 0`) and
+diagram 2 (`nWaitOrders &gt; 0 ?`); never escape a quote inside a label, drop the inner quotes
+instead; a semicolon inside a `sequenceDiagram` message is a statement separator, so use a comma;
+and a `flowchart` edge label takes a quoted string with `<br/>` in it and renders multi-line
+correctly. A `subgraph` whose node labels contain `[16]` array subscripts renders fine as long as
+the whole label is quoted.
 
 **Sub-agents.** State the prohibition verbatim in every sub-agent prompt — naming `curl`, `wget`,
 `gh`, `git` and `raw.githubusercontent.com`, and instructing the sub-agent to report failure rather
-than find another route. It was obeyed and reported on 2026-11-26 and again on 2026-11-27.
-
+than find another route. It was obeyed and reported on 2026-11-26, 2026-11-27 and again on
+2026-11-28 (three sub-agents, all three reported WebFetch-only compliance explicitly).
 
 ## Syllabus
 
@@ -130,7 +160,7 @@ than find another route. It was obeyed and reported on 2026-11-26 and again on 2
 
 - [x] 09 — The buffer manager: `BufferDesc`, the clock-sweep victim search, and the strategy ring
 - [x] 10 — Buffer pins versus content locks, and the LWLock implementation
-- [ ] 11 — The heavyweight lock manager: `LOCKTAG`, lock partitions, and the deadlock detector
+- [x] 11 — The heavyweight lock manager: `LOCKTAG`, lock partitions, and the deadlock detector
 - [ ] 12 — Tuple locks: the four strengths, the conflict table, and the `LockTuple`/`XactLockTableWait` protocol
 
 ### Part III — MVCC and transaction management (`access/transam`)
@@ -183,191 +213,6 @@ The SQLite track's lessons 31-33 notes were archived on that run; see TRACK-ARCH
 "31 - 33". The capstone document (2026/10/2026-10-19-sqlite-capstone/README.md) closes the track
 and records which items were deliberately left unread. None of these carry forward into the
 PostgreSQL track. Do not hand them to a PostgreSQL lesson.
-
--- LESSON 08 (2026-10-27) AS TAUGHT ------------------------------------------------------------
-Document: 2026/10/2026-10-27-postgres-smgr-md-segments-fsync-queue/README.md (single README, not
-split -- the segment map, the extension batching and the fsync queue are three sections of one
-vertical slice, and splitting would have hidden that they are the same layer).
-
-SOURCE PROVENANCE: `apt-get source postgresql-16` again, version 16.15-0ubuntu0.24.04.1, the same
-build the cluster runs. LESSON 07'S ROUTE WORKS AND IS NOW THE DEFAULT -- see the environment notes
-below for the exact recipe (deb-src on noble, then apt-get source into a world-readable dir).
-PATCH CHECK, AND IT MATTERS MORE THIS RUN THAN LAST: there are 15 patches in debian/patches/ now,
-and ONE OF THEM TOUCHES bufmgr.c (v8-0001-Fix-recovery-conflict-SIGUSR1-handling.patch). Its only
-bufmgr.c hunk is at LockBufferForCleanup(), nowhere near ExtendBufferedRel*, so the extension code
-quoted is upstream verbatim -- but DO NOT repeat lesson 07's blanket "no patch touches anything we
-read"; extract the +++/--- paths and check per file. md.c, smgr.c, sync.c, hio.c, checkpointer.c
-and fd.c are untouched. Trees/releases so far: 01 @ddd468ca, 02 @3cde90ec, 03 @f2edf5dd,
-04 @f52d4051, 05 @126976a8, 06 @0019a1ec, 07 = release 16.15, 08 = release 16.15.
-Files read IN FULL: storage/smgr/README (52 lines), include/storage/smgr.h, include/storage/sync.h.
-Read substantially: storage/smgr/md.c (1649 lines -- every function named in the lesson),
-storage/sync/sync.c (624 lines). Read in part: postmaster/checkpointer.c (ForwardSyncRequest,
-CompactCheckpointerRequestQueue, the CheckpointerShmemStruct declaration, CheckpointerShmemSize),
-access/heap/hio.c (RelationAddBlocks), storage/buffer/bufmgr.c (ExtendBufferedRelBy/To/Common/
-Shared, LimitAdditionalPins), common/file_utils.c (pg_pwrite_zeros), utils/misc/guc_tables.c
-(the file_extend_method entry), include/storage/fd.h (enum FileExtendMethod),
-include/port/pg_iovec.h (PG_IOV_MAX), catalog/storage.c (AddPendingSync, smgrDoPendingSyncs),
-access/nbtree/nbtsort.c (the smgrimmedsync call site).
-
-*** THIS RUN HAD A CLUSTER, EVERY number is measured, AND THE PRIMARY INSTRUMENT WAS strace, NOT
-SQL. *** PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1), x86_64, gcc 13.3.0, Linux 6.18, ext4,
-2 vCPU / 8 GB RAM, ~30 GB free. block_size 8192, segment_size 131072 blocks, wal_segment_size
-16 MB, wal_level replica, max_wal_size 1 GB, checkpoint_timeout 300 s, fsync on, data_sync_retry
-off, max_files_per_process 1000, file_extend_method posix_fallocate, shared_buffers 128 MB except
-where a measurement says otherwise, data_checksums OFF.
-*** A DIFFERENT CLUSTER RECIPE WORKED THIS RUN AND IS SIMPLER: `apt-get install postgresql
-postgresql-contrib` then `pg_ctlcluster 16 main start`, running psql as the postgres user via
-`su postgres -c`. No initdb, no /var/tmp dance, ALTER SYSTEM + pg_ctlcluster restart works for
-PGC_POSTMASTER settings, and the log is at /var/log/postgresql/postgresql-16-main.log which is
-where log_checkpoints and DEBUG1 output land. Both recipes work; this one is fewer steps. The
-world-readable-script trap still applies: put psql -f scripts in /tmp/<dir> with chmod 777. ***
-
-TOOK, and must not be re-taught:
-- THE SWITCH: smgrsw[] has ONE element, 16 md* function pointers, and the README's own defence of
-  the indirection quoted ("Removing the switch layer would save nothing noticeable anyway, since
-  storage-access operations are surely far more expensive than one extra layer of C function
-  calls"). smgropen() does NO I/O -- hash entry only, keyed on RelFileLocatorBackend.
-- THE SEGMENT MAP, structurally: SMgrRelationData's md_num_open_segs[fork] + md_seg_fds[fork] ->
-  MdfdVec { File mdfd_vfd; BlockNumber mdfd_segno; } -> fd.c VFD -> file. _fdvec_resize() NEVER
-  SHRINKS, deliberately, "because we want mdtruncate() to be able to promise that it won't allocate
-  memory, so that it is allowed in a critical section". _mdfd_openseg asserts segments open in
-  strict order -- NO SPARSE MAP. md_num_open_segs IS A CACHE, NOT A CENSUS (header comment quoted).
-- *** THE 1 GB SEGMENT BOUNDARY, CROSSED AND MEASURED -- lesson 01's arithmetic is now an
-  observation, which is what its handover asked for. *** 1,000,000 rows x 1000-byte pad ->
-  base/16388/16438, 142,858 blocks, 1,170,292,736 bytes. On disk: segment 0 = EXACTLY
-  1,073,741,824 bytes = 131,072 blocks = RELSEG_SIZE; `.1` = 96,550,912 = 11,786 blocks;
-  `_fsm` = 311,296 (38 blocks); no `_vm` until the first VACUUM. 131072 + 11786 = 142858 exactly.
-  SIDE DETAIL: stat reports segment 0 as 2,097,160 x 512 B = 1,073,745,920 allocated, 4,096 bytes
-  MORE than apparent -- ext4 extent metadata, not PostgreSQL.
-- *** mdnblocks() IS TWO SYSCALLS AND THE TRACE SHOWS THE LOOP CONDITION:
-    openat("base/16388/16438") = 14 ; lseek(14,0,SEEK_END) = 1073741824   <- == RELSEG_SIZE, advance
-    openat("base/16388/16438.1") = 15 ; lseek(15,0,SEEK_END) = 96550912   <- < RELSEG_SIZE, return
-  1.45 ms for the pair. _mdfd_openseg deliberately passes NO O_CREAT here ("might create a segment
-  which has vanished through some operating system misadventure"). ***
-- *** RELATION SIZE IS A SYSCALL, EVERY TIME, OUTSIDE RECOVERY -- MEASURED: the same backend did
-  lseek(15,0,SEEK_END) again 3 s later for the same unchanged relation. smgrnblocks_cached()
-  returns InvalidBlockNumber when not InRecovery, reason quoted from smgr.h ("lack of a shared
-  invalidation mechanism for changes in file size"). THIS IS THE REMOVED-REDUNDANCY THREAD'S
-  STRUCTURAL LIMIT: PostgreSQL stores a relation's size NOWHERE, where SQLite keeps a page count
-  in the header at offset 28 and validates it against the change counter. ***
-- *** RELATION EXTENSION, THE LESSON'S BEST EXPERIMENT: THE SAME 20,000 ROWS, FOUR SYSCALL SHAPES.
-    (1) INSERT..SELECT (no bistate):        2,860 pwritev, iovcnt=1, 0 fallocate; 2,858 blocks
-    (2) COPY (bistate):                     48 fallocate, 1 pwritev;              2,896 blocks
-    (3) COPY, file_extend_method=write_zeros: 0 fallocate, 97 pwritev;            2,896 blocks
-    (4) COPY, shared_buffers=128kB:         2,861 pwritev, iovcnt=1;              2,858 blocks
-  (2)'s fallocate lengths IN ORDER: 81920, 81920, 163840, 327680, then 524288 x 44 = 10, 10, 20,
-  40, 64, 64, ... That is hio.c arithmetic exactly: extend_by = num_pages*(1+waitcount), then
-  Max(.., bistate->already_extended_by) which ACCUMULATES (0->10->20->40->80), then
-  Min(.., MAX_BUFFERS_TO_EXTEND_BY = 64). 48 syscalls instead of 2,860 = 60x. ***
-- *** THE CLAMP NOBODY EXPECTS, and the most operationally surprising thing in the lesson:
-  LimitAdditionalPins() computes NBuffers / (MaxBackends + NUM_AUXILIARY_PROCS), subtracts
-  PrivateRefCountOverflowed + REFCOUNT_ARRAY_ENTRIES, floors at 1. At shared_buffers=128kB
-  (16 buffers) with max_connections=100 the quotient is 0, so EVERY extension went back to ONE
-  BLOCK -- measured, row (4). EXTENSION BATCHING IS A FUNCTION OF shared_buffers /
-  max_connections, documented nowhere a DBA would look. ***
-- THE COST OF BATCHING, measured: 2,896 vs 2,858 blocks = +38 blocks = +1.3% permanent slack for
-  the same 20,000 rows. Bulk extension over-extends by design (not_in_fsm_pages, then
-  FreeSpaceMapVacuumRange, or bistate->next_free).
-- file_extend_method IS A REAL GUC IN THIS BUILD (PGC_SIGHUP, RESOURCES_DISK, default
-  posix_fallocate, alternative write_zeros, the fallocate option compiled in only
-  #ifdef HAVE_POSIX_FALLOCATE). *** IT CHANGES THE SYSCALL, NOT THE CLOCK -- MEASURED: five COPY
-  runs of a 97 MB CSV each way, medians 638 ms (fallocate) vs 670 ms (write_zeros), no difference
-  outside noise. What DOES move: backend write_bytes in /proc/<pid>/io, 197,615,616 vs 219,070,464
-  for a 117,047,296-byte relation (+21.5 MB, +10.9%). HONEST LIMIT STATED IN THE LESSON:
-  write_bytes cannot separate WAL from heap writeback, and the nominal 117 MB of zero writes mostly
-  never reach the device because the real data overwrites the same page-cache pages. A cold-cache
-  or blktrace run would be needed for a precise figure. ***
-- pg_pwrite_zeros / FileZero: PG_IOV_MAX = Min(IOV_MAX, 32), and EVERY iovec points at the SAME
-  `static const PGIOAlignedBlock zbuffer` of BLCKSZ. MEASURED: a 40-block extension splits 32 + 8,
-  a 64-block extension splits 32 + 32.
-- *** pg_stat_io SEES BLOCKS, NOT SYSCALLS -- worth remembering before trusting it for I/O shape.
-  MEASURED after pg_stat_reset_shared('io'): client backend / relation / bulkwrite extends = 14288,
-  exactly the relation's block count, writes = 12240, fsyncs NULL; client backend / relation /
-  normal extends = 6 (the FSM fork, extended without a strategy). Those 14,288 blocks were ~224
-  fallocate calls. IOOP_EXTEND is counted with extend_by as its count argument. ***
-- *** skipFsync IS A TRANSFER OF OBLIGATION, NOT A WAIVER, and the proof is a measurement that
-  looks like a bug: four plain `CREATE TABLE q (id int, pad text)` produced FOUR fsync() syscalls
-  in the CLIENT BACKEND, on relfilenodes that pg_class identifies as pg_toast_*_index. nbtsort.c
-  builds btrees OUTSIDE shared buffers with smgrextend(..., skipFsync=true) and pays the debt in
-  _bt_leafbuild's `if (wstate->btws_use_wal) smgrimmedsync(...)`, comment quoted. THE TELL IN THE
-  TRACE is openat("<relfilenode>.1") = -1 ENOENT immediately before the fsync -- that is
-  mdimmedsync's deliberate probe past the last active segment, which mdnblocks would never do. ***
-  NOT taken here: smgrDoPendingSyncs / wal_skip_threshold is DEAD CODE at wal_level=replica
-  because AddPendingSync is guarded by `relpersistence == PERMANENT && !XLogIsNeeded()`. Verified
-  by reading the guard, not measured. A LESSON THAT RUNS WITH wal_level=minimal CAN TAKE IT.
-- THE FSYNC REQUEST QUEUE, the part nobody reads, now read: FileTag { int16 handler; int16 forknum;
-  RelFileLocator rlocator; uint32 segno; } is the WHOLE design. Constants that are code, not
-  folklore: max_requests = Min(NBuffers, MAX_CHECKPOINT_REQUESTS=10000000) -> 16,384 at
-  shared_buffers=128MB and 16 at 128kB (DERIVED from checkpointer.c:912, nothing exposes it);
-  FSYNCS_PER_ABSORB = UNLINKS_PER_ABSORB = 10; too_full = (num_requests >= max_requests/2) with the
-  SetLatch deliberately AFTER LWLockRelease. FOUR request types (SYNC/UNLINK/FORGET/FILTER) and SIX
-  handlers (MD, CLOG, COMMIT_TS, MULTIXACT_OFFSET, MULTIXACT_MEMBER, NONE) share one queue.
-  retryOnError DIFFERS BY CALLER and the difference is a durability argument: register_dirty_segment
-  passes FALSE (fall back to a local fsync), register_unlink_segment and register_forget_request
-  pass TRUE (spin on WaitLatch 10 ms forever), because dropping an unlink leaks a file.
-- *** THE OBSERVATION TECHNIQUE WORTH REUSING: log_min_messages = debug1 MAKES
-  ProcessSyncRequests() PRINT ONE LINE PER pendingOps ENTRY. That is a direct dump of the
-  checkpointer's hash table, with real paths. MEASURED after CHECKPOINT (drain), then two UPDATEs
-  by ctid '(0,1)' and '(131072,1)' on the two-segment relation, then CHECKPOINT:
-    number=1 file=base/16388/16438   time=0.421 ms
-    number=2 file=base/16388/16438.1 time=0.125 ms
-    number=3 file=pg_xact/0000       time=0.138 ms
-  "wrote 4 buffers ... sync files=3". THREE FACTS: segno is part of the key so ONE RELATION COSTS
-  TWO ENTRIES; pg_xact rides the same queue via SYNC_HANDLER_CLOG; and `sync files=N` in
-  checkpoint complete IS ckpt_sync_rels, i.e. literally the number of hash entries processed. ***
-- *** THE DEDUP RATIO, MEASURED: ~40,800 block writes (buffers_backend 24,490 + buffers_clean 100 +
-  3 + the checkpoint's own 16,214) collapsed into sync files=21, longest=0.083 s. The 22,500-block
-  heap written and rewritten three times is ONE entry fsynced once in 59.153 ms; its `_fsm` fork is
-  a SEPARATE entry (forknum is in the key -- this is the mechanical justification for "forks grow
-  and truncate independently", which lessons 05/06 asserted from the README). ~1,940:1. ***
-- buffers_backend_fsync STAYED 0 IN EVERY CONFIGURATION, including 57,987 backend writes against a
-  16-SLOT queue. That is the design working, not a weak test: CompactCheckpointerRequestQueue
-  hashes {type, ftag} and keeps only the last occurrence, so a queue of near-duplicates always
-  compacts and ForwardSyncRequest never returns false. THE FAILURE NEEDS A QUEUE BOTH FULL AND
-  DUPLICATE-FREE -- many distinct hot segments, not many writes.
-- *** AN EXPERIMENT THAT FAILED, REPORTED AS A FAILURE IN THE DOCUMENT: SIGSTOPping the
-  checkpointer to force queue overflow DEADLOCKED -- the inserting backend hit max_wal_size and
-  waited for a checkpoint that could not start. Abandoned, checkpointer resumed. THE QUEUE-FULL
-  FALLBACK IN register_dirty_segment() WAS READ AND NEVER EXECUTED. DO NOT REPEAT THIS METHOD. ***
-- *** THE INACTIVE ZERO-LENGTH SEGMENT, OBSERVED -- lesson 01 derived it, nothing had seen it.
-  DELETE FROM seg WHERE ctid >= '(100000,1)' then VACUUM: "truncated 142858 to 100000 pages".
-  After: segment 0 = 819,200,000 B (= 100,000 x 8192), `.1` = 0 BYTES AND STILL PRESENT,
-  `_fsm` 311,296 -> 221,184, `_vm` created at 32,768 (4 blocks). mdtruncate's reason quoted ("other
-  backends and/or the checkpointer might be holding open file references"), plus
-  register_dirty_segment being called ON A TRUNCATION (the queue carries "this file got shorter"
-  with the same FileTag), and Assert(v != &md_seg_fds[fork][0]) -- "we never drop the 1st segment".
-  AND THE ZERO-LENGTH SEGMENT IS INVISIBLE ABOVE: a fresh backend scanning the table did
-  openat("base/16388/16438") + lseek = 819200000 and made ZERO references to `.1` in the whole
-  trace. NOT REACHED: truncating to an exact multiple of RELSEG_SIZE, which the comment says keeps
-  segment K+1 at length 0. ***
-- ANSWERS TO THE THREE INHERITED QUESTIONS, recorded so nobody re-asks them:
-  (1) LESSON 06'S "why does bulk extension overshoot": RelationAddBlocks's waitcount multiplier and
-      the accumulating bistate->already_extended_by, capped at 64. Measured ramp above.
-  (2) LESSON 07'S "N cold updates produce exactly N new blocks": consistent with extend_by = 1 on
-      the no-bistate path -- heap_update's RelationGetBufferForTuple has no BulkInsertState, so each
-      cold update that cannot fit extends by exactly one block. The FSM question (can a cold update
-      be routed back onto a prune-recovered page) is STILL OPEN; the answer needs
-      FreeSpaceMapVacuumRange, which is lesson 19's.
-  (3) LESSON 05'S "is the FSM's 3-block floor a consequence of extension": NO. It is
-      fsm_logical_to_physical's interleaving (the bottom page cannot be block 0), which lesson 05
-      already derived. smgrextend has nothing to do with it. CLOSED.
-- WAL AND EXTENSION: not separately measured this run, but stated with evidence from the code --
-  mdextend/mdzeroextend emit no WAL; the new page's contents are logged by whatever writes into it.
-  A LESSON THAT WANTS THE EVIDENCE SHOULD pg_waldump an INSERT that extends and show there is no
-  extension record. Lesson 08's Next Steps do not claim otherwise.
-DELIBERATELY TREATED AS BLACK BOXES: GetVictimBuffer, StrategyFreeBuffer, IOContextForStrategy and
-the bulkwrite ring (09); BufferDesc, the clock sweep (09); pin accounting beyond the one line in
-LimitAdditionalPins (10); max_safe_fds and the VFD LRU (named, not measured); BufferSync and the
-checkpoint's spread writes (24); pendingUnlinks/SyncPostCheckpoint (19).
-
-NO SYLLABUS REVISION THIS RUN. Lesson 08's title was taught exactly as written -- relation
-extension, the segment map and the fsync request queue were all three taken in full -- and all
-three inherited questions were answered or explicitly closed.
-
-Throwaway tables left by this run (cluster does not persist; names listed only to avoid collisions
-within a future run): seg, ext_insert, ext_copy, ext_copy_wz, tiny_copy, q1..q4, dedup, b, io_t,
-iostat_t. NOTE: this run did NOT use the pgNN_ prefix convention and should have. Lesson 09 should
-go back to pg9_*.
 
 -- LESSON 09 (2026-10-28) AS TAUGHT ------------------------------------------------------------
 Document: 2026/10/2026-10-28-postgres-buffer-manager-clock-sweep/README.md (single README, not
@@ -718,12 +563,12 @@ OPEN ITEMS carried forward:
   section still says "only VACUUM currently sets visibility map bits", which heap_multi_insert's
   all_frozen_set contradicts.
 
-NOTE-BLOCK ROTATION DONE THIS RUN (2026-10-29, the lesson 10 run): lesson 07's note was dropped and
-lesson 10's was added. TRACK-ARCHIVE.md gained the row "PG 07" pointing at commit
-99a7b3b7eab710319907cbd11d5c311ebe61d4fa / blob 937bfd19f68fdc42eebe5c83f1f636869629a59e, which is
+NOTE-BLOCK ROTATION DONE THIS RUN (2026-11-28, the lesson 11 run): lesson 08's note was dropped and
+lesson 11's was added. TRACK-ARCHIVE.md gained the row "PG 08" pointing at commit
+0fe7e863679c97fa83c2cc7ce35226b40c87ff6c / blob 458173fa9a1255ce9f3ce6232eec4ae5cffa6da2, which is
 the last state of TRACK.md carrying it, and that row was added FIRST, as the policy above requires.
-This block now holds 08, 09 and 10 -- exactly the three the policy allows. WHEN LESSON 11 SHIPS IT
-MUST DROP THE LESSON 08 BLOCK, and before dropping it MUST add its TRACK-ARCHIVE.md row first.
+This block now holds 09, 10 and 11 -- exactly the three the policy allows. WHEN LESSON 12 SHIPS IT
+MUST DROP THE LESSON 09 BLOCK, and before dropping it MUST add its TRACK-ARCHIVE.md row first.
 
 Known environment facts for a fresh session (verify, do not assume):
 - Block size 8 KB and segment size 1 GB are compile-time (BLCKSZ, RELSEG_SIZE) and exposed as the
@@ -742,7 +587,9 @@ Known environment facts for a fresh session (verify, do not assume):
       refuses a data directory under the scratchpad path -- /var/tmp works.
   (B) Lesson 08's: `apt-get install postgresql postgresql-contrib`, then
       `pg_ctlcluster 16 main start`, then run everything as `su postgres -c "psql ..."`.
-  (C) LESSON 09'S, AND TRY THIS FIRST: postgresql-16 was ALREADY INSTALLED in the sandbox image,
+  (C) LESSON 09'S, AND TRY THIS FIRST -- CONFIRMED AGAIN BY LESSON 11 ON 2026-11-28, so this is
+      now four runs in a row and should be treated as the default: postgresql-16 was ALREADY
+      INSTALLED in the sandbox image,
       with psql 16.15 on PATH and the cluster "16 main" present but down. `pg_lsclusters` shows it.
       Then `pg_ctlcluster 16 main start` and `sudo -u postgres psql -X -q -d DB -c "..."` -- no
       su quoting, no initdb, no world-readable-script dance for -c work. ALTER SYSTEM +
@@ -775,9 +622,18 @@ Known environment facts for a fresh session (verify, do not assume):
   queryable with its size, so a per-element struct size can be read back by division. ***
 - Table names used so far, for avoiding collisions within a run: seg_demo (01), pg2_fill /
   pg2_big (02), pg3_* and w8 / w9 / w16 / w72 / w73 (03), pg4_* (04), pg5_* (05), pg6_* (06),
-  pg7_* (07), 08's unprefixed set (seg, ext_*, tiny_copy, q1..q4, dedup, b, io_t, iostat_t) and
-  09's unprefixed set (t_small, t_mid, t_big, t_copy, t_tiny, in database `bufdemo`) -- two lapses
-  in a row. GO BACK TO THE pgNN_ PREFIX CONVENTION.
+  pg7_* (07), 08's unprefixed set (seg, ext_*, tiny_copy, q1..q4, dedup, b, io_t, iostat_t),
+  09's unprefixed set (t_small, t_mid, t_big, t_copy, t_tiny, in database `bufdemo`), 10's
+  unprefixed set (pintab1..pintab12, t_freeze, t_prune, t_std, t_std2, onepage, big1, rightmost)
+  -- three lapses in a row -- and then pg11_* (11, in database `pg11lab`), which put the
+  convention back. *** CONVENTION RESTORED AS OF LESSON 11. KEEP IT: pg12_*, pg13_*, ... ***
+- *** THE COMPILED-PROBE TRAP IS WORSE THAN LESSON 10's NOTE SAYS. postgres.h redefines
+  fprintf TO pg_fprintf AS WELL AS printf, and pg_fprintf is in no library you link, so a probe
+  that only does `#undef printf` fails at LINK time with `undefined reference to pg_fprintf`.
+  Lesson 11's working preamble: #include "postgres.h", then #undef printf, #undef fprintf,
+  #undef sprintf, #undef snprintf, #undef vsnprintf, then #include <stdio.h>. Build with
+  `gcc -I $(pg_config --includedir-server) -o probe probe.c`. No -l flags needed for pure
+  sizeof/offsetof/macro values. ***
 - pg_waldump lives at /usr/lib/postgresql/16/bin/pg_waldump, works on the live cluster's segments,
   and `--stats=record` prints a per-record-type record/FPI byte breakdown. Lesson 06 used it to
   price XLOG_HEAP2_VISIBLE and lesson 07 to price XLOG_HEAP2_PRUNE against Btree/INSERT_LEAF.
@@ -1049,6 +905,260 @@ Throwaway tables left by this run (cluster does not persist; names listed only t
 within a future run): pintab1..pintab12, t_freeze, t_prune, t_std, t_std2, onepage, big1,
 rightmost. NOTE: like lesson 08, this run did NOT use the pgNN_ prefix convention. Lesson 11 should
 use pg11_*.
+
+-- LESSON 11 (2026-11-28) AS TAUGHT ------------------------------------------------------------
+Document: 2026/11/2026-11-28-postgres-heavyweight-lock-manager/README.md (single README, 46 KB, not
+split -- LOCKTAG, the conflict table, the partitions, the fast path and deadlock.c are one vertical
+slice and the fast path only makes sense as an escape from the partitions, which only make sense as
+an escape from a single LockMgrLock).
+
+SOURCE PROVENANCE: `apt-get source postgresql-16` for the fifth run in a row, version
+16.15-0ubuntu0.24.04.1, the same build the cluster runs; deb-src had to be re-enabled again
+(`sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/ubuntu.sources`, then
+apt-get update). PATCH CHECK DONE PER FILE AND THE SERIES IS NOW 14, NOT 15: storage/lmgr/lock.c,
+deadlock.c, lmgr.c, proc.c, include/storage/{lock,proc,lwlock,lockdefs}.h, storage/lmgr/README and
+utils/adt/lockfuncs.c are ALL UNTOUCHED, so every line quoted is upstream verbatim. The backend C
+files the series does touch: bufmgr.c + procsignal.c + tcop/postgres.c + include/storage/procsignal.h
++ include/tcop/tcopprot.h (v8-0001-Fix-recovery-conflict-SIGUSR1-handling.patch),
+utils/activity/pgstat_database.c (pgstat-report-conflicts-immediately.patch), and
+commands/extension.c + utils/fmgr/dfmgr.c + utils/misc/guc_tables.c + postgresql.conf.sample +
+include/utils/guc.h (extension_destdir), plus jit/llvm/llvmjit.c (jit-s390x). MD5s of the files read
+in full, for a future byte-level re-verification: lock.c a9671b2431ba1b14538f33a22e276623,
+deadlock.c 341dcbeec83c590ae2f7c53175445609, lock.h 6556dada0739c8dc394a74a8f58d22a8,
+lmgr/README bc707a5b4f3dffd56395da2088ac6870.
+Files read IN FULL: storage/lmgr/README (731 lines), include/storage/lock.h (625 lines),
+include/storage/lockdefs.h (61 lines). Read substantially: storage/lmgr/deadlock.c (1159 lines --
+every function named in the lesson). Read in part: storage/lmgr/lock.c (4695 lines: LockConflicts,
+lock_mode_names, the lock-method tables, NLOCKENTS, LockShmemSize, the FAST_PATH_* macros,
+EligibleForRelationFastPath / ConflictsWithRelationFastPath, LockAcquireExtended's fast-path branch
+at 925-1010, FastPathGrantRelationLock, FastPathTransferRelationLocks, proclock_hash at 541),
+storage/lmgr/proc.c (1930 lines: ProcSleep's rule-2 loop at 1100-1175, the timer setup at 1209-1241,
+the wait loop at 1280-1345, CheckDeadLock at 1726-1800, CheckDeadLockAlert),
+utils/adt/lockfuncs.c (LockTagTypeNames and the pg_locks column mapping at 236-261),
+utils/activity/wait_event.c (the PG_WAIT_LOCK cases at 90 and 147), storage/lmgr/lmgr.c:1307,
+include/utils/wait_event.h (PG_WAIT_LOCK = 0x03000000).
+
+*** THIS RUN HAD A CLUSTER AND EVERY number is measured. *** PostgreSQL 16.15
+(Ubuntu 16.15-0ubuntu0.24.04.1), x86_64, gcc 13.3.0, Linux 6.18, ext4, 2 vCPU / 8 GB RAM, ~31 GB
+free. shared_buffers 128 MB = 16,384 buffers, max_connections 100, deadlock_timeout 1000 ms,
+max_locks_per_transaction 64, max_prepared_transactions 0, block_size 8192, log_lock_waits turned
+ON for the deadlock measurements. Extensions used: pageinspect, pg_buffercache, pgstattuple (only
+pg_locks / pg_stat_activity / pg_shmem_allocations were actually needed -- NO extension is required
+for this lesson, which is a first in the track). Database `pg11lab`.
+ENVIRONMENT FACTS, ALL REUSABLE:
+(a) Recipe C again, fourth run in a row: pg_lsclusters showed "16 main" present and DOWN,
+    `pg_ctlcluster 16 main start` was the only setup step. ALTER SYSTEM + pg_reload_conf() is
+    enough for log_lock_waits (it is PGC_SUPERUSER, not PGC_POSTMASTER -- no restart needed).
+(b) *** THE TWO-FIFO HARNESS IS THE RIGHT INSTRUMENT FOR ANYTHING INVOLVING TWO BACKENDS AND AN
+    EXACT INTERLEAVING, AND IT IS SIMPLER THAN LESSON 08'S strace VERSION BECAUSE NO PID IS NEEDED:
+    mkfifo f1 f2; chmod 777 f1 f2; start `psql -X -q -At -d DB < f1 > o1 &` and the same for f2;
+    then `exec 3>f1; exec 4>f2` and write statements into &3 / &4 with sleeps between. Put
+    `\timing on` down both pipes FIRST -- psql's own \timing is the measurement instrument and it
+    is accurate to the microsecond. Everything (fifos, output files, SQL scripts) must live in
+    /var/tmp/lab chmod 777; the scratchpad path is NOT readable by the postgres user. Close with
+    `exec 3>&-; exec 4>&-`. ***
+(c) `LOCK TABLE` OUTSIDE A TRANSACTION BLOCK IS AN ERROR ("LOCK TABLE can only be used in
+    transaction blocks") and a backgrounded `psql -c "LOCK TABLE ..."` therefore exits 1 silently
+    if you redirect stderr. Wrap it: BEGIN; LOCK TABLE ...; COMMIT; in a -f script.
+(d) /usr/bin/time still does not exist (lesson 09's note holds); psql \timing is the substitute.
+
+TOOK, and must not be re-taught:
+- *** LOCKTAG IS 16 BYTES WITH NO PADDING AND THAT IS CAUSAL, NOT COSMETIC: it is the hash key, and
+  lmgr/README says a padding byte would make "the hash computation will be random". MEASURED:
+  sizeof(LOCKTAG) = 16, field4 at 12, locktag_type at 14, locktag_lockmethodid at 15. The header's
+  own phrasing -- "defined with malice aforethought" -- was quoted. ***
+- *** THE SINGLE BEST FINDING OF THE LESSON, AND IT CLOSES A LESSON 10 LOOSE END: LockTagTypeNames[]
+  (lockfuncs.c:29, 12 entries, StaticAssertDecl'd against LOCKTAG_LAST_TYPE+1) feeds BOTH
+  pg_locks.locktype (lockfuncs.c:236) AND pg_stat_activity.wait_event for a Lock wait. proc.c:1328
+  waits with event id `PG_WAIT_LOCK | locallock->tag.lock.locktag_type` = 0x03000000 | the tag type
+  BYTE; wait_event.c:148 resolves it with GetLockNameFromTagType(); lmgr.c:1307 is
+  `return LockTagTypeNames[locktag_type];`. SO THE WAIT EVENT NAME FOR A HEAVYWEIGHT LOCK IS THE
+  LOW BYTE OF THE LOCKTAG. Lesson 10's workload A (823 Lock|transactionid, 111 Lock|tuple) was
+  reading locktag_type 5 and 4. Confirmed live: a backend blocked on LOCK TABLE ACCESS EXCLUSIVE
+  reported wait_event_type=Lock, wait_event=relation. ***
+- The full 12-type LOCKTAG table with each type's field1..field4 meaning, tabulated from the
+  SET_LOCKTAG_* macros. LOCKTAG_TUPLE is (dboid, reloid, blocknum, offnum) -- A PHYSICAL ADDRESS,
+  explicitly flagged as lesson 12's problem statement and NOT resolved.
+- *** THE CONFLICT TABLE IS SYMMETRIC BUT NOT MONOTONE, AND THIS IS THE LESSON'S BEST STRUCTURAL
+  POINT. All 64 pairs checked programmatically: ZERO asymmetric pairs. Masks:
+  AccessShare 0x100, RowShare 0x180, RowExclusive 0x1e0, ShareUpdateExclusive 0x1f0, Share 0x1d8,
+  ShareRowExclusive 0x1f8, Exclusive 0x1fc, AccessExclusive 0x1fe. BUT mode 4
+  (ShareUpdateExclusive) SELF-CONFLICTS and permits mode 3 (RowExclusive), while mode 5 (Share)
+  does NOT self-conflict and BLOCKS mode 3. NEITHER MASK CONTAINS THE OTHER -- modes 4 and 5 are
+  genuinely INCOMPARABLE, there is no total order, and that is why conflictTab exists instead of a
+  >= comparison. *** THIS DISCHARGES LESSON 10'S IOU: VACUUM's "only one at a time, concurrently
+  with writes" guarantee is literally the X at (4,4) in that matrix and nothing else. ***
+  COROLLARY WORTH CARRYING: EligibleForRelationFastPath uses `(mode) < ShareUpdateExclusiveLock`,
+  a NUMERIC comparison on a non-totally-ordered set, correct only because modes 1-3 happen to be
+  the three weak DML modes. Mode 4 is in neither the eligible nor the conflicting set.
+- DEFAULT_LOCKMETHOD and USER_LOCKMETHOD point at the SAME LockConflicts array and the same
+  lock_mode_names; only the trace flag differs. MAX_LOCKMODES 10, MaxLockMode 8, sizeof(LOCKMASK) 4
+  so there is room for 31.
+- THE THREE REPRESENTATIONS OF ONE LOCK AS A COST LADDER: LOCALLOCK hit (no shared memory touched
+  AT ALL, nLocks++ and return) -> fast path -> LOCK+PROCLOCK in the partitioned hash. LOCALLOCK's
+  "when nLocks == 0 they should be considered garbage" comment quoted.
+- *** THE STRUCT NUMBERS, PRINTED BY COMPILED PROBE, NOT DERIVED: sizeof(LOCKTAG) 16,
+  sizeof(LOCK) 152, sizeof(PROCLOCK) 64, sizeof(PROCLOCKTAG) 16, sizeof(LOCALLOCK) 72,
+  sizeof(LOCALLOCKTAG) 20, sizeof(PGPROC) 880. LOCK offsets: tag 0, grantMask 16, waitMask 20,
+  procLocks 24, waitProcs 40, requested[] 64, nRequested 104, granted[] 108, nGranted 148.
+  PGPROC offsets: myProcLocks[] 184, fpLockBits 760, fpRelId[16] 768, fpVXIDLock 832.
+  NUM_LOCK_PARTITIONS 16, LOG2_NUM_LOCK_PARTITIONS 4, LOCK_MANAGER_LWLOCK_OFFSET 176 (matches
+  lesson 10's lwlock.h figures exactly), FP_LOCK_SLOTS_PER_BACKEND 16, LOCKTAG_LAST_TYPE 11. ***
+- proclock_hash's trick: `lockhash ^= ((uint32) procptr) << LOG2_NUM_LOCK_PARTITIONS;` (lock.c:541)
+  -- shifting the proc pointer left by 4 leaves the low 4 bits, i.e. the partition, untouched, so a
+  PROCLOCK always lands in its LOCK's partition. PGPROC.myProcLocks is itself per-partition
+  (dlist_head[16] at offset 184) and README says why: fast-path transfer requires one backend to
+  manipulate another's PROCLOCK lists.
+- The partition-number-order rule, and README's refusal to optimise the detector ("trying to make
+  this work does not seem a productive use of effort") quoted. CheckDeadLock releases in REVERSE
+  order for two stated reasons, the second being "(2) This avoids O(N^2) behavior inside
+  LWLockRelease" -- WHICH IS LESSON 10'S held_lwlocks[] BACKWARD SEARCH SURFACING TWO LAYERS UP.
+- *** THE FAST PATH, MEASURED THREE WAYS. (1) SLOT EXHAUSTION IS A HARD CLIFF: 20 one-page tables
+  read in one transaction gave EXACTLY fastpath=t 16 / fastpath=f 4. (2) PARTITIONING WALKS OFF IT:
+  one `SELECT count(*) FROM pg11_part WHERE v = 0` on a 64-partition RANGE table took 66 relation
+  AccessShareLocks, 16 fastpath and 50 through the shared hash, plus 1 fastpath virtualxid.
+  (3) THE TRANSFER IS OBSERVABLE: backend A (pid 927) held a fastpath AccessShareLock on pg11_fp1
+  and read fastpath=t; three seconds after backend B queued for ACCESS EXCLUSIVE, A's SAME ROW read
+  fastpath=f WHILE A SAT INSIDE pg_sleep() DOING NOTHING. That is FastPathTransferRelationLocks
+  running inside the strong locker and rewriting a stranger's PGPROC -- the only place in the server
+  that does this. pg_blocking_pids() correctly returned {927}. ***
+- FastPathStrongRelationLocks MEASURED IN SHARED MEMORY: pg_shmem_allocations row "Fast Path Strong
+  Relation Lock Data", size 4100, allocated_size 4224 = 1024 uint32 counters + one 4-byte slock_t,
+  confirming FAST_PATH_STRONG_LOCK_HASH_PARTITIONS = 1024 WITHOUT a probe. A 1024-way coarse
+  partitioning in front of the 16-way fine one, read with NO LOCK. The memory-ordering argument was
+  quoted in full ("either the value is truly zero, or if it is a stale value, the strong locker has
+  yet to acquire the per-backend LWLock we now hold") -- and it RESTS ON LESSON 10'S OBSERVATION
+  that LWLockAcquire doubles as a memory barrier, which there was only a comment justifying a
+  redundant CAS and here is load-bearing for a lock-free read.
+  TRAP: "LOCK hash" and "PROCLOCK hash" are only 2896 B each in pg_shmem_allocations -- that is the
+  dynahash HEADER; the elements live in the 6,651,776-byte "<anonymous>" entry.
+- *** TWO DEADLOCK PATHS EXIST AND THEY DIFFER BY ~3,800x. THIS IS THE HEADLINE.
+  (A) EARLY DEADLOCK, in ProcSleep, NOT deadlock.c. Two sessions each took ShareLock on pg11_dl,
+      then each requested ExclusiveLock. The second one's error came back in 0.265 ms:
+      "ERROR: deadlock detected / DETAIL: Process 997 waits for ExclusiveLock on relation 16512 of
+      database 16384; blocked by process 998. Process 998 waits for ... blocked by process 997."
+      deadlock_timeout is 1000 ms and deadlock.c NEVER RAN. The mechanism is proc.c:1104-1156's
+      two-question loop -- "Must he wait for me?" (conflictTab[proc->waitLockMode] & myHeldLocks)
+      then "Must I wait for him?" (conflictTab[lockmode] & proc->heldLocks) -- which finds a
+      two-node cycle with TWO BITMASK ANDS and calls RememberSimpleDeadLock(), setting
+      early_deadlock. THE MOST COMMON REAL-WORLD DEADLOCK (the lock upgrade) NEVER TOUCHES THE
+      DETECTOR. The DETAIL prints the relation by RAW OID because RememberSimpleDeadLock fills
+      deadlockDetails[] from the tag with no catalog lookup.
+  (B) THE TIMEOUT PATH. Two transactions, cross-ordered UPDATEs on pg11_dl. Victim errored at
+      1000.736 ms client-side / 1000.182 ms in the log -- within 0.74 ms of deadlock_timeout. ***
+- *** AND THE PART THAT MAKES (B) WORTH THE LOG LINES: THE NON-VICTIM RAN A FULL DEADLOCK CHECK AND
+  FOUND NOTHING. Verbatim from the log: 03:41:16.546 [970] "process 970 still waiting for ShareLock
+  on transaction 769 after 1000.221 ms" / DETAIL "Process holding the lock: 971. Wait queue: 970."
+  -- then 03:41:17.550 [971] "process 971 detected deadlock while waiting for ShareLock on
+  transaction 768 after 1000.182 ms" and the ERROR. 970's timer fired BEFORE 971 began waiting, so
+  the cycle did not exist yet and its check was wasted: 16 exclusive partition LWLock acquisitions
+  and a graph walk for nothing. THIS IS README'S MISC NOTE 1 EXECUTING ("the last process in the
+  cycle to wait ... is certain to detect and resolve the cycle"). 970 then waited 2004.709 ms total
+  -- one second for its own useless check, one for the victim's. BOTH EDGES WERE
+  LOCKTAG_TRANSACTION from plain UPDATEs that never named a tuple lock: LESSON 12'S OPENING. ***
+- deadlock.c's structure taken in full: DeadLockCheckRecurse pushes one soft-edge reversal onto
+  curConstraints[] / recurses / pops; TestConfiguration calls ExpandConstraints then TopoSort per
+  queue, then FindLockCycle from every constraint's waiter AND blocker AND startProc LAST ("because
+  if it has a soft cycle still to be dealt with, we want to deal with that first"); FindLockCycle
+  believes waitOrders[] over reality; hard edges come from proclock->holdMask & conflictMask, soft
+  edges from queue position. TopoSort is DELIBERATELY the wrong algorithm and says so ("a lot
+  simpler and slower than ... Knuth's Volume 1. However, Knuth's method doesn't try to minimize the
+  damage to the existing order") -- it scans BACKWARDS and emits the last proc with
+  beforeConstraints == 0. A SORT FAILURE IS INFORMATION, not an error: it means the newest reversal
+  contradicts an earlier one, and README says detecting it is what stops the search looping.
+- *** THE DETECTOR'S WORKSPACE IS ~31 KB PER BACKEND, palloc'd ONCE AT STARTUP INTO TopMemoryContext,
+  for a reason quoted verbatim: "(a) the deadlock checker might be invoked when there's no free
+  memory left, and (b) the checker is normally run inside a signal handler, which is a very
+  dangerous place to invoke palloc from." With MaxBackends = 122 (100 + 3 autovacuum + 1 + 8
+  max_worker_processes + 10 max_wal_senders) and sizeof(EDGE) = 40: visitedProcs/topoProcs 976 B
+  (ALIASED -- topoProcs = visitedProcs, "it needn't run concurrently with FindLockCycle"),
+  deadlockDetails ~2928, beforeConstraints 488, afterConstraints 488, waitOrders ~1464,
+  waitOrderProcs 976, curConstraints 4880, possibleConstraints 4*MaxBackends*40 = 19520. ***
+  maxCurConstraints = MaxBackends DOUBLES AS THE RECURSION LIMIT ("Making it really big might
+  potentially allow a stack-overflow problem"). AND THE HONEST COMMENT, quoted: "Is this enough?
+  In practice it seems it should be, but I don't quite see how to prove it. If we run out, we might
+  fail to find a workable wait queue rearrangement even though one exists."
+- *** TestConfiguration RETURNS -1 FOR BOTH A HARD DEADLOCK AND A SELF-INCONSISTENT OR
+  OUT-OF-WORKSPACE CONSTRAINT SET, SO A RESOURCE SHORTFALL IS REPORTED AS A DEADLOCK AND NOTHING
+  COUNTS IT. A transaction can be aborted for a rescuable soft deadlock. Handed forward as open
+  item (3). ***
+- *** max_locks_per_transaction IS A POOL-SIZING GUC, NOT A PER-TRANSACTION CAP, AND THIS WAS
+  MEASURED BY BISECTION. At max_locks_per_transaction = 64, ONE transaction took 5,000 advisory
+  locks (pg_advisory_xact_lock over generate_series) and reported 5,000 rows in pg_locks. 7,800 /
+  7,808 / 8,000 / 8,500 / 9,000 / 10,000 all succeeded. Bisecting 10,000..40,000 put the wall
+  between 12,812 (success) and 12,929 (failure) -- about 1.64x NLOCKENTS() = max_locks_per_xact *
+  (MaxBackends + max_prepared_xacts) = 64 * 122 = 7,808, the excess coming from LockShmemSize's
+  stated 10% safety margin plus dynahash slack. Failure is "ERROR: out of shared memory / HINT: You
+  might need to increase max_locks_per_transaction." ***
+- THE RELATION EXTENSION LOCK IS EXCLUDED FROM THE GRAPH BY FIAT: FindLockCycleRecurseMember returns
+  false immediately for LOCKTAG_RELATION_EXTEND, justified by an invariant enforced only by an
+  Assert in LockAcquireExtended (the file-static IsRelationExtensionLockHeld, which is
+  PG_USED_FOR_ASSERTS_ONLY). In a non-assert build a path that took a heavyweight lock while holding
+  an extension lock would create a cycle the detector refuses to look at.
+- Tom Lane's 2001-01-19 pgsql-hackers message "Deadlock reimplementation notes (kinda long)" was
+  FETCHED THIS RUN and is the design document that lmgr/README's deadlock section was committed
+  from; the cover text says so outright. Quoted: "it's better to spend some time to guarantee that
+  we've checked all possible escape routes".
+
+*** THE NULL RESULT, AND IT CONFIRMS LESSON 10 FROM THE OTHER SIDE. Two workloads on the
+64-partition table, max_parallel irrelevant here:
+  (A) 16 clients, prepared `SELECT count(*) FROM pg11_part WHERE id = :k` with k in -5..-1 so
+      runtime pruning scans NOTHING but all 66 locks are still taken: 61,272 tps, 0.261 ms mean
+      latency, 1,225,086 transactions in 20 s, i.e. ~4 MILLION lock acquisitions/sec of which ~3M
+      went through the 16 partition LWLocks. A 40 ms pg_stat_activity sampler caught ZERO
+      LWLock|LockManager in 36 active samples -- THE SAMPLER IS ~150x SLOWER THAN THE TRANSACTION
+      IT IS TRYING TO OBSERVE, and only 36 of 600 sampling attempts caught any active backend.
+  (B) 16 clients, `SELECT count(*) FROM pg11_part WHERE v = 0` (real seq scans of all 64
+      partitions): 347 tps, 46.1 ms mean latency, and LWLock|LockManager DID appear -- 9 of 159
+      non-idle samples, alongside 150 Client|ClientRead.
+  CONCLUSION, AND IT IS THE RIGHT ONE TO CARRY FORWARD: partition LWLocks are held for tens of
+  instructions, exactly as lesson 10 concluded for content locks, SO THE WORKLOAD WHERE LOCK
+  MANAGER CONTENTION MATTERS MOST IS THE ONE WHERE SAMPLING CAN SEE IT LEAST. Anyone sizing
+  NUM_LOCK_PARTITIONS from pg_stat_activity is reading an instrument that cannot resolve the
+  signal. A LOWER-OVERHEAD SAMPLER IS NOW THE TRACK'S BIGGEST INSTRUMENTATION GAP (see open item 2;
+  this is the same gap lesson 10 logged as its own item 2, now independently confirmed). ***
+
+NO SYLLABUS REVISION THIS RUN. Lesson 11's title was taught exactly as written -- LOCKTAG, lock
+partitions and the deadlock detector were all three taken in full -- plus the two things lesson 10's
+handover assigned by name (the ShareUpdateExclusiveLock argument it had borrowed, and the
+LWLock-absence gap it had identified). Lesson 12's title needs no change: this lesson established
+exactly the gap it fills (LOCKTAG_TUPLE is a physical address; Lock|transactionid and Lock|tuple
+were measured and left unexplained; exercise 4's deadlock ran entirely on LOCKTAG_TRANSACTION
+edges), so the strengths/conflict-table/LockTuple framing is right. Part III still begins at lesson
+13 and the Part II/III boundary is where the next patch-series re-verification is due.
+
+OPEN ITEMS HANDED FORWARD, in priority order:
+(1) *** CONFIRM THE PARTITION ASSIGNMENT IS CONTENT-ADDRESSED. LockHashPartition is the low 4 bits
+    of the dynahash hash of a 16-byte tag, so a lock's partition depends on WHAT is locked, not WHO
+    locks it. Build 16 relations whose OIDs land in distinct partitions and check whether
+    LWLock|LockManager tracks tag distribution rather than client count. Needs a compiled probe
+    calling LockTagHashCode -- postgresql-server-dev-16 makes that routine (see the probe-trap note
+    in the environment section). ***
+(2) THE 40 ms SAMPLING FLOOR, NOW BLOCKING TWO LESSONS. Same gap lesson 10 logged. -DLWLOCK_STATS
+    or eBPF on TRACE_POSTGRESQL_LWLOCK_* would turn workload (A)'s zero into a real block count;
+    both need a rebuild and neither was attempted. THIS IS THE SINGLE HIGHEST-VALUE
+    INFRASTRUCTURE INVESTMENT AVAILABLE TO THIS TRACK and lessons 22-23 will need it too.
+(3) A WASTED DeadLockCheck IS COUNTED NOWHERE -- exercise 4's non-victim took 16 exclusive LWLocks
+    and walked the graph for nothing. This is now the THIRD instance of the same accounting gap:
+    lesson 09's GetVictimBuffer retries, lesson 10's skipped cleanup locks, and this. THREE IS A
+    PATTERN AND ARGUABLY A PATCH -- a pg_stat_database or pg_stat_activity counter for
+    deadlock-checks-run vs deadlocks-found would be a bounded, defensible first contribution.
+(4) FORCE A GENUINE DS_SOFT_DEADLOCK AND CATCH THE REORDERING. Exercise 3 fired early_deadlock in
+    ProcSleep instead, so the wait-queue rearrangement path -- the whole TopoSort/ExpandConstraints
+    machine -- WAS NEVER OBSERVED EXECUTING, only read. Needs three or more waiters in one queue
+    with a reorderable conflict pattern. log_lock_waits will NOT show it; DEBUG_DEADLOCK and
+    PrintLockQueue would, and that needs a rebuild (folds into item 2).
+(5) MEASURE FastPathTransferRelationLocks AS A FUNCTION OF max_connections. It scans every backend's
+    array under every backend's fpInfoLock, so at max_connections = 1000 one ALTER TABLE should take
+    ~1000 LWLocks. Time one LOCK TABLE ACCESS EXCLUSIVE at 100 vs 1000 connections.
+(6) IS maxPossibleConstraints EXHAUSTION REACHABLE? The source says the proof is unknown. Either
+    construct a configuration that hits it or demonstrate the bound is safe.
+(7) For lesson 15: rule 4 of storage/buffer/README (hint bits need only a shared content lock) is
+    STILL unspent -- lesson 10 left it, lesson 11 did not touch it.
+
+Throwaway tables left by this run (cluster does not persist; names listed only to avoid collisions
+within a future run), all correctly prefixed: pg11_fp1..pg11_fp20, pg11_dl, pg11_part and
+pg11_part_0..pg11_part_63, in database `pg11lab`. Lesson 12 should use pg12_*.
 -->
 
 ## Completed Subjects
